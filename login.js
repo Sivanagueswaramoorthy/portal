@@ -1,5 +1,4 @@
 window.onload = () => {
-    // --- NEW CLIENT ID ---
     google.accounts.id.initialize({ client_id: "159246343111-o9bv4lgk1hmmvdkef0qnq0ih9qefjhmj.apps.googleusercontent.com", callback: handleLogin });
     google.accounts.id.renderButton(document.getElementById("g_id_signin"), { theme: "filled_blue", size: "large", shape: "rectangular", width: 280 });
 
@@ -19,7 +18,6 @@ async function handleLogin(response) {
     const errBox = document.getElementById('error-msg');
     
     try {
-        // --- NEW RENDER URL ---
         const req = await fetch('https://portal-6crm.onrender.com/api/auth', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken })
         });

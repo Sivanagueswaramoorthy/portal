@@ -7,17 +7,15 @@ const app = express();
 app.use(cors()); 
 app.use(express.json());
 
-// --- NEW CLIENT ID ---
 const CLIENT_ID = "159246343111-o9bv4lgk1hmmvdkef0qnq0ih9qefjhmj.apps.googleusercontent.com";
 const googleClient = new OAuth2Client(CLIENT_ID);
 
 const dbPool = mysql.createPool({
-    
     host: 'mysql-32a5e69e-sivanagu7771-74ba.d.aivencloud.com',
     port: 17949, 
-   user: 'avnadmin', 
-    password: process.env.DB_PASSWORD, 
-    database: 'defaultdb',
+    user: 'avnadmin', 
+    password: process.env.DB_PASSWORD, // Hid password so GitHub won't block it
+    database: 'defaultdb', 
     waitForConnections: true,
     connectionLimit: 10,
     ssl: { rejectUnauthorized: false } 
@@ -33,7 +31,6 @@ const promisePool = dbPool.promise();
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_drives (id INT AUTO_INCREMENT PRIMARY KEY, company VARCHAR(255), role VARCHAR(255), appeared VARCHAR(50), selected VARCHAR(50), ctc VARCHAR(50))`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_student_profile (student_email VARCHAR(255) PRIMARY KEY, offer_role VARCHAR(255) DEFAULT '--', offer_company VARCHAR(255) DEFAULT '--', offer_ctc VARCHAR(50) DEFAULT '--', status VARCHAR(50) DEFAULT 'Unplaced', assessments VARCHAR(50) DEFAULT '0', interviews VARCHAR(50) DEFAULT '0', offers VARCHAR(50) DEFAULT '0', tech_dsa VARCHAR(50) DEFAULT '0', tech_oop VARCHAR(50) DEFAULT '0', tech_core VARCHAR(50) DEFAULT '0', apt_quant VARCHAR(50) DEFAULT '0', apt_logical VARCHAR(50) DEFAULT '0', apt_hr VARCHAR(50) DEFAULT '0')`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_apps (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), company VARCHAR(255), role VARCHAR(255), date_applied VARCHAR(50), status VARCHAR(50))`);
-        
         console.log("Database Verified: Enterprise tables ready.");
     } catch (err) { console.error("DB Init Error:", err.message); }
 })();
@@ -61,7 +58,7 @@ app.post('/api/auth', async (req, res) => {
         const [placeApps] = await promisePool.query("SELECT * FROM placement_apps WHERE student_email = ? ORDER BY id DESC", [profile[0].email]);
         
         res.json({ success: true, isAdmin: false, profile: profile[0], courses, skills, semGpas, globalStats: globalStats[0], globalDrives, placeProfile: placeProfile[0], placeApps, picture: ticket.getPayload().picture });
-    } catch (error) { res.status(500).json({ success: false, message: "Server authentication failed. Ensure Client ID matches." }); }
+    } catch (error) { res.status(500).json({ success: false, message: "Server authentication failed." }); }
 });
 
 async function verifyAdmin(token) {
@@ -88,7 +85,6 @@ app.post('/api/admin/student-data', async (req, res) => {
         const [semGpas] = await promisePool.query("SELECT semester, gpa FROM student_sem_gpa WHERE student_email = ?", [email]);
         const [placeProfile] = await promisePool.query("SELECT * FROM placement_student_profile WHERE student_email = ?", [email]);
         const [placeApps] = await promisePool.query("SELECT * FROM placement_apps WHERE student_email = ? ORDER BY id DESC", [email]);
-
         res.json({ success: true, profile: profile[0], courses, skills, semGpas, placeProfile: placeProfile[0], placeApps });
     } catch (e) { res.status(500).json({ success: false }); }
 });
