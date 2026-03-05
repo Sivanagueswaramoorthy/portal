@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BIT Sathy | Enterprise Login</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="login-view">
+        <div class="login-card">
+            <div class="login-logo"><i class="fa-solid fa-layer-group"></i></div>
+            <h2 style="margin-bottom: 8px; font-weight: 800; font-size: 1.4rem; color: var(--text-main);">Enterprise Portal</h2>
+            <p style="color: var(--text-muted); margin-bottom: 32px; font-weight: 500; font-size: 0.85rem;">Secure access for Staff & Students</p>
+            <div style="display: flex; justify-content: center;"><div id="g_id_signin"></div></div>
+            <div id="error-msg" style="display: none; color: var(--danger); margin-top: 16px; font-weight: 600; font-size: 0.8rem;"></div>
+        </div>
+    </div>
+
+    <script src="login.js"></script>
+</body>
+</html>
