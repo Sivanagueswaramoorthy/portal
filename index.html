@@ -6,18 +6,75 @@
     <title>BIT Sathy | Enterprise Login</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <div id="login-view">
-        <div class="login-card">
-            <div class="login-logo"><i class="fa-solid fa-layer-group"></i></div>
-            <h2 style="margin-bottom: 8px; font-weight: 800; font-size: 1.4rem; color: var(--text-main);">Enterprise Portal</h2>
-            <p style="color: var(--text-muted); margin-bottom: 32px; font-weight: 500; font-size: 0.85rem;">Secure access for Staff & Students</p>
-            <div style="display: flex; justify-content: center;"><div id="g_id_signin"></div></div>
-            <div id="error-msg" style="display: none; color: var(--danger); margin-top: 16px; font-weight: 600; font-size: 0.8rem;"></div>
+    <div class="auth-container">
+        <div class="auth-left">
+            <div class="auth-brand">
+                <i class="fa-solid fa-code"></i> BIT Sathy IT
+            </div>
+            <div class="auth-hero-text">
+                <h1>Welcome to the<br>Enterprise Portal</h1>
+                <p>Secure, centralized access to your dashboard, academic records, and placement hub all in one place.</p>
+            </div>
+            <div class="auth-footer-text">
+                &copy; 2026 Bannari Amman Institute of Technology. All rights reserved.
+            </div>
+            <div class="shape shape-1"></div>
+            <div class="shape shape-2"></div>
+        </div>
+
+        <div class="auth-right">
+            <div class="auth-form-wrapper">
+                <div class="auth-header">
+                    <h2>Sign in to your account</h2>
+                    <p>Enter your credentials to continue.</p>
+                </div>
+
+                <form id="traditional-login-form" onsubmit="event.preventDefault();">
+                    <div class="input-group">
+                        <label for="email">Email Address</label>
+                        <div class="input-icon-wrapper">
+                            <i class="fa-regular fa-envelope icon-left"></i>
+                            <input type="email" id="email" placeholder="e.g. sivanagu@bitsathy.ac.in" required>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="password">Password</label>
+                        <div class="input-icon-wrapper">
+                            <i class="fa-solid fa-lock icon-left"></i>
+                            <input type="password" id="password" placeholder="••••••••" required>
+                            <i class="fa-regular fa-eye icon-right" id="togglePassword" onclick="togglePass()"></i>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <label class="remember-me">
+                            <input type="checkbox" checked>
+                            <span>Remember me</span>
+                        </label>
+                        <a href="#" class="forgot-pass">Forgot password?</a>
+                    </div>
+
+                    <button type="submit" class="btn-primary-login">
+                        Sign In <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </form>
+
+                <div class="auth-divider">
+                    <span>OR CONTINUE WITH</span>
+                </div>
+
+                <div class="google-btn-container">
+                    <div id="g_id_signin"></div>
+                </div>
+                
+                <div id="error-msg" class="error-message" style="display: none;"></div>
+            </div>
         </div>
     </div>
 

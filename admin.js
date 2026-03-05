@@ -67,7 +67,6 @@ function switchTab(tabId, element) {
 function openModal(id) { document.getElementById(id).style.display = 'flex'; }
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-// CRITICAL FIX: Removed the Google Initialization script that was crashing the page!
 window.onload = async () => {
     try {
         const req = await fetch(`${BASE_URL}/api/auth`, { 
