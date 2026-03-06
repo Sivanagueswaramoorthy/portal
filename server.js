@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { OAuth2Client } = require('google-auth-library');
 const mysql = require('mysql2');
+const axios = require('axios'); // Needed to fetch the Google Script
 
 const app = express();
 app.use(cors()); 
@@ -79,7 +80,7 @@ app.post('/api/auth', async (req, res) => {
     } catch (error) { res.status(500).json({ success: false, message: "Server authentication failed." }); }
 });
 
-// --- REWARD POINTS LEADERBOARD FETCH ---
+// --- UPDATED: REWARD POINTS PROXY FETCH ---
 app.post('/api/student/all-rewards', async (req, res) => {
     try {
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
@@ -89,10 +90,17 @@ app.post('/api/student/all-rewards', async (req, res) => {
             return res.status(403).json({ success: false, message: "Unauthorized." });
         }
 
-        // Securely fetches data from YOUR database to avoid CORS errors
-        const [rows] = await promisePool.query("SELECT full_name, roll_no, department, reward_points FROM student_profile ORDER BY CAST(reward_points AS UNSIGNED) DESC");
-        res.json({ success: true, students: rows });
+        // Securely bypass browser CORS by fetching server-to-server
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzyDfs25UGZnrRfXQbtcXkCh6C0WrXc2KR0zbh3smbA6Q7JEE7_0hrL9S_Go5npZpMXGQ/exec";
+        
+        const scriptResponse = await axios.get(GOOGLE_SCRIPT_URL);
+        
+        // Google scripts often nest the array in a 'data' object
+        let studentsData = scriptResponse.data.data || scriptResponse.data;
+
+        res.json({ success: true, students: studentsData });
     } catch (e) { 
+        console.error("Proxy fetch error:", e.message);
         res.status(500).json({ success: false }); 
     }
 });

@@ -273,10 +273,10 @@ function populatePersonalPlacement(pProfile, pApps) {
     }
 }
 
-// --- NEW: FETCH ALL LOCAL DATABASE REWARDS FOR LEADERBOARD ---
+// --- NEW: FETCH ALL PROXY REWARDS FOR LEADERBOARD ---
 async function fetchAllRewards() {
     const tbody = document.getElementById('all-rewards-tbody');
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Leaderboard...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Leaderboard from Server...</td></tr>`;
 
     try {
         const req = await fetch(`${BASE_URL}/api/student/all-rewards`, {
@@ -289,10 +289,10 @@ async function fetchAllRewards() {
         if (data.success) {
             allRewardsData = data.students; 
 
-            // Sort by points (Highest to Lowest)
+            // Flexible mapping to catch however the college named their spreadsheet columns
             allRewardsData.sort((a, b) => {
-                let ptsA = parseInt(a.reward_points || 0);
-                let ptsB = parseInt(b.reward_points || 0);
+                let ptsA = parseInt(a.Total_Points || a.points || a.reward_points || a.total_points || a.Total || 0);
+                let ptsB = parseInt(b.Total_Points || b.points || b.reward_points || b.total_points || b.Total || 0);
                 return ptsB - ptsA;
             });
 
@@ -302,7 +302,7 @@ async function fetchAllRewards() {
         }
     } catch (e) {
         console.error(e);
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--danger);">Network error. Unable to connect to server.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--danger);">Network error. Unable to connect to backend server.</td></tr>`;
     }
 }
 
@@ -319,10 +319,10 @@ function renderRewardsTable(students) {
         if (index === 1) rankBadge = `<span class="badge" style="background: #E2E8F0; color: #475569; border: none;">2nd</span>`;
         if (index === 2) rankBadge = `<span class="badge" style="background: #FFEDD5; color: #9A3412; border: none;">3rd</span>`;
 
-        let name = s.full_name || '--';
-        let roll = s.roll_no || '--';
-        let dept = s.department || 'Not Assigned';
-        let points = s.reward_points || '0';
+        let name = s.Name || s.name || s.student_name || s.full_name || '--';
+        let roll = s.Roll_No || s.roll_no || s.register_no || '--';
+        let dept = s.Department || s.dept || s.department || 'Not Assigned';
+        let points = s.Total_Points || s.points || s.reward_points || s.total_points || s.Total || '0';
 
         return `
         <tr class="dir-row">
@@ -338,8 +338,8 @@ function renderRewardsTable(students) {
 function filterRewards() {
     const searchTerm = document.getElementById('rewardSearch').value.toLowerCase();
     const filtered = allRewardsData.filter(s => {
-        let name = (s.full_name || "").toLowerCase();
-        let roll = (s.roll_no || "").toLowerCase();
+        let name = (s.Name || s.name || s.full_name || "").toLowerCase();
+        let roll = (s.Roll_No || s.roll_no || "").toLowerCase();
         return name.includes(searchTerm) || roll.includes(searchTerm);
     });
     renderRewardsTable(filtered);
