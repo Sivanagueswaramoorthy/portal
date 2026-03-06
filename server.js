@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { OAuth2Client } = require('google-auth-library');
 const mysql = require('mysql2');
-const axios = require('axios'); // Needed to fetch the Google Script
+const axios = require('axios'); // IMPORT AXIOS
 
 const app = express();
 app.use(cors()); 
@@ -15,7 +15,7 @@ const dbPool = mysql.createPool({
     host: 'mysql-32a5e69e-sivanagu7771-74ba.d.aivencloud.com',
     port: 17949, 
     user: 'avnadmin', 
-    password: process.env.DB_PASSWORD, 
+    password: process.env.DB_PASSWORD, // Ensure this is set in Render Environment Variables!
     database: 'defaultdb', 
     waitForConnections: true,
     connectionLimit: 10,
@@ -45,7 +45,6 @@ app.post('/api/auth', async (req, res) => {
         const name = payload.name;
         const picture = payload.picture;
 
-        // 1. STRICT DOMAIN RESTRICTION
         if (!email.endsWith('@bitsathy.ac.in') && email.toLowerCase() !== 'sivanagu7771@gmail.com') {
             return res.status(403).json({ success: false, message: "Access Denied. You must use your official @bitsathy.ac.in email." });
         }
@@ -53,12 +52,10 @@ app.post('/api/auth', async (req, res) => {
         const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
         const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
 
-        // 2. ADMIN LOGIN
         if (email.toLowerCase() === 'sivanagu7771@gmail.com') {
             return res.json({ success: true, isAdmin: true, profile: { full_name: name, email: email, picture: picture }, globalStats: globalStats[0], globalDrives });
         }
 
-        // 3. STUDENT LOGIN & AUTO-REGISTRATION
         let [profile] = await promisePool.query("SELECT * FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]);
         
         if (profile.length === 0) {
@@ -69,7 +66,6 @@ app.post('/api/auth', async (req, res) => {
             [profile] = await promisePool.query("SELECT * FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]);
         }
 
-        // 4. FETCH STUDENT DATA
         const [courses] = await promisePool.query("SELECT * FROM student_courses WHERE student_email = ? ORDER BY semester ASC", [profile[0].email]);
         const [skills] = await promisePool.query("SELECT * FROM student_skills WHERE student_email = ?", [profile[0].email]);
         const [semGpas] = await promisePool.query("SELECT semester, gpa FROM student_sem_gpa WHERE student_email = ?", [profile[0].email]);
@@ -80,7 +76,7 @@ app.post('/api/auth', async (req, res) => {
     } catch (error) { res.status(500).json({ success: false, message: "Server authentication failed." }); }
 });
 
-// --- UPDATED: REWARD POINTS PROXY FETCH ---
+// --- NEW: REWARD POINTS PROXY FETCH ---
 app.post('/api/student/all-rewards', async (req, res) => {
     try {
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
@@ -90,21 +86,22 @@ app.post('/api/student/all-rewards', async (req, res) => {
             return res.status(403).json({ success: false, message: "Unauthorized." });
         }
 
-        // Securely bypass browser CORS by fetching server-to-server
+        // Bypasses CORS by making your server fetch the data from Google
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzyDfs25UGZnrRfXQbtcXkCh6C0WrXc2KR0zbh3smbA6Q7JEE7_0hrL9S_Go5npZpMXGQ/exec";
         
         const scriptResponse = await axios.get(GOOGLE_SCRIPT_URL);
         
-        // Google scripts often nest the array in a 'data' object
+        // Extract array depending on Google Script output format
         let studentsData = scriptResponse.data.data || scriptResponse.data;
 
         res.json({ success: true, students: studentsData });
     } catch (e) { 
         console.error("Proxy fetch error:", e.message);
-        res.status(500).json({ success: false }); 
+        res.status(500).json({ success: false, message: "Server failed to reach Google Script." }); 
     }
 });
 
+// ... (KEEP ALL YOUR EXISTING ADMIN ROUTES BELOW EXACTLY AS THEY WERE) ...
 async function verifyAdmin(token) {
     const ticket = await googleClient.verifyIdToken({ idToken: token, audience: CLIENT_ID });
     if (ticket.getPayload().email.toLowerCase() !== 'sivanagu7771@gmail.com') throw new Error("Unauthorized");
