@@ -14,7 +14,7 @@ const dbPool = mysql.createPool({
     host: 'mysql-32a5e69e-sivanagu7771-74ba.d.aivencloud.com',
     port: 17949, 
     user: 'avnadmin', 
-    password: process.env.DB_PASSWORD, // Hid password so GitHub won't block it
+    password: process.env.DB_PASSWORD, 
     database: 'defaultdb', 
     waitForConnections: true,
     connectionLimit: 10,
@@ -35,29 +35,50 @@ const promisePool = dbPool.promise();
     } catch (err) { console.error("DB Init Error:", err.message); }
 })();
 
-// --- SMART LOGIN ---
+// --- SMART LOGIN WITH AUTO-REGISTRATION ---
 app.post('/api/auth', async (req, res) => {
     try {
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
-        const email = ticket.getPayload().email;
+        const payload = ticket.getPayload();
+        const email = payload.email;
+        const name = payload.name; // Get their actual Google Name
+        const picture = payload.picture;
+
+        // 1. STRICT DOMAIN CHECK
+        // If not your admin email and not a bitsathy email, kick them out.
+        if (!email.endsWith('@bitsathy.ac.in') && email.toLowerCase() !== 'sivanagu7771@gmail.com') {
+            return res.status(403).json({ success: false, message: "Access Denied. You must use your official @bitsathy.ac.in email." });
+        }
 
         const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
         const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
 
+        // 2. ADMIN LOGIN
         if (email.toLowerCase() === 'sivanagu7771@gmail.com') {
-            return res.json({ success: true, isAdmin: true, profile: { full_name: ticket.getPayload().name, email: email, picture: ticket.getPayload().picture }, globalStats: globalStats[0], globalDrives });
+            return res.json({ success: true, isAdmin: true, profile: { full_name: name, email: email, picture: picture }, globalStats: globalStats[0], globalDrives });
         }
 
-        const [profile] = await promisePool.query("SELECT * FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]);
-        if (profile.length === 0) return res.status(404).json({ success: false, message: "Student record not found." });
+        // 3. STUDENT LOGIN & AUTO-REGISTRATION
+        let [profile] = await promisePool.query("SELECT * FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]);
+        
+        // If they are a bitsathy student but not in the database yet, auto-create their account!
+        if (profile.length === 0) {
+            await promisePool.query(
+                "INSERT INTO student_profile (email, full_name, department, reward_points) VALUES (?, ?, 'Not Assigned', '0')", 
+                [email.toLowerCase(), name]
+            );
+            // Re-fetch the newly created profile
+            [profile] = await promisePool.query("SELECT * FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]);
+        }
 
+        // 4. FETCH STUDENT DATA
         const [courses] = await promisePool.query("SELECT * FROM student_courses WHERE student_email = ? ORDER BY semester ASC", [profile[0].email]);
         const [skills] = await promisePool.query("SELECT * FROM student_skills WHERE student_email = ?", [profile[0].email]);
         const [semGpas] = await promisePool.query("SELECT semester, gpa FROM student_sem_gpa WHERE student_email = ?", [profile[0].email]);
         const [placeProfile] = await promisePool.query("SELECT * FROM placement_student_profile WHERE student_email = ?", [profile[0].email]);
         const [placeApps] = await promisePool.query("SELECT * FROM placement_apps WHERE student_email = ? ORDER BY id DESC", [profile[0].email]);
         
-        res.json({ success: true, isAdmin: false, profile: profile[0], courses, skills, semGpas, globalStats: globalStats[0], globalDrives, placeProfile: placeProfile[0], placeApps, picture: ticket.getPayload().picture });
+        res.json({ success: true, isAdmin: false, profile: profile[0], courses, skills, semGpas, globalStats: globalStats[0], globalDrives, placeProfile: placeProfile[0], placeApps, picture: picture });
     } catch (error) { res.status(500).json({ success: false, message: "Server authentication failed." }); }
 });
 
