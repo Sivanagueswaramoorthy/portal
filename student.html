@@ -24,6 +24,7 @@
             <a class="nav-item" id="nav-acad" onclick="switchTab('academics', this)"><i class="fa-solid fa-book-open"></i> Academic Records</a>
             <a class="nav-item" id="nav-col-place" onclick="switchTab('college-placement', this)"><i class="fa-solid fa-building-user"></i> College Placement</a>
             <a class="nav-item" id="nav-place" onclick="switchTab('placement', this)"><i class="fa-solid fa-briefcase"></i> My Placement Hub</a>
+            <a class="nav-item" id="nav-rewards" onclick="switchTab('rewards', this); fetchAllRewards();"><i class="fa-solid fa-gift"></i> Reward Points Board</a>
         </div>
         <div class="nav-bottom">
             <a class="nav-item" style="color: var(--danger);" onclick="signOut()"><i class="fa-solid fa-power-off"></i> Secure Logout</a>
@@ -280,6 +281,38 @@
                     <table class="modern-table">
                         <thead><tr><th>Company Name</th><th>Role Profile</th><th>Date Applied</th><th>Status / Result</th></tr></thead>
                         <tbody id="student-apps-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="view-rewards" class="view-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <div>
+                        <h1 class="page-title">Global Reward Points</h1>
+                        <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.85rem;">Live leaderboard for all BIT Sathy IT students.</p>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <div style="padding: 16px 24px; border-bottom: 1px solid var(--border); background: #F8FAFC;">
+                        <div class="search-wrapper" style="max-width: 300px;">
+                            <i class="fa-solid fa-search"></i>
+                            <input type="text" id="rewardSearch" class="control-input" style="width: 100%;" placeholder="Search by name or roll no..." oninput="filterRewards()">
+                        </div>
+                    </div>
+                    <table class="modern-table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Student Name</th>
+                                <th>Roll Number</th>
+                                <th>Department</th>
+                                <th>Reward Points</th>
+                            </tr>
+                        </thead>
+                        <tbody id="all-rewards-tbody">
+                            <tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading data...</td></tr>
+                        </tbody>
                     </table>
                 </div>
             </div>

@@ -14,7 +14,7 @@ const dbPool = mysql.createPool({
     host: 'mysql-32a5e69e-sivanagu7771-74ba.d.aivencloud.com',
     port: 17949, 
     user: 'avnadmin', 
-    password: process.env.DB_PASSWORD, 
+    password: process.env.DB_PASSWORD, // Hidden for GitHub security
     database: 'defaultdb', 
     waitForConnections: true,
     connectionLimit: 10,
@@ -41,11 +41,10 @@ app.post('/api/auth', async (req, res) => {
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
         const payload = ticket.getPayload();
         const email = payload.email;
-        const name = payload.name; // Get their actual Google Name
+        const name = payload.name;
         const picture = payload.picture;
 
-        // 1. STRICT DOMAIN CHECK
-        // If not your admin email and not a bitsathy email, kick them out.
+        // 1. STRICT DOMAIN RESTRICTION
         if (!email.endsWith('@bitsathy.ac.in') && email.toLowerCase() !== 'sivanagu7771@gmail.com') {
             return res.status(403).json({ success: false, message: "Access Denied. You must use your official @bitsathy.ac.in email." });
         }
@@ -61,13 +60,11 @@ app.post('/api/auth', async (req, res) => {
         // 3. STUDENT LOGIN & AUTO-REGISTRATION
         let [profile] = await promisePool.query("SELECT * FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]);
         
-        // If they are a bitsathy student but not in the database yet, auto-create their account!
         if (profile.length === 0) {
             await promisePool.query(
                 "INSERT INTO student_profile (email, full_name, department, reward_points) VALUES (?, ?, 'Not Assigned', '0')", 
                 [email.toLowerCase(), name]
             );
-            // Re-fetch the newly created profile
             [profile] = await promisePool.query("SELECT * FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]);
         }
 
@@ -80,6 +77,21 @@ app.post('/api/auth', async (req, res) => {
         
         res.json({ success: true, isAdmin: false, profile: profile[0], courses, skills, semGpas, globalStats: globalStats[0], globalDrives, placeProfile: placeProfile[0], placeApps, picture: picture });
     } catch (error) { res.status(500).json({ success: false, message: "Server authentication failed." }); }
+});
+
+// --- NEW: FETCH ALL REWARD POINTS FOR LEADERBOARD ---
+app.post('/api/student/all-rewards', async (req, res) => {
+    try {
+        const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
+        const email = ticket.getPayload().email;
+
+        if (!email.endsWith('@bitsathy.ac.in') && email.toLowerCase() !== 'sivanagu7771@gmail.com') {
+            return res.status(403).json({ success: false, message: "Unauthorized." });
+        }
+
+        const [rows] = await promisePool.query("SELECT full_name, roll_no, department, reward_points FROM student_profile ORDER BY CAST(reward_points AS UNSIGNED) DESC");
+        res.json({ success: true, students: rows });
+    } catch (e) { res.status(500).json({ success: false }); }
 });
 
 async function verifyAdmin(token) {

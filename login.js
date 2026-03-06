@@ -1,9 +1,9 @@
 window.onload = () => {
-// Initialize Google Auth with Domain Hint
+    // Initialize Google Auth with Domain Hint
     google.accounts.id.initialize({ 
         client_id: "159246343111-o9bv4lgk1hmmvdkef0qnq0ih9qefjhmj.apps.googleusercontent.com", 
         callback: handleLogin,
-        hosted_domain: "bitsathy.ac.in" // Tells Google to only show college emails
+        hosted_domain: "bitsathy.ac.in" 
     });
     
     // Render the button beautifully

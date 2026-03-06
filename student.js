@@ -1,5 +1,6 @@
 let globalToken = localStorage.getItem('bit_session_token');
 let gpaChartInstance = null;
+let allRewardsData = [];
 const BASE_URL = 'https://portal-6crm.onrender.com';
 
 if (!globalToken) window.location.href = 'index.html';
@@ -34,7 +35,6 @@ function switchTab(tabId, element) {
     }
 }
 
-// CRITICAL FIX: Removed the Google Initialization script that was crashing the page!
 window.onload = async () => {
     try {
         const req = await fetch(`${BASE_URL}/api/auth`, { 
@@ -133,7 +133,6 @@ function renderChart(courses, semGpas) {
 
 function populateDashboard(p, img, courses, skills, semGpas) {
     document.getElementById('cardProfileName').innerText = p.full_name; 
-    document.getElementById('cardProfileImg').src = img || getAvatar(p.full_name);
     document.getElementById('val-email').innerText = p.email; 
     document.getElementById('val-roll_no').innerText = p.roll_no || '--'; 
     document.getElementById('val-department').innerText = p.department || '--';
@@ -272,4 +271,61 @@ function populatePersonalPlacement(pProfile, pApps) {
     } else { 
         appBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 30px; color:var(--text-muted);">No applications logged.</td></tr>`; 
     }
+}
+
+// --- NEW: REWARD POINTS LEADERBOARD LOGIC ---
+async function fetchAllRewards() {
+    const tbody = document.getElementById('all-rewards-tbody');
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Fetching live data...</td></tr>`;
+
+    try {
+        const req = await fetch(`${BASE_URL}/api/student/all-rewards`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: globalToken })
+        });
+        const data = await req.json();
+
+        if (data.success) {
+            allRewardsData = data.students;
+            renderRewardsTable(allRewardsData);
+        } else {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--danger);">Failed to load data.</td></tr>`;
+        }
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--danger);">Network error.</td></tr>`;
+    }
+}
+
+function renderRewardsTable(students) {
+    const tbody = document.getElementById('all-rewards-tbody');
+    if (students.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No student records found.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = students.map((s, index) => {
+        let rankBadge = `<span style="font-weight: 800; color: var(--text-muted);">${index + 1}</span>`;
+        if (index === 0) rankBadge = `<span class="badge" style="background: #FEF08A; color: #854D0E; border: none;"><i class="fa-solid fa-trophy"></i> 1st</span>`;
+        if (index === 1) rankBadge = `<span class="badge" style="background: #E2E8F0; color: #475569; border: none;">2nd</span>`;
+        if (index === 2) rankBadge = `<span class="badge" style="background: #FFEDD5; color: #9A3412; border: none;">3rd</span>`;
+
+        return `
+        <tr class="dir-row">
+            <td>${rankBadge}</td>
+            <td style="font-weight:700; color: var(--text-main);">${s.full_name}</td>
+            <td style="font-family: monospace; font-size: 0.95rem;">${s.roll_no || '--'}</td>
+            <td><span class="badge badge-primary">${s.department || '--'}</span></td>
+            <td style="font-weight: 800; color: #B45309; font-size: 1.1rem;">${s.reward_points || '0'}</td>
+        </tr>`;
+    }).join('');
+}
+
+function filterRewards() {
+    const searchTerm = document.getElementById('rewardSearch').value.toLowerCase();
+    const filtered = allRewardsData.filter(s => 
+        (s.full_name && s.full_name.toLowerCase().includes(searchTerm)) || 
+        (s.roll_no && s.roll_no.toLowerCase().includes(searchTerm))
+    );
+    renderRewardsTable(filtered);
 }

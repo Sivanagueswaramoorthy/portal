@@ -33,7 +33,7 @@ body { background-color: var(--bg-app); color: var(--text-main); height: 100vh; 
 .auth-right { width: 500px; background: var(--auth-bg); display: flex; align-items: center; justify-content: center; padding: 40px; flex-shrink: 0; box-shadow: -10px 0 30px rgba(0,0,0,0.03); z-index: 5; overflow-y: auto; }
 .auth-form-wrapper { width: 100%; max-width: 380px; animation: slideUp 0.6s ease-out forwards; }
 @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-.mobile-brand { display: none; } /* Hidden on desktop */
+.mobile-brand { display: none; }
 .auth-header { margin-bottom: 32px; }
 .auth-header h2 { font-size: 1.7rem; font-weight: 800; color: var(--text-main); margin: 0 0 8px 0; letter-spacing: -0.5px; }
 .auth-header p { font-size: 0.95rem; color: var(--text-muted); margin: 0; }
@@ -61,12 +61,10 @@ body { background-color: var(--bg-app); color: var(--text-main); height: 100vh; 
 .error-message { margin-top: 16px; padding: 12px; border-radius: 8px; background: #FEF2F2; color: #EF4444; font-size: 0.85rem; font-weight: 600; text-align: center; border: 1px solid #FECACA; }
 
 /* --- DASHBOARD & PORTAL STYLES --- */
-/* FIX: Added height: 100dvh so the sidebar doesn't get pushed off mobile screens */
 .sidebar { width: 250px; background: var(--bg-surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px 16px; z-index: 20; flex-shrink: 0; transition: transform 0.3s ease; height: 100vh; height: 100dvh; }
 .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.5); z-index: 15; opacity: 0; transition: opacity 0.3s ease; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.15rem; margin-bottom: 40px; padding: 0 12px; color: var(--text-main); letter-spacing: -0.5px;}
 .brand i { color: var(--primary); font-size: 1.3rem; }
-/* FIX: Added overflow-y: auto to the menu so the logout button stays at the bottom */
 .nav-menu { display: flex; flex-direction: column; gap: 4px; flex: 1; overflow-y: auto; padding-bottom: 10px; }
 .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; color: var(--text-muted); font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; font-size: 0.85rem; text-decoration: none;}
 .nav-item i { width: 16px; text-align: center; font-size: 0.95rem; opacity: 0.7; }
@@ -74,7 +72,6 @@ body { background-color: var(--bg-app); color: var(--text-main); height: 100vh; 
 .nav-item:hover i { opacity: 1; color: var(--primary); }
 .nav-item.active { background: var(--primary-light); color: var(--primary); }
 .nav-item.active i { opacity: 1; color: var(--primary); }
-/* FIX: Flex-shrink prevents the logout button from being squished */
 .nav-bottom { margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border); flex-shrink: 0; }
 
 .main-content { flex: 1; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; position: relative; width: 100%;}
@@ -184,18 +181,14 @@ tr:hover .admin-table-edit, tr:hover .admin-table-del, .skill-card:hover .admin-
 
 /* --- MOBILE RESPONSIVE MEDIA QUERIES --- */
 @media (max-width: 900px) {
-    /* Login Page Mobile UX Overhaul */
     .auth-left { display: none; }
     .auth-container { background: linear-gradient(135deg, #0F172A, #1E293B); padding: 20px; }
     .auth-right { width: 100%; max-width: 450px; border-radius: 24px; padding: 32px 24px; margin: auto; height: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
     .auth-form-wrapper { max-width: 100%; }
     .auth-header h2 { font-size: 1.5rem; }
-    
-    /* Mobile Logo Display */
     .mobile-brand { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--text-main); font-size: 1.3rem; font-weight: 800; margin-bottom: 24px; }
     .mobile-logo-icon { background: var(--primary); color: white; width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
 
-    /* Dashboard layout adjustments */
     .stats-grid { grid-template-columns: repeat(3, 1fr); }
     #placement-global .stats-grid { grid-template-columns: repeat(2, 1fr); }
     #placement-personal .stats-grid { grid-template-columns: repeat(2, 1fr); }
