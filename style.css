@@ -181,12 +181,15 @@ tr:hover .admin-table-edit, tr:hover .admin-table-del, .skill-card:hover .admin-
 
 /* --- MOBILE RESPONSIVE MEDIA QUERIES --- */
 @media (max-width: 900px) {
+    body { background-color: var(--bg-app); }
     .auth-left { display: none; }
-    .auth-container { background: linear-gradient(135deg, #0F172A, #1E293B); padding: 20px; }
-    .auth-right { width: 100%; max-width: 450px; border-radius: 24px; padding: 32px 24px; margin: auto; height: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+    .auth-container { background: linear-gradient(135deg, #0F172A, #1E293B); padding: 20px; align-items: center; justify-content: center; }
+    .auth-right { width: 100%; max-width: 400px; border-radius: 20px; padding: 32px 24px; margin: auto; height: auto; box-shadow: 0 15px 35px rgba(0,0,0,0.4); }
     .auth-form-wrapper { max-width: 100%; }
-    .auth-header h2 { font-size: 1.5rem; }
-    .mobile-brand { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--text-main); font-size: 1.3rem; font-weight: 800; margin-bottom: 24px; }
+    .auth-header h2 { font-size: 1.5rem; text-align: center; }
+    .auth-header p { text-align: center; }
+    
+    .mobile-brand { display: flex !important; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--text-main); font-size: 1.3rem; font-weight: 800; margin-bottom: 24px; }
     .mobile-logo-icon { background: var(--primary); color: white; width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
 
     .stats-grid { grid-template-columns: repeat(3, 1fr); }
@@ -197,9 +200,14 @@ tr:hover .admin-table-edit, tr:hover .admin-table-del, .skill-card:hover .admin-
 
 @media (max-width: 768px) {
     .mobile-menu-btn { display: block; }
-    .sidebar { position: fixed; left: 0; top: 0; transform: translateX(-100%); box-shadow: var(--shadow-lg); }
+    
+    .sidebar { position: fixed; left: 0; top: 0; height: 100dvh; transform: translateX(-100%); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; padding-bottom: 24px; }
     .sidebar.open { transform: translateX(0); }
     .sidebar-overlay.show { display: block; opacity: 1; }
+    
+    .nav-menu { flex: 1; overflow-y: auto; padding-bottom: 10px; }
+    .nav-bottom { flex-shrink: 0; margin-top: auto; padding-top: 16px; }
+    
     .top-header { padding: 12px 20px; }
     .scrollable-area { padding: 20px; }
     .profile-details { flex-direction: column; gap: 16px; }

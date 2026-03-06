@@ -273,13 +273,12 @@ function populatePersonalPlacement(pProfile, pApps) {
     }
 }
 
-// --- NEW: FETCH REWARD POINTS VIA PROXY ---
+// --- NEW: FETCH ALL LOCAL DATABASE REWARDS FOR LEADERBOARD ---
 async function fetchAllRewards() {
     const tbody = document.getElementById('all-rewards-tbody');
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Fetching live data from BIT Server...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Leaderboard...</td></tr>`;
 
     try {
-        // Send a request to your custom backend to fetch the data
         const req = await fetch(`${BASE_URL}/api/student/all-rewards`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -290,10 +289,10 @@ async function fetchAllRewards() {
         if (data.success) {
             allRewardsData = data.students; 
 
-            // Sort by points (Highest to Lowest) to create a Leaderboard
+            // Sort by points (Highest to Lowest)
             allRewardsData.sort((a, b) => {
-                let ptsA = parseInt(a.Total_Points || a.points || a.reward_points || a.total_points || 0);
-                let ptsB = parseInt(b.Total_Points || b.points || b.reward_points || b.total_points || 0);
+                let ptsA = parseInt(a.reward_points || 0);
+                let ptsB = parseInt(b.reward_points || 0);
                 return ptsB - ptsA;
             });
 
@@ -320,11 +319,10 @@ function renderRewardsTable(students) {
         if (index === 1) rankBadge = `<span class="badge" style="background: #E2E8F0; color: #475569; border: none;">2nd</span>`;
         if (index === 2) rankBadge = `<span class="badge" style="background: #FFEDD5; color: #9A3412; border: none;">3rd</span>`;
 
-        // Using fallbacks based on common column headers from Apps Script exports
-        let name = s.Name || s.name || s.student_name || '--';
-        let roll = s.Roll_No || s.roll_no || s.register_no || '--';
-        let dept = s.Department || s.dept || s.department || '--';
-        let points = s.Total_Points || s.points || s.reward_points || s.total_points || '0';
+        let name = s.full_name || '--';
+        let roll = s.roll_no || '--';
+        let dept = s.department || 'Not Assigned';
+        let points = s.reward_points || '0';
 
         return `
         <tr class="dir-row">
@@ -340,8 +338,8 @@ function renderRewardsTable(students) {
 function filterRewards() {
     const searchTerm = document.getElementById('rewardSearch').value.toLowerCase();
     const filtered = allRewardsData.filter(s => {
-        let name = (s.Name || s.name || s.student_name || "").toLowerCase();
-        let roll = (s.Roll_No || s.roll_no || s.register_no || "").toLowerCase();
+        let name = (s.full_name || "").toLowerCase();
+        let roll = (s.roll_no || "").toLowerCase();
         return name.includes(searchTerm) || roll.includes(searchTerm);
     });
     renderRewardsTable(filtered);
