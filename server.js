@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const { OAuth2Client } = require('google-auth-library');
 const mysql = require('mysql2');
-const axios = require('axios'); // IMPORT AXIOS
 
 const app = express();
 app.use(cors()); 
@@ -15,7 +14,7 @@ const dbPool = mysql.createPool({
     host: 'mysql-32a5e69e-sivanagu7771-74ba.d.aivencloud.com',
     port: 17949, 
     user: 'avnadmin', 
-    password: process.env.DB_PASSWORD, // Ensure this is set in Render Environment Variables!
+    password: process.env.DB_PASSWORD, 
     database: 'defaultdb', 
     waitForConnections: true,
     connectionLimit: 10,
@@ -76,7 +75,7 @@ app.post('/api/auth', async (req, res) => {
     } catch (error) { res.status(500).json({ success: false, message: "Server authentication failed." }); }
 });
 
-// --- NEW: REWARD POINTS PROXY FETCH ---
+// --- UPDATED: LOCAL DATABASE LEADERBOARD ---
 app.post('/api/student/all-rewards', async (req, res) => {
     try {
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
@@ -86,22 +85,14 @@ app.post('/api/student/all-rewards', async (req, res) => {
             return res.status(403).json({ success: false, message: "Unauthorized." });
         }
 
-        // Bypasses CORS by making your server fetch the data from Google
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzyDfs25UGZnrRfXQbtcXkCh6C0WrXc2KR0zbh3smbA6Q7JEE7_0hrL9S_Go5npZpMXGQ/exec";
-        
-        const scriptResponse = await axios.get(GOOGLE_SCRIPT_URL);
-        
-        // Extract array depending on Google Script output format
-        let studentsData = scriptResponse.data.data || scriptResponse.data;
-
-        res.json({ success: true, students: studentsData });
+        // Fetch securely from your local DB to prevent crashes!
+        const [rows] = await promisePool.query("SELECT full_name, roll_no, department, reward_points FROM student_profile ORDER BY CAST(reward_points AS UNSIGNED) DESC");
+        res.json({ success: true, students: rows });
     } catch (e) { 
-        console.error("Proxy fetch error:", e.message);
-        res.status(500).json({ success: false, message: "Server failed to reach Google Script." }); 
+        res.status(500).json({ success: false }); 
     }
 });
 
-// ... (KEEP ALL YOUR EXISTING ADMIN ROUTES BELOW EXACTLY AS THEY WERE) ...
 async function verifyAdmin(token) {
     const ticket = await googleClient.verifyIdToken({ idToken: token, audience: CLIENT_ID });
     if (ticket.getPayload().email.toLowerCase() !== 'sivanagu7771@gmail.com') throw new Error("Unauthorized");
