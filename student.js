@@ -50,10 +50,8 @@ window.onload = async () => {
             return; 
         }
         
-        if (data.isAdmin) { 
-            window.location.href = 'admin.html'; 
-            return; 
-        }
+        if (data.isAdmin) { window.location.href = 'admin.html'; return; }
+        if (data.isHR) { window.location.href = 'hr.html'; return; }
         
         let loggedInName = data.profile.full_name; 
         let loggedInEmail = data.profile.email; 
@@ -66,6 +64,7 @@ window.onload = async () => {
         populateGlobalPlacement(data.globalStats, data.globalDrives); 
         
     } catch (e) { 
+        localStorage.removeItem('bit_session_token');
         window.location.href = 'index.html'; 
     }
 };
@@ -253,6 +252,13 @@ function populatePersonalPlacement(pProfile, pApps) {
     const logical = prf.apt_logical || '0'; document.getElementById('val-a-log').innerText = logical; document.getElementById('bar-a-log').style.width = `${logical}%`;
     const hr = prf.apt_hr || '0'; document.getElementById('val-a-hr').innerText = hr; document.getElementById('bar-a-hr').style.width = `${hr}%`;
 
+    // Load Resume Link
+    document.getElementById('resume-link-input').value = (prf.resume_url && prf.resume_url !== '--') ? prf.resume_url : '';
+    if (prf.resume_url && prf.resume_url !== '--') {
+        document.getElementById('view-resume-btn').href = prf.resume_url;
+        document.getElementById('view-resume-btn').style.display = 'inline-flex';
+    }
+
     const appBody = document.getElementById('student-apps-tbody');
     if (pApps && pApps.length > 0) {
         appBody.innerHTML = pApps.map(a => {
@@ -273,7 +279,34 @@ function populatePersonalPlacement(pProfile, pApps) {
     }
 }
 
-// --- SECURE: FETCH LOCAL DATABASE REWARDS FOR LEADERBOARD ---
+// --- NEW: SAVE RESUME LINK ---
+async function saveResume() {
+    const link = document.getElementById('resume-link-input').value;
+    if (!link) return alert("Please paste a link first.");
+    
+    document.getElementById('resume-link-input').disabled = true;
+    
+    try {
+        const req = await fetch(`${BASE_URL}/api/student/update-resume`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: globalToken, resume_url: link })
+        });
+        const data = await req.json();
+        if(data.success) {
+            alert("Resume link saved successfully! HR can now view it.");
+            document.getElementById('view-resume-btn').href = link;
+            document.getElementById('view-resume-btn').style.display = 'inline-flex';
+        } else {
+            alert("Failed to save. Try again.");
+        }
+    } catch(e) {
+        alert("Network error.");
+    }
+    document.getElementById('resume-link-input').disabled = false;
+}
+
+// --- LEADERBOARD LOGIC ---
 async function fetchAllRewards() {
     const tbody = document.getElementById('all-rewards-tbody');
     tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Leaderboard...</td></tr>`;
@@ -286,24 +319,23 @@ async function fetchAllRewards() {
         });
         const data = await req.json();
 
-        // Safety check to ensure data.students is an array before sorting
         if (data.success && Array.isArray(data.students)) {
             allRewardsData = data.students; 
 
-            // Sort by points (Highest to Lowest)
             allRewardsData.sort((a, b) => {
-                let ptsA = parseInt(a.reward_points || 0);
-                let ptsB = parseInt(b.reward_points || 0);
+                let ptsA = parseInt(a.reward_points || 0) || 0;
+                let ptsB = parseInt(b.reward_points || 0) || 0;
                 return ptsB - ptsA;
             });
 
             renderRewardsTable(allRewardsData);
         } else {
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--danger);">Failed to load data. Invalid response from server.</td></tr>`;
+            // AUTOMATIC FAILSAFE: Logs user out if token expired
+            signOut();
         }
     } catch (e) {
         console.error(e);
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--danger);">Network error. Please refresh the page and try again!</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--danger);">Server is waking up! Please refresh the page in 30 seconds.</td></tr>`;
     }
 }
 

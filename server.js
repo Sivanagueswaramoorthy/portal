@@ -1,352 +1,326 @@
-let globalToken = localStorage.getItem('bit_session_token');
-let gpaChartInstance = null;
-let allRewardsData = [];
-const BASE_URL = 'https://portal-6crm.onrender.com';
+const express = require('express');
+const cors = require('cors');
+const { OAuth2Client } = require('google-auth-library');
+const mysql = require('mysql2');
 
-if (!globalToken) window.location.href = 'index.html';
+const app = express();
+app.use(cors()); 
+app.use(express.json());
 
-function getAvatar(name) { 
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff&bold=true&rounded=true`; 
-}
+const CLIENT_ID = "159246343111-o9bv4lgk1hmmvdkef0qnq0ih9qefjhmj.apps.googleusercontent.com";
+const googleClient = new OAuth2Client(CLIENT_ID);
 
-function setTopHeader(name, email, pic) { 
-    document.getElementById('headerName').innerText = name; 
-    document.getElementById('headerEmail').innerText = email; 
-    document.getElementById('headerImage').src = pic || getAvatar(name); 
-}
+// --- DATABASE CONNECTION ---
+const dbPool = mysql.createPool({
+    host: 'mysql-32a5e69e-sivanagu7771-74ba.d.aivencloud.com',
+    port: 17949, 
+    user: 'avnadmin', 
+    password: 'AVNS_x5GIyjOoanVqXlKMi0w', // Your Aiven Database Password
+    database: 'defaultdb', 
+    waitForConnections: true,
+    connectionLimit: 10,
+    ssl: { rejectUnauthorized: false } 
+});
+const promisePool = dbPool.promise();
 
-function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar'); 
-    const overlay = document.getElementById('sidebar-overlay');
-    sidebar.classList.toggle('open');
-    if (sidebar.classList.contains('open')) overlay.classList.add('show'); else overlay.classList.remove('show');
-}
-
-function switchTab(tabId, element) {
-    document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active')); 
-    if(element) element.classList.add('active');
-    
-    document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active')); 
-    document.getElementById('view-' + tabId).classList.add('active');
-    
-    if(window.innerWidth <= 768) { 
-        document.getElementById('sidebar').classList.remove('open'); 
-        document.getElementById('sidebar-overlay').classList.remove('show'); 
-    }
-}
-
-window.onload = async () => {
+// --- DB AUTO-INITIALIZER ---
+(async function initializeDatabase() {
     try {
-        const req = await fetch(`${BASE_URL}/api/auth`, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ token: globalToken }) 
-        });
-        const data = await req.json();
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS student_sem_gpa (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255) NOT NULL, semester INT NOT NULL, gpa VARCHAR(10), UNIQUE KEY unique_sem (student_email, semester))`);
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_global (id INT PRIMARY KEY, total_placed VARCHAR(50), ongoing_drives VARCHAR(50), highest_ctc VARCHAR(50), avg_ctc VARCHAR(50))`);
+        await promisePool.query(`INSERT IGNORE INTO placement_global (id, total_placed, ongoing_drives, highest_ctc, avg_ctc) VALUES (1, '0', '0', '0', '0')`);
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_drives (id INT AUTO_INCREMENT PRIMARY KEY, company VARCHAR(255), role VARCHAR(255), appeared VARCHAR(50), selected VARCHAR(50), ctc VARCHAR(50))`);
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_student_profile (student_email VARCHAR(255) PRIMARY KEY, offer_role VARCHAR(255) DEFAULT '--', offer_company VARCHAR(255) DEFAULT '--', offer_ctc VARCHAR(50) DEFAULT '--', status VARCHAR(50) DEFAULT 'Unplaced', assessments VARCHAR(50) DEFAULT '0', interviews VARCHAR(50) DEFAULT '0', offers VARCHAR(50) DEFAULT '0', tech_dsa VARCHAR(50) DEFAULT '0', tech_oop VARCHAR(50) DEFAULT '0', tech_core VARCHAR(50) DEFAULT '0', apt_quant VARCHAR(50) DEFAULT '0', apt_logical VARCHAR(50) DEFAULT '0', apt_hr VARCHAR(50) DEFAULT '0', resume_url VARCHAR(500) DEFAULT '--')`);
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_apps (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), company VARCHAR(255), role VARCHAR(255), date_applied VARCHAR(50), status VARCHAR(50))`);
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS hr_profile (email VARCHAR(255) PRIMARY KEY, company_name VARCHAR(255))`);
         
-        if (!data.success) { 
-            localStorage.removeItem('bit_session_token'); 
-            window.location.href = 'index.html'; 
-            return; 
+        console.log("✅ Database Verified: All enterprise tables and HR module ready.");
+    } catch (err) { console.error("❌ DB Init Error:", err.message); }
+})();
+
+// --- AUTHENTICATION LOGIC ---
+app.post('/api/auth', async (req, res) => {
+    try {
+        const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
+        const payload = ticket.getPayload();
+        const email = payload.email.toLowerCase();
+        
+        // 1. ADMIN CHECK (Must be first)
+        if (email === 'sivanagu7771@gmail.com') {
+            const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
+            const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
+            return res.json({ success: true, isAdmin: true, profile: { full_name: payload.name, email: email, picture: payload.picture }, globalStats: globalStats[0], globalDrives });
+        }
+
+        // 2. HR CHECK (Must be second, BEFORE the college email block)
+        const [hrCheck] = await promisePool.query("SELECT * FROM hr_profile WHERE email = ?", [email]);
+        if (hrCheck.length > 0) {
+            return res.json({ success: true, isHR: true, hrData: hrCheck[0], name: payload.name, email: email, picture: payload.picture });
+        }
+
+        // 3. STUDENT DOMAIN BLOCKER (Must be after HR check!)
+        if (!email.endsWith('@bitsathy.ac.in')) {
+            return res.json({ success: false, message: "Access Denied. You must use your official @bitsathy.ac.in email." });
         }
         
-        if (data.isAdmin) { 
-            window.location.href = 'admin.html'; 
-            return; 
+        // 4. STUDENT LOGIN & AUTO-REGISTRATION
+        let [profile] = await promisePool.query("SELECT * FROM student_profile WHERE email = ?", [email]);
+        if (profile.length === 0) {
+            await promisePool.query("INSERT INTO student_profile (email, full_name, department, reward_points) VALUES (?, ?, 'Not Assigned', '0')", [email, payload.name]);
+            [profile] = await promisePool.query("SELECT * FROM student_profile WHERE email = ?", [email]);
         }
-        
-        let loggedInName = data.profile.full_name; 
-        let loggedInEmail = data.profile.email; 
-        let loggedInPic = data.picture || getAvatar(loggedInName);
-        
-        setTopHeader(loggedInName, loggedInEmail, loggedInPic);
-        
-        populateDashboard(data.profile, loggedInPic, data.courses, data.skills, data.semGpas);
-        populatePersonalPlacement(data.placeProfile, data.placeApps);
-        populateGlobalPlacement(data.globalStats, data.globalDrives); 
-        
-    } catch (e) { 
-        window.location.href = 'index.html'; 
-    }
-};
 
-function signOut() { localStorage.removeItem('bit_session_token'); window.location.href = 'index.html'; }
+        const [courses] = await promisePool.query("SELECT * FROM student_courses WHERE student_email = ? ORDER BY semester ASC", [email]);
+        const [skills] = await promisePool.query("SELECT * FROM student_skills WHERE student_email = ?", [email]);
+        const [semGpas] = await promisePool.query("SELECT semester, gpa FROM student_sem_gpa WHERE student_email = ?", [email]);
+        const [placeProfile] = await promisePool.query("SELECT * FROM placement_student_profile WHERE student_email = ?", [email]);
+        const [placeApps] = await promisePool.query("SELECT * FROM placement_apps WHERE student_email = ? ORDER BY id DESC", [email]);
+        const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
+        const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
 
-function renderChart(courses, semGpas) {
-    const ctx = document.getElementById('gpaChart').getContext('2d');
-    let labels = []; let dataPoints = [];
-    let gpaMap = {}; 
-    
-    if(semGpas) semGpas.forEach(g => gpaMap[g.semester] = g.gpa);
+        res.json({ success: true, isAdmin: false, isHR: false, profile: profile[0], courses, skills, semGpas, globalStats: globalStats[0], globalDrives, placeProfile: placeProfile[0], placeApps, picture: payload.picture });
+    } catch (error) { res.json({ success: false, message: "Session expired. Please log in again." }); }
+});
 
-    if (courses && courses.length > 0) {
-        let semData = {};
-        courses.forEach(c => {
-            if (!semData[c.semester]) semData[c.semester] = { total: 0, count: 0 };
-            let pts = 0;
-            if(c.grade.includes('O')) pts = 10; 
-            else if(c.grade === 'A+') pts = 9; 
-            else if(c.grade === 'A') pts = 8; 
-            else if(c.grade === 'B+') pts = 7; 
-            else if(c.grade === 'B') pts = 6; 
-            else if(c.grade === 'C') pts = 5;
-            
-            semData[c.semester].total += pts; 
-            semData[c.semester].count += 1;
-        });
-        Object.keys(semData).sort((a,b) => a-b).forEach(sem => {
-            labels.push(`Sem ${sem}`); 
-            if(gpaMap[sem] && gpaMap[sem] !== '--') {
-                dataPoints.push(parseFloat(gpaMap[sem]));
-            } else {
-                dataPoints.push((semData[sem].total / semData[sem].count).toFixed(2));
-            }
-        });
-    } else { 
-        labels = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6']; 
-        dataPoints = [0,0,0,0,0,0]; 
-    }
-
-    if (gpaChartInstance) gpaChartInstance.destroy(); 
-    let gradient = ctx.createLinearGradient(0, 0, 0, 300);
-    gradient.addColorStop(0, 'rgba(79, 70, 229, 0.15)'); 
-    gradient.addColorStop(1, 'rgba(79, 70, 229, 0)');
-    
-    gpaChartInstance = new Chart(ctx, { 
-        type: 'line', 
-        data: { 
-            labels: labels, 
-            datasets: [{ 
-                label: 'Avg SGPA', data: dataPoints, borderColor: '#4F46E5', backgroundColor: gradient, 
-                borderWidth: 3, pointBackgroundColor: '#FFF', pointBorderColor: '#4F46E5', 
-                pointBorderWidth: 2, pointRadius: 4, fill: true, tension: 0.3 
-            }] 
-        }, 
-        options: { 
-            responsive: true, maintainAspectRatio: false, 
-            plugins: { legend: { display: false } }, 
-            scales: { y: { min: 0, max: 10, border: {display: false} }, x: { grid: { display: false }, border: {display: false} } }, 
-            interaction: { mode: 'index', intersect: false } 
-        } 
-    });
-}
-
-function populateDashboard(p, img, courses, skills, semGpas) {
-    document.getElementById('cardProfileName').innerText = p.full_name; 
-    document.getElementById('val-email').innerText = p.email; 
-    document.getElementById('val-roll_no').innerText = p.roll_no || '--'; 
-    document.getElementById('val-department').innerText = p.department || '--';
-    document.getElementById('val-cgpa').innerText = parseFloat(p.cgpa).toFixed(2); 
-    document.getElementById('val-sgpa').innerText = parseFloat(p.sgpa || 0).toFixed(2);
-    document.getElementById('val-attendance').innerText = p.attendance; 
-    document.getElementById('val-reward_points').innerText = p.reward_points;
-    document.getElementById('val-arrears').innerText = p.arrears; 
-    document.getElementById('val-leaves').innerText = p.leaves;
-    
-    renderChart(courses, semGpas);
-
-    if(skills && skills.length > 0) {
-        document.getElementById('act-total-skills').innerText = skills.length; 
-        document.getElementById('act-mastered').innerText = skills.filter(s => s.completed_levels >= s.total_levels).length; 
-        document.getElementById('act-progress').innerText = skills.filter(s => s.completed_levels < s.total_levels).length;
-        
-        document.getElementById('skills-container').innerHTML = skills.map(s => {
-            let pct = Math.round((s.completed_levels / s.total_levels) * 100) || 0;
-            return `
-            <div class="skill-card">
-                <div class="skill-header flex-between">
-                    <div class="skill-title"><span>${s.skill_name}</span></div>
-                </div>
-                <div class="badge" style="margin-bottom: 12px;">${s.category || 'General'}</div>
-                <div class="progress-track"><div class="progress-fill" style="width: ${pct}%;"></div></div>
-                <div class="skill-footer flex-between">
-                    <div class="flex-center">
-                        <i class="fa-solid fa-layer-group" style="color: var(--primary);"></i> 
-                        <span style="color: var(--text-main); font-weight:800;">${s.completed_levels}</span> / 
-                        <span>${s.total_levels}</span> Lvl
-                    </div>
-                    <div style="color: var(--primary); font-weight: 800;">${pct}%</div>
-                </div>
-            </div>`;
-        }).join('');
-    } else { 
-        document.getElementById('act-total-skills').innerText = "0"; 
-        document.getElementById('act-mastered').innerText = "0"; 
-        document.getElementById('act-progress').innerText = "0";
-        document.getElementById('skills-container').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color:var(--text-muted); font-weight: 500; border: 1px dashed var(--border); border-radius: 12px;">No PCDP activities logged yet.</div>`; 
-    }
-
-    if(courses && courses.length > 0) {
-        let sems = {}; 
-        courses.forEach(c => { if(!sems[c.semester]) sems[c.semester]=[]; sems[c.semester].push(c); });
-        let gpaMap = {}; 
-        if (semGpas) semGpas.forEach(g => gpaMap[g.semester] = g.gpa);
-        
-        document.getElementById('academics-container').innerHTML = Object.keys(sems).sort((a,b)=>b-a).map(sem => {
-            let semGpaVal = gpaMap[sem] || '--';
-            return `
-            <div class="sem-card">
-                <div class="sem-header">
-                    <div class="flex-center">
-                        <div class="sem-title">Semester ${sem}</div>
-                        <div class="sem-gpa-badge">
-                            <span class="lbl">GPA</span>
-                            <div class="flex-center"><span class="val">${semGpaVal}</span></div>
-                        </div>
-                    </div>
-                </div>
-                <table class="clean-table">
-                    <thead><tr><th style="padding-left:24px;">Subject</th><th>Marks</th><th>Grade</th></tr></thead>
-                    <tbody>
-                        ${sems[sem].map(c => `
-                        <tr>
-                            <td style="padding-left:24px; color: var(--text-main); font-weight: 600;">${c.course_name}</td>
-                            <td style="color: var(--primary); font-weight: 700; font-family: monospace; font-size:0.9rem;">${c.marks || '--'}</td>
-                            <td><span class="badge ${c.grade && (c.grade.includes('A')||c.grade==='O')?'badge-success':'badge-primary'}">${c.grade || '--'}</span></td>
-                        </tr>`).join('')}
-                    </tbody>
-                </table>
-            </div>`
-        }).join('');
-    } else { 
-        document.getElementById('academics-container').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color:var(--text-muted); font-size:0.85rem; border: 1px dashed var(--border); border-radius: 12px;">No academic records found.</div>`; 
-    }
-}
-
-function populateGlobalPlacement(gStats, gDrives) {
-    gStats = gStats || {};
-    document.getElementById('val-g-total').innerText = gStats.total_placed || '0';
-    document.getElementById('val-g-ongoing').innerText = gStats.ongoing_drives || '0';
-    document.getElementById('val-g-highest').innerText = gStats.highest_ctc || '0';
-    document.getElementById('val-g-avg').innerText = gStats.avg_ctc || '0';
-    
-    const drvBody = document.getElementById('global-drives-tbody');
-    if (gDrives && gDrives.length > 0) {
-        drvBody.innerHTML = gDrives.map(d => `
-        <tr>
-            <td style="font-weight: 700; color: var(--text-main);">${d.company}</td>
-            <td>${d.role}</td>
-            <td style="font-family: monospace;">${d.appeared}</td>
-            <td><span class="badge badge-success">${d.selected}</span></td>
-            <td style="font-weight: 700; color: var(--primary);">${d.ctc}</td>
-        </tr>`).join('');
-    } else { 
-        drvBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:var(--text-muted);">No campus drives recorded.</td></tr>`; 
-    }
-}
-
-function populatePersonalPlacement(pProfile, pApps) {
-    pProfile = pProfile || {}; 
-    const prf = pProfile;
-    document.getElementById('val-p-role').innerText = prf.offer_role || '--'; 
-    document.getElementById('val-p-comp').innerText = prf.offer_company || '--';
-    document.getElementById('val-p-ctc').innerText = prf.offer_ctc || '--'; 
-    document.getElementById('val-p-status').innerText = prf.status || 'Unplaced';
-    document.getElementById('val-p-assess').innerText = prf.assessments || '0'; 
-    document.getElementById('val-p-int').innerText = prf.interviews || '0'; 
-    document.getElementById('val-p-off').innerText = prf.offers || '0';
-    
-    const dsa = prf.tech_dsa || '0'; document.getElementById('val-t-dsa').innerText = dsa; document.getElementById('bar-t-dsa').style.width = `${dsa}%`;
-    const oop = prf.tech_oop || '0'; document.getElementById('val-t-oop').innerText = oop; document.getElementById('bar-t-oop').style.width = `${oop}%`;
-    const core = prf.tech_core || '0'; document.getElementById('val-t-core').innerText = core; document.getElementById('bar-t-core').style.width = `${core}%`;
-    const quant = prf.apt_quant || '0'; document.getElementById('val-a-quant').innerText = quant; document.getElementById('bar-a-quant').style.width = `${quant}%`;
-    const logical = prf.apt_logical || '0'; document.getElementById('val-a-log').innerText = logical; document.getElementById('bar-a-log').style.width = `${logical}%`;
-    const hr = prf.apt_hr || '0'; document.getElementById('val-a-hr').innerText = hr; document.getElementById('bar-a-hr').style.width = `${hr}%`;
-
-    const appBody = document.getElementById('student-apps-tbody');
-    if (pApps && pApps.length > 0) {
-        appBody.innerHTML = pApps.map(a => {
-            let bClass = 'badge-primary';
-            if(a.status.toLowerCase().includes('select') || a.status.toLowerCase().includes('offer')) bClass = 'badge-success';
-            if(a.status.toLowerCase().includes('clear') || a.status.toLowerCase().includes('reject')) bClass = 'badge-danger';
-            if(a.status.toLowerCase().includes('pend') || a.status.toLowerCase().includes('wait')) bClass = 'badge-warning';
-            return `
-            <tr>
-                <td style="font-weight: 700; color: var(--text-main);">${a.company}</td>
-                <td style="color: var(--text-muted);">${a.role}</td>
-                <td>${a.date_applied}</td>
-                <td><span class="badge ${bClass}">${a.status}</span></td>
-            </tr>`;
-        }).join('');
-    } else { 
-        appBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 30px; color:var(--text-muted);">No applications logged.</td></tr>`; 
-    }
-}
-
-// --- SECURE: FETCH LOCAL DATABASE REWARDS FOR LEADERBOARD ---
-async function fetchAllRewards() {
-    const tbody = document.getElementById('all-rewards-tbody');
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Leaderboard...</td></tr>`;
-
+// --- SAFE REWARDS FETCH ---
+app.post('/api/student/all-rewards', async (req, res) => {
     try {
-        const req = await fetch(`${BASE_URL}/api/student/all-rewards`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: globalToken })
-        });
-        const data = await req.json();
+        await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
+        let rows = [];
+        try {
+            [rows] = await promisePool.query("SELECT full_name, roll_no, department, reward_points FROM student_profile");
+        } catch (sqlErr) {
+            [rows] = await promisePool.query("SELECT full_name, roll_no, department FROM student_profile");
+        }
+        res.json({ success: true, students: rows || [] });
+    } catch (e) { res.json({ success: false, message: "Session expired. Please log in again." }); }
+});
 
-        // Safety check to ensure data.students is an array before sorting
-        if (data.success && Array.isArray(data.students)) {
-            allRewardsData = data.students; 
+// --- HR & RESUME API ---
+app.post('/api/hr/applicants', async (req, res) => {
+    try {
+        const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
+        const email = ticket.getPayload().email.toLowerCase();
+        
+        const [hr] = await promisePool.query("SELECT company_name FROM hr_profile WHERE email = ?", [email]);
+        if (hr.length === 0) return res.json({ success: false });
 
-            // Sort by points safely using Math logic on the frontend
-            allRewardsData.sort((a, b) => {
-                let ptsA = parseInt(a.reward_points || 0) || 0;
-                let ptsB = parseInt(b.reward_points || 0) || 0;
-                return ptsB - ptsA;
-            });
+        const sql = `
+            SELECT a.role, a.date_applied, a.status, s.full_name, s.roll_no, s.department, s.email, p.resume_url, p.tech_dsa, p.tech_oop, p.tech_core, p.apt_quant, p.apt_logical, p.apt_hr
+            FROM placement_apps a
+            JOIN student_profile s ON a.student_email = s.email
+            LEFT JOIN placement_student_profile p ON a.student_email = p.student_email
+            WHERE LOWER(a.company) = LOWER(?)
+        `;
+        const [applicants] = await promisePool.query(sql, [hr[0].company_name]);
+        res.json({ success: true, applicants });
+    } catch(e) { res.json({ success: false }); }
+});
 
-            renderRewardsTable(allRewardsData);
+app.post('/api/student/update-resume', async (req, res) => {
+    try {
+        const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
+        const email = ticket.getPayload().email.toLowerCase();
+        await promisePool.query(`INSERT IGNORE INTO placement_student_profile (student_email) VALUES (?)`, [email]);
+        await promisePool.query(`UPDATE placement_student_profile SET resume_url = ? WHERE student_email = ?`, [req.body.resume_url, email]);
+        res.json({ success: true });
+    } catch(e) { res.json({ success: false }); }
+});
+
+// --- ADMIN ROUTES ---
+async function verifyAdmin(token) {
+    const ticket = await googleClient.verifyIdToken({ idToken: token, audience: CLIENT_ID });
+    if (ticket.getPayload().email.toLowerCase() !== 'sivanagu7771@gmail.com') throw new Error("Unauthorized");
+    return true;
+}
+
+app.post('/api/admin/list', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        const [rows] = await promisePool.query("SELECT email, full_name, roll_no, department FROM student_profile ORDER BY full_name ASC");
+        res.json({ success: true, students: rows });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/student-data', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        const email = req.body.targetEmail;
+        const [profile] = await promisePool.query("SELECT * FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]);
+        const [courses] = await promisePool.query("SELECT * FROM student_courses WHERE student_email = ? ORDER BY semester ASC", [email]);
+        const [skills] = await promisePool.query("SELECT * FROM student_skills WHERE student_email = ?", [email]);
+        const [semGpas] = await promisePool.query("SELECT semester, gpa FROM student_sem_gpa WHERE student_email = ?", [email]);
+        const [placeProfile] = await promisePool.query("SELECT * FROM placement_student_profile WHERE student_email = ?", [email]);
+        const [placeApps] = await promisePool.query("SELECT * FROM placement_apps WHERE student_email = ? ORDER BY id DESC", [email]);
+        res.json({ success: true, profile: profile[0], courses, skills, semGpas, placeProfile: placeProfile[0], placeApps });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/update-field', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        const { targetEmail, field, value } = req.body;
+        if (field === 'email') {
+            await promisePool.query("SET FOREIGN_KEY_CHECKS=0");
+            await promisePool.query(`UPDATE student_profile SET email = ? WHERE LOWER(email) = LOWER(?)`, [value.toLowerCase(), targetEmail]);
+            await promisePool.query(`UPDATE student_courses SET student_email = ? WHERE LOWER(student_email) = LOWER(?)`, [value.toLowerCase(), targetEmail]);
+            await promisePool.query(`UPDATE student_skills SET student_email = ? WHERE LOWER(student_email) = LOWER(?)`, [value.toLowerCase(), targetEmail]);
+            await promisePool.query(`UPDATE student_sem_gpa SET student_email = ? WHERE LOWER(student_email) = LOWER(?)`, [value.toLowerCase(), targetEmail]);
+            await promisePool.query(`UPDATE placement_student_profile SET student_email = ? WHERE LOWER(student_email) = LOWER(?)`, [value.toLowerCase(), targetEmail]);
+            await promisePool.query(`UPDATE placement_apps SET student_email = ? WHERE LOWER(student_email) = LOWER(?)`, [value.toLowerCase(), targetEmail]);
+            await promisePool.query("SET FOREIGN_KEY_CHECKS=1");
         } else {
-            // If the error message mentions a session problem, automatically log them out
-            if (data.message && data.message.includes("Session expired")) {
-                signOut();
-            } else {
-                tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--danger);">Failed to load data. The data requested is unavailable.</td></tr>`;
-            }
+            await promisePool.query(`UPDATE student_profile SET ${field} = ? WHERE LOWER(email) = LOWER(?)`, [value, targetEmail]);
         }
-    } catch (e) {
-        console.error(e);
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--danger);">Network error. Please wait 1 minute for server to wake up and refresh!</td></tr>`;
-    }
-}
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
 
-function renderRewardsTable(students) {
-    const tbody = document.getElementById('all-rewards-tbody');
-    if (!students || students.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No student records found in database yet.</td></tr>`;
-        return;
-    }
+app.post('/api/admin/update-sem-gpa', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query("INSERT INTO student_sem_gpa (student_email, semester, gpa) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE gpa = VALUES(gpa)", [req.body.targetEmail.toLowerCase(), req.body.semester, req.body.gpa]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
 
-    tbody.innerHTML = students.map((s, index) => {
-        let rankBadge = `<span style="font-weight: 800; color: var(--text-muted);">${index + 1}</span>`;
-        if (index === 0) rankBadge = `<span class="badge" style="background: #FEF08A; color: #854D0E; border: none;"><i class="fa-solid fa-trophy"></i> 1st</span>`;
-        if (index === 1) rankBadge = `<span class="badge" style="background: #E2E8F0; color: #475569; border: none;">2nd</span>`;
-        if (index === 2) rankBadge = `<span class="badge" style="background: #FFEDD5; color: #9A3412; border: none;">3rd</span>`;
+app.post('/api/admin/update-global-stat', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query(`UPDATE placement_global SET ${req.body.field} = ? WHERE id = 1`, [req.body.value]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
 
-        let name = s.full_name || '--';
-        let roll = s.roll_no || '--';
-        let dept = s.department || 'Not Assigned';
-        let points = s.reward_points || '0';
+app.post('/api/admin/add-drive', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query("INSERT INTO placement_drives (company, role, appeared, selected, ctc) VALUES (?, ?, ?, ?, ?)", [req.body.company, req.body.role, req.body.appeared, req.body.selected, req.body.ctc]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
 
-        return `
-        <tr class="dir-row">
-            <td>${rankBadge}</td>
-            <td style="font-weight:700; color: var(--text-main);">${name}</td>
-            <td style="font-family: monospace; font-size: 0.95rem;">${roll}</td>
-            <td><span class="badge badge-primary">${dept}</span></td>
-            <td style="font-weight: 800; color: #B45309; font-size: 1.1rem;">${points}</td>
-        </tr>`;
-    }).join('');
-}
+app.post('/api/admin/update-drive', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query(`UPDATE placement_drives SET ${req.body.field} = ? WHERE id = ?`, [req.body.value, req.body.id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
 
-function filterRewards() {
-    const searchTerm = document.getElementById('rewardSearch').value.toLowerCase();
-    const filtered = allRewardsData.filter(s => {
-        let name = (s.full_name || "").toLowerCase();
-        let roll = (s.roll_no || "").toLowerCase();
-        return name.includes(searchTerm) || roll.includes(searchTerm);
-    });
-    renderRewardsTable(filtered);
-}
+app.post('/api/admin/delete-drive', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query("DELETE FROM placement_drives WHERE id = ?", [req.body.id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/update-placement-profile', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query(`INSERT IGNORE INTO placement_student_profile (student_email) VALUES (?)`, [req.body.targetEmail.toLowerCase()]);
+        await promisePool.query(`UPDATE placement_student_profile SET ${req.body.field} = ? WHERE student_email = ?`, [req.body.value, req.body.targetEmail.toLowerCase()]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/add-app', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query("INSERT INTO placement_apps (student_email, company, role, date_applied, status) VALUES (?, ?, ?, ?, ?)", [req.body.targetEmail.toLowerCase(), req.body.company, req.body.role, req.body.date_applied, req.body.status]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/update-app', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query(`UPDATE placement_apps SET ${req.body.field} = ? WHERE id = ?`, [req.body.value, req.body.id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/delete-app', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query("DELETE FROM placement_apps WHERE id = ?", [req.body.id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/add-student', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        const sql = `INSERT INTO student_profile (email, full_name, roll_no, department) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE full_name=VALUES(full_name), roll_no=VALUES(roll_no), department=VALUES(department)`;
+        await promisePool.query(sql, [req.body.email.toLowerCase(), req.body.full_name, req.body.roll_no, req.body.department]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/delete-student', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        const email = req.body.email;
+        await promisePool.query("SET FOREIGN_KEY_CHECKS=0");
+        await promisePool.query("DELETE FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]);
+        await promisePool.query("DELETE FROM student_courses WHERE LOWER(student_email) = LOWER(?)", [email]);
+        await promisePool.query("DELETE FROM student_skills WHERE LOWER(student_email) = LOWER(?)", [email]);
+        await promisePool.query("DELETE FROM student_sem_gpa WHERE LOWER(student_email) = LOWER(?)", [email]);
+        await promisePool.query("DELETE FROM placement_student_profile WHERE LOWER(student_email) = LOWER(?)", [email]);
+        await promisePool.query("DELETE FROM placement_apps WHERE LOWER(student_email) = LOWER(?)", [email]);
+        await promisePool.query("SET FOREIGN_KEY_CHECKS=1");
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/add-skill', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query("INSERT INTO student_skills (student_email, skill_name, total_levels, completed_levels, category) VALUES (?, ?, ?, ?, ?)", [req.body.targetEmail, req.body.skill_name, req.body.total_levels, req.body.completed_levels, req.body.category]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/update-skill', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query(`UPDATE student_skills SET ${req.body.field} = ? WHERE id = ?`, [req.body.value, req.body.id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/delete-skill', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query("DELETE FROM student_skills WHERE id = ?", [req.body.id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/add-course', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query("INSERT INTO student_courses (student_email, semester, course_name, marks, grade) VALUES (?, ?, ?, ?, ?)", [req.body.targetEmail, req.body.semester, req.body.course_name, req.body.marks, req.body.grade]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/update-course', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query(`UPDATE student_courses SET ${req.body.field} = ? WHERE id = ?`, [req.body.value, req.body.id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/delete-course', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query("DELETE FROM student_courses WHERE id = ?", [req.body.id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`🚀 BACKEND READY ON PORT ${PORT}`));

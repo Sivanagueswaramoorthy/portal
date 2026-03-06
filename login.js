@@ -1,18 +1,15 @@
 window.onload = () => {
-    // Initialize Google Auth with Domain Hint
     google.accounts.id.initialize({ 
         client_id: "159246343111-o9bv4lgk1hmmvdkef0qnq0ih9qefjhmj.apps.googleusercontent.com", 
         callback: handleLogin,
         hosted_domain: "bitsathy.ac.in" 
     });
     
-    // Render the button beautifully
     google.accounts.id.renderButton(
         document.getElementById("g_id_signin"), 
         { theme: "outline", size: "large", shape: "rectangular", width: 380, logo_alignment: "center" }
     );
 
-    // Auto-login check
     const savedToken = localStorage.getItem('bit_session_token');
     if (savedToken) {
         document.getElementById('g_id_signin').style.display = 'none';
@@ -26,7 +23,6 @@ window.onload = () => {
     }
 };
 
-// Password Show/Hide Toggle Logic
 function togglePass() {
     const passInput = document.getElementById("password");
     const passIcon = document.getElementById("togglePassword");
@@ -42,7 +38,6 @@ function togglePass() {
     }
 }
 
-// Handles the Google callback
 async function handleLogin(response) {
     const globalToken = response.credential;
     const errBox = document.getElementById('error-msg');
@@ -60,6 +55,8 @@ async function handleLogin(response) {
             localStorage.setItem('bit_session_token', globalToken);
             if (data.isAdmin) {
                 window.location.href = 'admin.html';
+            } else if (data.isHR) {
+                window.location.href = 'hr.html';
             } else {
                 window.location.href = 'student.html';
             }
@@ -69,7 +66,7 @@ async function handleLogin(response) {
             errBox.style.color = '#EF4444'; 
             errBox.style.background = '#FEF2F2';
             errBox.style.borderColor = '#FECACA';
-            errBox.innerText = data.message; 
+            errBox.innerText = data.message || "Session expired. Please sign in again."; 
             errBox.style.display = 'block'; 
         }
     } catch (e) {
@@ -78,7 +75,7 @@ async function handleLogin(response) {
         errBox.style.color = '#EF4444'; 
         errBox.style.background = '#FEF2F2';
         errBox.style.borderColor = '#FECACA';
-        errBox.innerText = "Connection Failed. Check network."; 
+        errBox.innerText = "Connection Failed. Backend might be sleeping, try again in 1 minute."; 
         errBox.style.display = 'block'; 
     }
 }

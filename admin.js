@@ -99,22 +99,28 @@ window.onload = async () => {
 };
 
 async function fetchDirectory() {
-    const req = await fetch(`${BASE_URL}/api/admin/list`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ adminToken: globalToken }) 
-    });
-    const data = await req.json();
-    
-    if (data.success) {
-        allStudentsList = data.students;
-        const deptSelect = document.getElementById('dirFilter');
-        const depts = [...new Set(allStudentsList.map(s => s.department).filter(d => d))];
-        deptSelect.innerHTML = '<option value="ALL">All Departments</option>';
-        depts.forEach(d => { deptSelect.innerHTML += `<option value="${d}">${d}</option>`; });
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/list`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ adminToken: globalToken }) 
+        });
+        const data = await req.json();
         
-        renderDirectoryTable(allStudentsList);
-        switchTab('directory', document.getElementById('nav-dir'));
+        if (data.success) {
+            allStudentsList = data.students;
+            const deptSelect = document.getElementById('dirFilter');
+            const depts = [...new Set(allStudentsList.map(s => s.department).filter(d => d))];
+            deptSelect.innerHTML = '<option value="ALL">All Departments</option>';
+            depts.forEach(d => { deptSelect.innerHTML += `<option value="${d}">${d}</option>`; });
+            
+            renderDirectoryTable(allStudentsList);
+            switchTab('directory', document.getElementById('nav-dir'));
+        } else {
+            signOut();
+        }
+    } catch(e) {
+        document.getElementById('directoryBody').innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--danger);">Server is waking up. Please refresh.</td></tr>`;
     }
 }
 
