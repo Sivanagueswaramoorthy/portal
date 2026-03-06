@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { OAuth2Client } = require('google-auth-library');
 const mysql = require('mysql2');
+const axios = require('axios'); // <-- ADDED: Needed to fetch the Google Script
 
 const app = express();
 app.use(cors()); 
@@ -79,7 +80,7 @@ app.post('/api/auth', async (req, res) => {
     } catch (error) { res.status(500).json({ success: false, message: "Server authentication failed." }); }
 });
 
-// --- NEW: FETCH ALL REWARD POINTS FOR LEADERBOARD ---
+// --- UPDATED: FETCH LIVE REWARD POINTS FROM GOOGLE SCRIPT ---
 app.post('/api/student/all-rewards', async (req, res) => {
     try {
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
@@ -89,9 +90,20 @@ app.post('/api/student/all-rewards', async (req, res) => {
             return res.status(403).json({ success: false, message: "Unauthorized." });
         }
 
-        const [rows] = await promisePool.query("SELECT full_name, roll_no, department, reward_points FROM student_profile ORDER BY CAST(reward_points AS UNSIGNED) DESC");
-        res.json({ success: true, students: rows });
-    } catch (e) { res.status(500).json({ success: false }); }
+        // THE SECRET URL YOU REVERSE-ENGINEERED
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzyDfs25UGZnrRfXQbtcXkCh6C0WrXc2KR0zbh3smbA6Q7JEE7_0hrL9S_Go5npZpMXGQ/exec";
+        
+        // Your server fetches the data (bypassing browser CORS)
+        const scriptResponse = await axios.get(GOOGLE_SCRIPT_URL);
+        
+        // Ensure we extract the array properly depending on how they structured it
+        let studentsData = scriptResponse.data.data || scriptResponse.data;
+
+        res.json({ success: true, students: studentsData });
+    } catch (e) { 
+        console.error("Error fetching live rewards:", e.message);
+        res.status(500).json({ success: false }); 
+    }
 });
 
 async function verifyAdmin(token) {
