@@ -9,18 +9,19 @@ const dbPool = mysql.createPool({
     ssl: { rejectUnauthorized: false } 
 });
 
-// Here is your exact email being authorized as an HR!
+// The exact HR credentials you requested
 const email = 'sivanagueswaramoorthy@gmail.com'; 
 const company = 'Zoho';
+const password = 'hr@123'; 
 
 dbPool.query(
-    `INSERT INTO hr_profile (email, company_name) VALUES (?, ?) ON DUPLICATE KEY UPDATE company_name = VALUES(company_name)`, 
-    [email, company],
+    `INSERT INTO hr_profile (email, company_name, password) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE company_name = VALUES(company_name), password = VALUES(password)`, 
+    [email, company, password],
     (err) => {
         if (err) {
             console.error("❌ Error:", err.message);
         } else {
-            console.log(`✅ Success! ${email} is now officially registered as an HR for ${company}.`);
+            console.log(`✅ Success! HR Account updated.\nEmail: ${email}\nPassword: ${password}\nCompany: ${company}`);
         }
         process.exit(); 
     }

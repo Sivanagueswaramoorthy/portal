@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { OAuth2Client } = require('google-auth-library');
 const mysql = require('mysql2');
+const jwt = require('jsonwebtoken'); 
 
 const app = express();
 app.use(cors()); 
@@ -9,13 +10,13 @@ app.use(express.json());
 
 const CLIENT_ID = "159246343111-o9bv4lgk1hmmvdkef0qnq0ih9qefjhmj.apps.googleusercontent.com";
 const googleClient = new OAuth2Client(CLIENT_ID);
+const HR_SECRET_KEY = "bitsathy_super_secret_hr_key"; 
 
-// --- DATABASE CONNECTION ---
 const dbPool = mysql.createPool({
     host: 'mysql-32a5e69e-sivanagu7771-74ba.d.aivencloud.com',
     port: 17949, 
     user: 'avnadmin', 
-    password: 'AVNS_x5GIyjOoanVqXlKMi0w', // Your Aiven Database Password
+    password: 'AVNS_x5GIyjOoanVqXlKMi0w', 
     database: 'defaultdb', 
     waitForConnections: true,
     connectionLimit: 10,
@@ -23,47 +24,65 @@ const dbPool = mysql.createPool({
 });
 const promisePool = dbPool.promise();
 
-// --- DB AUTO-INITIALIZER ---
+// --- DB AUTO-INITIALIZER (SELF-HEALING) ---
 (async function initializeDatabase() {
     try {
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS student_profile (email VARCHAR(255) PRIMARY KEY, full_name VARCHAR(255), roll_no VARCHAR(50), department VARCHAR(100))`);
+        try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN cgpa VARCHAR(10) DEFAULT '0'`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN sgpa VARCHAR(10) DEFAULT '0'`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN attendance VARCHAR(10) DEFAULT '0'`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN reward_points VARCHAR(10) DEFAULT '0'`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN arrears VARCHAR(10) DEFAULT '0'`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN leaves VARCHAR(10) DEFAULT '0'`); } catch(e){}
+
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS student_courses (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), semester INT, course_name VARCHAR(255), marks VARCHAR(50), grade VARCHAR(10))`);
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS student_skills (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), skill_name VARCHAR(255), total_levels INT, completed_levels INT, category VARCHAR(100))`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS student_sem_gpa (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255) NOT NULL, semester INT NOT NULL, gpa VARCHAR(10), UNIQUE KEY unique_sem (student_email, semester))`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_global (id INT PRIMARY KEY, total_placed VARCHAR(50), ongoing_drives VARCHAR(50), highest_ctc VARCHAR(50), avg_ctc VARCHAR(50))`);
         await promisePool.query(`INSERT IGNORE INTO placement_global (id, total_placed, ongoing_drives, highest_ctc, avg_ctc) VALUES (1, '0', '0', '0', '0')`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_drives (id INT AUTO_INCREMENT PRIMARY KEY, company VARCHAR(255), role VARCHAR(255), appeared VARCHAR(50), selected VARCHAR(50), ctc VARCHAR(50))`);
-        await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_student_profile (student_email VARCHAR(255) PRIMARY KEY, offer_role VARCHAR(255) DEFAULT '--', offer_company VARCHAR(255) DEFAULT '--', offer_ctc VARCHAR(50) DEFAULT '--', status VARCHAR(50) DEFAULT 'Unplaced', assessments VARCHAR(50) DEFAULT '0', interviews VARCHAR(50) DEFAULT '0', offers VARCHAR(50) DEFAULT '0', tech_dsa VARCHAR(50) DEFAULT '0', tech_oop VARCHAR(50) DEFAULT '0', tech_core VARCHAR(50) DEFAULT '0', apt_quant VARCHAR(50) DEFAULT '0', apt_logical VARCHAR(50) DEFAULT '0', apt_hr VARCHAR(50) DEFAULT '0', resume_url VARCHAR(500) DEFAULT '--')`);
+        
+        // FIX: Resume URL is set to LONGTEXT to hold any size Google Drive link safely
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_student_profile (student_email VARCHAR(255) PRIMARY KEY, offer_role VARCHAR(255) DEFAULT '--', offer_company VARCHAR(255) DEFAULT '--', offer_ctc VARCHAR(50) DEFAULT '--', status VARCHAR(50) DEFAULT 'Unplaced', assessments VARCHAR(50) DEFAULT '0', interviews VARCHAR(50) DEFAULT '0', offers VARCHAR(50) DEFAULT '0', tech_dsa VARCHAR(50) DEFAULT '0', tech_oop VARCHAR(50) DEFAULT '0', tech_core VARCHAR(50) DEFAULT '0', apt_quant VARCHAR(50) DEFAULT '0', apt_logical VARCHAR(50) DEFAULT '0', apt_hr VARCHAR(50) DEFAULT '0', resume_url LONGTEXT)`);
+        try { await promisePool.query(`ALTER TABLE placement_student_profile MODIFY COLUMN resume_url LONGTEXT`); } catch(e){}
+
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_apps (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), company VARCHAR(255), role VARCHAR(255), date_applied VARCHAR(50), status VARCHAR(50))`);
-        await promisePool.query(`CREATE TABLE IF NOT EXISTS hr_profile (email VARCHAR(255) PRIMARY KEY, company_name VARCHAR(255))`);
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS hr_profile (email VARCHAR(255) PRIMARY KEY, company_name VARCHAR(255), password VARCHAR(255))`);
         
         console.log("✅ Database Verified: All enterprise tables and HR module ready.");
     } catch (err) { console.error("❌ DB Init Error:", err.message); }
 })();
 
-// --- AUTHENTICATION LOGIC ---
+// --- 1. MANUAL LOGIN (HR ONLY) ---
+app.post('/api/hr/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const [hr] = await promisePool.query("SELECT * FROM hr_profile WHERE LOWER(email) = LOWER(?) AND password = ?", [email, password]);
+        
+        if (hr.length > 0) {
+            const token = jwt.sign({ email: hr[0].email, company: hr[0].company_name }, HR_SECRET_KEY, { expiresIn: '2h' });
+            res.json({ success: true, token: token, company: hr[0].company_name });
+        } else {
+            res.json({ success: false, message: "Invalid HR Email or Password." });
+        }
+    } catch (e) { res.json({ success: false, message: "Database Error during HR login." }); }
+});
+
+// --- 2. GOOGLE AUTH (Admin & Students ONLY) ---
 app.post('/api/auth', async (req, res) => {
     try {
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
         const payload = ticket.getPayload();
         const email = payload.email.toLowerCase();
         
-        // 1. ADMIN CHECK (Must be first)
         if (email === 'sivanagu7771@gmail.com') {
             const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
             const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
             return res.json({ success: true, isAdmin: true, profile: { full_name: payload.name, email: email, picture: payload.picture }, globalStats: globalStats[0], globalDrives });
         }
 
-        // 2. HR CHECK (Must be second, BEFORE the college email block)
-        const [hrCheck] = await promisePool.query("SELECT * FROM hr_profile WHERE email = ?", [email]);
-        if (hrCheck.length > 0) {
-            return res.json({ success: true, isHR: true, hrData: hrCheck[0], name: payload.name, email: email, picture: payload.picture });
-        }
-
-        // 3. STUDENT DOMAIN BLOCKER (Must be after HR check!)
-        if (!email.endsWith('@bitsathy.ac.in')) {
-            return res.json({ success: false, message: "Access Denied. You must use your official @bitsathy.ac.in email." });
-        }
+        if (!email.endsWith('@bitsathy.ac.in')) return res.json({ success: false, message: "Access Denied. Only @bitsathy.ac.in or Admin Google accounts allowed here." });
         
-        // 4. STUDENT LOGIN & AUTO-REGISTRATION
         let [profile] = await promisePool.query("SELECT * FROM student_profile WHERE email = ?", [email]);
         if (profile.length === 0) {
             await promisePool.query("INSERT INTO student_profile (email, full_name, department, reward_points) VALUES (?, ?, 'Not Assigned', '0')", [email, payload.name]);
@@ -78,53 +97,58 @@ app.post('/api/auth', async (req, res) => {
         const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
         const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
 
-        res.json({ success: true, isAdmin: false, isHR: false, profile: profile[0], courses, skills, semGpas, globalStats: globalStats[0], globalDrives, placeProfile: placeProfile[0], placeApps, picture: payload.picture });
-    } catch (error) { res.json({ success: false, message: "Session expired. Please log in again." }); }
+        res.json({ success: true, isAdmin: false, profile: profile[0], courses, skills, semGpas, globalStats: globalStats[0], globalDrives, placeProfile: placeProfile[0], placeApps, picture: payload.picture });
+    } catch (error) { 
+        console.error("AUTH ERROR CAUGHT:", error.message);
+        res.json({ success: false, message: `Login Error: ${error.message}` }); 
+    }
 });
 
-// --- SAFE REWARDS FETCH ---
-app.post('/api/student/all-rewards', async (req, res) => {
+// --- HR DATA APIS ---
+app.post('/api/hr/verify', async (req, res) => {
     try {
-        await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
-        let rows = [];
-        try {
-            [rows] = await promisePool.query("SELECT full_name, roll_no, department, reward_points FROM student_profile");
-        } catch (sqlErr) {
-            [rows] = await promisePool.query("SELECT full_name, roll_no, department FROM student_profile");
-        }
-        res.json({ success: true, students: rows || [] });
-    } catch (e) { res.json({ success: false, message: "Session expired. Please log in again." }); }
+        const decoded = jwt.verify(req.body.token, HR_SECRET_KEY);
+        res.json({ success: true, company: decoded.company, email: decoded.email });
+    } catch(e) { res.json({ success: false }); }
 });
 
-// --- HR & RESUME API ---
 app.post('/api/hr/applicants', async (req, res) => {
     try {
-        const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
-        const email = ticket.getPayload().email.toLowerCase();
+        const decoded = jwt.verify(req.body.token, HR_SECRET_KEY);
         
-        const [hr] = await promisePool.query("SELECT company_name FROM hr_profile WHERE email = ?", [email]);
-        if (hr.length === 0) return res.json({ success: false });
-
         const sql = `
-            SELECT a.role, a.date_applied, a.status, s.full_name, s.roll_no, s.department, s.email, p.resume_url, p.tech_dsa, p.tech_oop, p.tech_core, p.apt_quant, p.apt_logical, p.apt_hr
+            SELECT a.role, a.date_applied, a.status, s.full_name, s.roll_no, s.department, s.email, p.resume_url, p.tech_dsa, p.tech_oop, p.tech_core
             FROM placement_apps a
             JOIN student_profile s ON a.student_email = s.email
             LEFT JOIN placement_student_profile p ON a.student_email = p.student_email
             WHERE LOWER(a.company) = LOWER(?)
         `;
-        const [applicants] = await promisePool.query(sql, [hr[0].company_name]);
+        const [applicants] = await promisePool.query(sql, [decoded.company]);
         res.json({ success: true, applicants });
     } catch(e) { res.json({ success: false }); }
 });
 
+// --- STUDENT APIS ---
 app.post('/api/student/update-resume', async (req, res) => {
     try {
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
         const email = ticket.getPayload().email.toLowerCase();
+        
         await promisePool.query(`INSERT IGNORE INTO placement_student_profile (student_email) VALUES (?)`, [email]);
         await promisePool.query(`UPDATE placement_student_profile SET resume_url = ? WHERE student_email = ?`, [req.body.resume_url, email]);
         res.json({ success: true });
-    } catch(e) { res.json({ success: false }); }
+    } catch(e) { 
+        console.error("Resume Save Error:", e.message);
+        res.json({ success: false, message: "Session expired or database error." }); 
+    }
+});
+
+app.post('/api/student/all-rewards', async (req, res) => {
+    try {
+        await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
+        let [rows] = await promisePool.query("SELECT full_name, roll_no, department, reward_points FROM student_profile");
+        res.json({ success: true, students: rows || [] });
+    } catch (e) { res.json({ success: false, message: "Session expired." }); }
 });
 
 // --- ADMIN ROUTES ---

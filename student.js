@@ -1,7 +1,11 @@
+// SMART URL: Auto-detects if you are testing locally or on live GitHub Pages!
+const BASE_URL = (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') 
+    ? 'http://localhost:10000' 
+    : 'https://portal-6crm.onrender.com';
+
 let globalToken = localStorage.getItem('bit_session_token');
 let gpaChartInstance = null;
 let allRewardsData = [];
-const BASE_URL = 'https://portal-6crm.onrender.com';
 
 if (!globalToken) window.location.href = 'index.html';
 
@@ -135,7 +139,7 @@ function populateDashboard(p, img, courses, skills, semGpas) {
     document.getElementById('val-email').innerText = p.email; 
     document.getElementById('val-roll_no').innerText = p.roll_no || '--'; 
     document.getElementById('val-department').innerText = p.department || '--';
-    document.getElementById('val-cgpa').innerText = parseFloat(p.cgpa).toFixed(2); 
+    document.getElementById('val-cgpa').innerText = parseFloat(p.cgpa || 0).toFixed(2); 
     document.getElementById('val-sgpa').innerText = parseFloat(p.sgpa || 0).toFixed(2);
     document.getElementById('val-attendance').innerText = p.attendance; 
     document.getElementById('val-reward_points').innerText = p.reward_points;
@@ -252,7 +256,7 @@ function populatePersonalPlacement(pProfile, pApps) {
     const logical = prf.apt_logical || '0'; document.getElementById('val-a-log').innerText = logical; document.getElementById('bar-a-log').style.width = `${logical}%`;
     const hr = prf.apt_hr || '0'; document.getElementById('val-a-hr').innerText = hr; document.getElementById('bar-a-hr').style.width = `${hr}%`;
 
-    // Load Resume Link
+    // Safely insert Resume Link
     document.getElementById('resume-link-input').value = (prf.resume_url && prf.resume_url !== '--') ? prf.resume_url : '';
     if (prf.resume_url && prf.resume_url !== '--') {
         document.getElementById('view-resume-btn').href = prf.resume_url;
@@ -279,9 +283,8 @@ function populatePersonalPlacement(pProfile, pApps) {
     }
 }
 
-// --- NEW: SAVE RESUME LINK ---
 async function saveResume() {
-    const link = document.getElementById('resume-link-input').value;
+    const link = document.getElementById('resume-link-input').value.trim();
     if (!link) return alert("Please paste a link first.");
     
     document.getElementById('resume-link-input').disabled = true;
@@ -293,20 +296,21 @@ async function saveResume() {
             body: JSON.stringify({ token: globalToken, resume_url: link })
         });
         const data = await req.json();
+        
         if(data.success) {
-            alert("Resume link saved successfully! HR can now view it.");
+            alert("✅ UPDATE SUCCESS: Resume link saved! HR can now view it.");
             document.getElementById('view-resume-btn').href = link;
             document.getElementById('view-resume-btn').style.display = 'inline-flex';
         } else {
-            alert("Failed to save. Try again.");
+            alert(`❌ SESSION ERROR: ${data.message}\n\nPlease click "Secure Logout" on the left menu and sign back in.`);
+            signOut();
         }
     } catch(e) {
-        alert("Network error.");
+        alert("❌ CRITICAL NETWORK ERROR: Ensure your backend server is running!");
     }
     document.getElementById('resume-link-input').disabled = false;
 }
 
-// --- LEADERBOARD LOGIC ---
 async function fetchAllRewards() {
     const tbody = document.getElementById('all-rewards-tbody');
     tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Leaderboard...</td></tr>`;
@@ -321,28 +325,20 @@ async function fetchAllRewards() {
 
         if (data.success && Array.isArray(data.students)) {
             allRewardsData = data.students; 
-
-            allRewardsData.sort((a, b) => {
-                let ptsA = parseInt(a.reward_points || 0) || 0;
-                let ptsB = parseInt(b.reward_points || 0) || 0;
-                return ptsB - ptsA;
-            });
-
+            allRewardsData.sort((a, b) => (parseInt(b.reward_points) || 0) - (parseInt(a.reward_points) || 0));
             renderRewardsTable(allRewardsData);
         } else {
-            // AUTOMATIC FAILSAFE: Logs user out if token expired
             signOut();
         }
     } catch (e) {
-        console.error(e);
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--danger);">Server is waking up! Please refresh the page in 30 seconds.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--danger);">Server error or sleeping. Refresh the page.</td></tr>`;
     }
 }
 
 function renderRewardsTable(students) {
     const tbody = document.getElementById('all-rewards-tbody');
     if (!students || students.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No student records found in database yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No records found.</td></tr>`;
         return;
     }
 
@@ -352,28 +348,22 @@ function renderRewardsTable(students) {
         if (index === 1) rankBadge = `<span class="badge" style="background: #E2E8F0; color: #475569; border: none;">2nd</span>`;
         if (index === 2) rankBadge = `<span class="badge" style="background: #FFEDD5; color: #9A3412; border: none;">3rd</span>`;
 
-        let name = s.full_name || '--';
-        let roll = s.roll_no || '--';
-        let dept = s.department || 'Not Assigned';
-        let points = s.reward_points || '0';
-
         return `
         <tr class="dir-row">
             <td>${rankBadge}</td>
-            <td style="font-weight:700; color: var(--text-main);">${name}</td>
-            <td style="font-family: monospace; font-size: 0.95rem;">${roll}</td>
-            <td><span class="badge badge-primary">${dept}</span></td>
-            <td style="font-weight: 800; color: #B45309; font-size: 1.1rem;">${points}</td>
+            <td style="font-weight:700; color: var(--text-main);">${s.full_name || '--'}</td>
+            <td style="font-family: monospace; font-size: 0.95rem;">${s.roll_no || '--'}</td>
+            <td><span class="badge badge-primary">${s.department || 'Not Assigned'}</span></td>
+            <td style="font-weight: 800; color: #B45309; font-size: 1.1rem;">${s.reward_points || '0'}</td>
         </tr>`;
     }).join('');
 }
 
 function filterRewards() {
     const searchTerm = document.getElementById('rewardSearch').value.toLowerCase();
-    const filtered = allRewardsData.filter(s => {
-        let name = (s.full_name || "").toLowerCase();
-        let roll = (s.roll_no || "").toLowerCase();
-        return name.includes(searchTerm) || roll.includes(searchTerm);
-    });
+    const filtered = allRewardsData.filter(s => 
+        (s.full_name || "").toLowerCase().includes(searchTerm) || 
+        (s.roll_no || "").toLowerCase().includes(searchTerm)
+    );
     renderRewardsTable(filtered);
 }
