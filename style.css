@@ -203,18 +203,20 @@ tr:hover .admin-table-edit, tr:hover .admin-table-del, .skill-card:hover .admin-
 }
 
 @media (max-width: 768px) {
+    /* 📱 UNLOCK NATIVE MOBILE SCROLLING FOR PULL-TO-REFRESH */
+    body, html { overflow-y: auto !important; height: auto !important; display: block !important; overscroll-behavior-y: auto !important; }
+    .main-content { height: auto !important; overflow: visible !important; display: block !important; }
+    .scrollable-area { overflow-y: visible !important; height: auto !important; padding: 85px 20px 20px 20px !important; }
+    .top-header { position: fixed; top: 0; left: 0; width: 100%; z-index: 500; background: rgba(255, 255, 255, 0.95); }
+
     .mobile-menu-btn { display: block; }
-    
-    /* FIX: Used absolute top and bottom to ensure sidebar never cuts off logout button */
-    .sidebar { position: fixed; left: 0; top: 0; bottom: 0; height: auto; transform: translateX(-100%); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; z-index: 1000; }
+    .sidebar { position: fixed; left: 0; top: 0; bottom: 0; height: 100vh; transform: translateX(-100%); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; z-index: 1000; }
     .sidebar.open { transform: translateX(0); }
     .sidebar-overlay.show { display: block; opacity: 1; z-index: 999; }
     
     .nav-menu { flex: 1; overflow-y: auto; padding-bottom: 10px; }
     .nav-bottom { flex-shrink: 0; padding-top: 16px; margin-top: 0; }
     
-    .top-header { padding: 12px 20px; }
-    .scrollable-area { padding: 20px; }
     .profile-details { flex-direction: column; gap: 16px; }
     .dash-grid[style*="grid-template-columns: 1fr 1fr;"] { grid-template-columns: 1fr !important; }
     .dir-controls-wrapper { flex-direction: column; }
