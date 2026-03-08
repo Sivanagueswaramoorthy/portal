@@ -3,87 +3,120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
     <title>BIT Sathy | Enterprise Login</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    
+    <style>
+        /* Professional Enterprise Login Theme */
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background: #0F172A; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        
+        .login-wrapper { display: flex; width: 100%; max-width: 1100px; height: 600px; background: #ffffff; border-radius: 24px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); overflow: hidden; }
+        
+        .login-left { flex: 1; background: linear-gradient(135deg, #1E1B4B 0%, #4338CA 100%); padding: 60px; color: white; display: flex; flex-direction: column; justify-content: center; position: relative; }
+        .login-left h1 { font-size: 3rem; font-weight: 800; line-height: 1.1; margin-bottom: 20px; z-index: 2; }
+        .login-left p { font-size: 1.1rem; color: #C7D2FE; line-height: 1.6; max-width: 400px; z-index: 2; }
+        .brand-logo { position: absolute; top: 40px; left: 60px; font-size: 1.25rem; font-weight: 700; display: flex; align-items: center; gap: 10px; z-index: 2; }
+        
+        .login-right { flex: 1; padding: 60px; display: flex; flex-direction: column; justify-content: center; background: #ffffff; }
+        .login-right h2 { font-size: 1.8rem; font-weight: 800; color: #0F172A; margin-bottom: 8px; }
+        .login-right p.sub-heading { color: #64748B; margin-bottom: 30px; }
+        
+        .input-group { margin-bottom: 20px; }
+        .input-group label { display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 8px; }
+        .input-wrapper { position: relative; display: flex; align-items: center; }
+        .input-wrapper i.left-icon { position: absolute; left: 16px; color: #94A3B8; }
+        .input-wrapper input { width: 100%; padding: 14px 16px 14px 44px; border: 1px solid #E2E8F0; border-radius: 12px; font-size: 0.95rem; outline: none; transition: all 0.2s; background: #F8FAFC; }
+        .input-wrapper input:focus { border-color: #4F46E5; background: #ffffff; box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1); }
+        .input-wrapper i.right-icon { position: absolute; right: 16px; color: #94A3B8; cursor: pointer; }
+        
+        .form-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; font-size: 0.85rem; }
+        .form-actions label { display: flex; align-items: center; gap: 8px; color: #475569; cursor: pointer; }
+        .form-actions a { color: #4F46E5; text-decoration: none; font-weight: 600; }
+        
+        .btn-submit { width: 100%; padding: 14px; background: #4F46E5; color: white; border: none; border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; justify-content: center; align-items: center; gap: 8px; }
+        .btn-submit:hover { background: #4338CA; transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3); }
+        
+        .divider { display: flex; align-items: center; text-align: center; margin: 30px 0; color: #94A3B8; font-size: 0.75rem; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
+        .divider::before, .divider::after { content: ''; flex: 1; border-bottom: 1px solid #E2E8F0; }
+        .divider:not(:empty)::before { margin-right: .25em; }
+        .divider:not(:empty)::after { margin-left: .25em; }
+        
+        .google-container { display: flex; justify-content: center; width: 100%; }
+        
+        .error-msg { margin-top: 20px; padding: 12px; border-radius: 8px; background: #FEF2F2; color: #EF4444; border: 1px solid #FECACA; font-size: 0.85rem; display: none; align-items: center; gap: 8px; }
+
+        /* Mobile Layout */
+        @media (max-width: 900px) {
+            .login-wrapper { flex-direction: column; height: 100vh; border-radius: 0; }
+            .login-left { display: none; } /* Hide splash image on phones for clean look */
+            .login-right { padding: 30px; justify-content: flex-start; padding-top: 60px; }
+            .mobile-brand { display: flex; align-items: center; gap: 10px; font-size: 1.5rem; font-weight: 800; color: #0F172A; margin-bottom: 40px; justify-content: center; }
+            .mobile-brand i { color: #4F46E5; }
+        }
+        @media (min-width: 901px) { .mobile-brand { display: none; } }
+    </style>
 </head>
 <body>
 
-    <div class="auth-container">
-        <div class="auth-left">
-            <div class="auth-brand">
-                <i class="fa-solid fa-code"></i> BIT Sathy IT
-            </div>
-            <div class="auth-hero-text">
-                <h1>Welcome to the<br>Enterprise Portal</h1>
-                <p>Secure, centralized access to your dashboard, academic records, and placement hub all in one place.</p>
-            </div>
-            <div class="auth-footer-text">
-                &copy; 2026 Bannari Amman Institute of Technology. All rights reserved.
-            </div>
-            <div class="shape shape-1"></div>
-            <div class="shape shape-2"></div>
+    <div class="login-wrapper">
+        <div class="login-left">
+            <div class="brand-logo"><i class="fa-solid fa-code"></i> BIT Sathy IT</div>
+            <h1>Empower<br>Your Career.</h1>
+            <p>Access your academic dashboard, track placement drives, and manage your professional portfolio securely.</p>
         </div>
 
-        <div class="auth-right">
-            <div class="auth-form-wrapper">
-                
-                <div class="mobile-brand">
-                    <div class="mobile-logo-icon"><i class="fa-solid fa-layer-group"></i></div>
-                    BIT Sathy IT
-                </div>
+        <div class="login-right">
+            <div class="mobile-brand"><i class="fa-solid fa-code"></i> BIT Sathy IT</div>
+            
+            <h2>Sign in</h2>
+            <p class="sub-heading">Enter your HR credentials or use College Email.</p>
 
-                <div class="auth-header">
-                    <h2>Sign in to your account</h2>
-                    <p>Enter your credentials to continue.</p>
-                </div>
-
-                <form id="traditional-login-form" onsubmit="event.preventDefault();">
-                    <div class="input-group">
-                        <label for="email">Email Address</label>
-                        <div class="input-icon-wrapper">
-                            <i class="fa-regular fa-envelope icon-left"></i>
-                            <input type="email" id="email" placeholder="e.g. sivanagu@bitsathy.ac.in" required>
-                        </div>
+            <form id="traditional-login-form" onsubmit="event.preventDefault();">
+                <div class="input-group">
+                    <label>Email Address</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-envelope left-icon"></i>
+                        <input type="email" id="email" placeholder="e.g. hr@zoho.com" required>
                     </div>
-
-                    <div class="input-group">
-                        <label for="password">Password</label>
-                        <div class="input-icon-wrapper">
-                            <i class="fa-solid fa-lock icon-left"></i>
-                            <input type="password" id="password" placeholder="••••••••" required>
-                            <i class="fa-regular fa-eye icon-right" id="togglePassword" onclick="togglePass()"></i>
-                        </div>
-                    </div>
-
-                    <div class="form-actions">
-                        <label class="remember-me">
-                            <input type="checkbox" checked>
-                            <span>Remember me</span>
-                        </label>
-                        <a href="#" class="forgot-pass">Forgot password?</a>
-                    </div>
-
-                    <button type="submit" class="btn-primary-login">
-                        Sign In <i class="fa-solid fa-arrow-right"></i>
-                    </button>
-                </form>
-
-                <div class="auth-divider">
-                    <span>OR CONTINUE WITH</span>
                 </div>
 
-                <div class="google-btn-container">
-                    <div id="g_id_signin"></div>
+                <div class="input-group">
+                    <label>Password</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-lock left-icon"></i>
+                        <input type="password" id="password" placeholder="••••••••" required>
+                        <i class="fa-regular fa-eye right-icon" id="togglePassword" onclick="togglePass()"></i>
+                    </div>
                 </div>
-                
-                <div id="error-msg" class="error-message" style="display: none;"></div>
+
+                <div class="form-actions">
+                    <label><input type="checkbox" checked> Remember me</label>
+                    <a href="#">Forgot password?</a>
+                </div>
+
+                <button type="submit" class="btn-submit">
+                    Sign In to Portal <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </form>
+
+            <div class="divider">Or Continue With Google</div>
+
+            <div class="google-container">
+                <div id="g_id_signin"></div>
             </div>
+            
+            <div id="error-msg" class="error-msg"><i class="fa-solid fa-circle-exclamation"></i> <span></span></div>
         </div>
     </div>
 
-    <script src="login.js"></script>
+    <script src="login.js?v=deploy_1"></script>
 </body>
 </html>
