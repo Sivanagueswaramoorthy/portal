@@ -210,12 +210,14 @@ tr:hover .admin-table-edit, tr:hover .admin-table-del, .skill-card:hover .admin-
     .top-header { position: fixed; top: 0; left: 0; width: 100%; z-index: 500; background: rgba(255, 255, 255, 0.95); }
 
     .mobile-menu-btn { display: block; }
-    .sidebar { position: fixed; left: 0; top: 0; bottom: 0; height: 100vh; transform: translateX(-100%); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; z-index: 1000; }
+    
+    /* 🛠️ FIX FOR HIDDEN LOGOUT BUTTON: Uses Dynamic Height (dvh) and safe bottom padding */
+    .sidebar { position: fixed; left: 0; top: 0; bottom: 0; height: 100dvh !important; max-height: -webkit-fill-available; transform: translateX(-100%); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; z-index: 1000; background: var(--bg-surface); }
     .sidebar.open { transform: translateX(0); }
     .sidebar-overlay.show { display: block; opacity: 1; z-index: 999; }
     
     .nav-menu { flex: 1; overflow-y: auto; padding-bottom: 10px; }
-    .nav-bottom { flex-shrink: 0; padding-top: 16px; margin-top: 0; }
+    .nav-bottom { flex-shrink: 0; padding: 16px; margin-top: 0; background: var(--bg-surface); padding-bottom: 40px !important; /* Safety padding for bottom screen edge */ }
     
     .profile-details { flex-direction: column; gap: 16px; }
     .dash-grid[style*="grid-template-columns: 1fr 1fr;"] { grid-template-columns: 1fr !important; }
