@@ -11,6 +11,11 @@
     --input-border: #E2E8F0; --input-focus: #4F46E5; --input-focus-ring: rgba(79, 70, 229, 0.15);
 }
 
+/* 🛑 CHROME MOBILE REFRESH FIX: Enables native "Pull-to-refresh" on phones */
+body, html, .main-content, .scrollable-area {
+    overscroll-behavior-y: auto !important; 
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
 body { background-color: var(--bg-app); color: var(--text-main); height: 100vh; height: 100dvh; width: 100vw; overflow: hidden; display: flex; font-size: 14px; }
 
