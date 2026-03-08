@@ -84,6 +84,18 @@ async function fetchApplicants() {
     }
 }
 
+// --- MOBILE MENU FUNCTION ---
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar'); 
+    const overlay = document.getElementById('sidebar-overlay');
+    sidebar.classList.toggle('open');
+    if (sidebar.classList.contains('open')) {
+        overlay.classList.add('show');
+    } else {
+        overlay.classList.remove('show');
+    }
+}
+
 function signOut() { 
     localStorage.removeItem('hr_session_token'); 
     window.location.href = 'index.html'; 

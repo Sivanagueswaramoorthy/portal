@@ -7,11 +7,35 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    
+    <style>
+        /* 🛑 CHROME MOBILE REFRESH FIX: Enables native "Pull-to-refresh" */
+        body, html, .main-content, .scrollable-area {
+            overscroll-behavior-y: auto !important; 
+        }
+        
+        /* Forces the table to perfectly fit within the mobile screen */
+        .table-wrapper {
+            overflow-x: auto;
+            max-width: 100vw;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Mobile specific header adjustments */
+        @media (max-width: 768px) {
+            .hr-header-left { gap: 10px !important; }
+            .hr-header-left h2 { font-size: 0.95rem !important; }
+        }
+    </style>
 </head>
 <body>
+    
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
     <aside class="sidebar" id="sidebar">
         <div class="brand flex-between">
             <div class="flex-center"><i class="fa-solid fa-briefcase"></i> HR Portal</div>
+            <i class="fa-solid fa-xmark mobile-menu-btn" style="padding:0;" onclick="toggleSidebar()"></i>
         </div>
         <div class="nav-menu">
             <a class="nav-item active"><i class="fa-solid fa-users"></i> Applicant Tracking</a>
@@ -23,9 +47,11 @@
 
     <main class="main-content">
         <header class="top-header flex-between">
-            <div>
+            <div class="flex-center hr-header-left" style="gap: 15px;">
+                <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
                 <h2 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">Welcome, <span id="hr-company" style="color: var(--primary);">Loading...</span></h2>
             </div>
+            
             <div class="user-profile">
                 <div class="user-info">
                     <div class="user-name" id="headerName">Loading...</div>
@@ -63,6 +89,6 @@
         </div>
     </main>
 
-    <script src="hr.js?v=999"></script>
+    <script src="hr.js?v=mobile_fix_1"></script>
 </body>
 </html>
