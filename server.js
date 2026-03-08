@@ -134,12 +134,19 @@ app.post('/api/student/update-resume', async (req, res) => {
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
         const email = ticket.getPayload().email.toLowerCase();
         
-        await promisePool.query(`INSERT IGNORE INTO placement_student_profile (student_email) VALUES (?)`, [email]);
-        await promisePool.query(`UPDATE placement_student_profile SET resume_url = ? WHERE student_email = ?`, [req.body.resume_url, email]);
+        // BULLETPROOF UPSERT: Safely inserts or updates in one single step
+        await promisePool.query(
+            `INSERT INTO placement_student_profile (student_email, resume_url) 
+             VALUES (?, ?) 
+             ON DUPLICATE KEY UPDATE resume_url = ?`, 
+            [email, req.body.resume_url, req.body.resume_url]
+        );
+        
         res.json({ success: true });
     } catch(e) { 
         console.error("Resume Save Error:", e.message);
-        res.json({ success: false, message: "Session expired or database error." }); 
+        // Sends the EXACT error back to the frontend so we know what happened
+        res.json({ success: false, message: "Session Expired", details: e.message }); 
     }
 });
 

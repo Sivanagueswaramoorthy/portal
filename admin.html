@@ -8,11 +8,10 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
 
-    <title>BIT Sathy | Portal</title>
+    <title>BIT Sathy | Admin Portal</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    
     <link rel="stylesheet" href="style.css?v=ultimate_mobile_fix">
 </head>
 <body>
@@ -291,6 +290,14 @@
                         </div>
                     </div>
 
+                    <div class="card" style="margin-bottom: 24px; border: 1px solid var(--primary-light); background: #F8FAFC;">
+                        <h3 style="font-size: 1rem; font-weight: 800; margin: 0 0 16px 0; color: var(--primary);"><i class="fa-solid fa-file-pdf"></i> Student's Resume File</h3>
+                        <div class="flex-center">
+                            <input type="text" id="admin-resume-display" class="control-input" style="flex: 1; background: #e2e8f0; color: #64748b; cursor: not-allowed;" readonly placeholder="Student has not uploaded a resume yet.">
+                            <a id="admin-view-resume-btn" href="#" target="_blank" class="action-btn btn-primary" style="display:none;"><i class="fa-solid fa-external-link"></i> Open Resume</a>
+                        </div>
+                    </div>
+
                     <div class="stats-grid" style="margin-bottom: 24px;">
                         <div class="stat-box" style="grid-column: span 2;">
                             <div class="stat-title">Placement Status</div>
@@ -376,7 +383,7 @@
 
                     <div class="table-wrapper">
                         <div class="flex-between" style="padding: 16px 24px; border-bottom: 1px solid var(--border); background: #F8FAFC; flex-wrap: wrap;">
-                            <h3 style="font-size: 0.95rem; font-weight: 800; margin: 0; color: var(--text-main);">My Application Track Record</h3>
+                            <h3 style="font-size: 0.95rem; font-weight: 800; margin: 0; color: var(--text-main);">Student's Application Track Record</h3>
                             <button class="action-btn btn-primary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="openModal('add-app-modal')"><i class="fa-solid fa-plus"></i> Add App</button>
                         </div>
                         <table class="modern-table">
@@ -394,8 +401,8 @@
     <div id="add-skill-modal" class="modal-overlay"><div class="modal-content"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Add PCDP Skill</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-skill-modal')"></i></div><input type="text" id="sk-name" class="modal-input" placeholder="Skill Name"><input type="text" id="sk-cat" class="modal-input" placeholder="Category"><div style="display: flex; gap: 12px;"><input type="number" id="sk-comp" class="modal-input" placeholder="Completed"><input type="number" id="sk-tot" class="modal-input" placeholder="Total"></div><button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitNewSkill()">Add Skill</button></div></div>
     <div id="add-course-modal" class="modal-overlay"><div class="modal-content"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Add Course Mark</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-course-modal')"></i></div><input type="number" id="crs-sem" class="modal-input" placeholder="Semester"><input type="text" id="crs-name" class="modal-input" placeholder="Subject Name"><div style="display: flex; gap: 12px;"><input type="number" id="crs-mark" class="modal-input" placeholder="Marks"><input type="text" id="crs-grade" class="modal-input" placeholder="Grade"></div><button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitNewCourse()">Save Subject</button></div></div>
     <div id="add-drive-modal" class="modal-overlay"><div class="modal-content"><div class="flex-between" style="margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Add Campus Drive</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-drive-modal')"></i></div><input type="text" id="drv-comp" class="modal-input" placeholder="Company Name"><input type="text" id="drv-role" class="modal-input" placeholder="Role Profile"><div style="display: flex; gap: 12px;"><input type="number" id="drv-app" class="modal-input" placeholder="Appeared"><input type="number" id="drv-sel" class="modal-input" placeholder="Selected"></div><input type="text" id="drv-ctc" class="modal-input" placeholder="Salary Package"><button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitNewDrive()">Save Drive</button></div></div>
-    <div id="add-app-modal" class="modal-overlay"><div class="modal-content"><div class="flex-between" style="margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Log Application</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-app-modal')"></i></div><input type="text" id="app-comp" class="modal-input" placeholder="Company Name"><input type="text" id="app-role" class="modal-input" placeholder="Role Applied For"><div style="display: flex; gap: 12px;"><input type="text" id="app-date" class="modal-input" placeholder="Date"><input type="text" id="app-stat" class="modal-input" placeholder="Status"></div><button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitNewApp()">Log Application</button></div></div>
+    <div id="add-app-modal" class="modal-overlay"><div class="modal-content"><div class="flex-between" style="margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Log Application</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-app-modal')"></i></div><input type="text" id="app-comp" class="modal-input" placeholder="Company Name (e.g. Zoho)"><input type="text" id="app-role" class="modal-input" placeholder="Role Applied For"><div style="display: flex; gap: 12px;"><input type="text" id="app-date" class="modal-input" placeholder="Date"><input type="text" id="app-stat" class="modal-input" placeholder="Status"></div><button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitNewApp()">Log Application</button></div></div>
 
-    <script src="admin.js"></script>
+    <script src="admin.js?v=ultimate_mobile_fix"></script>
 </body>
 </html>

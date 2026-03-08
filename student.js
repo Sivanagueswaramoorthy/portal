@@ -302,11 +302,12 @@ async function saveResume() {
             document.getElementById('view-resume-btn').href = link;
             document.getElementById('view-resume-btn').style.display = 'inline-flex';
         } else {
-            alert(`❌ SESSION ERROR: ${data.message}\n\nPlease click "Secure Logout" on the left menu and sign back in.`);
-            signOut();
+            // Show the exact error (e.g., "Token used too late")
+            alert(`❌ ERROR: ${data.details || data.message}\n\nYour Google Session has reached its 1-hour limit. You will now be redirected to log in again.`);
+            signOut(); // Automatically log them out to get a fresh 1-hour token!
         }
     } catch(e) {
-        alert("❌ CRITICAL NETWORK ERROR: Ensure your backend server is running!");
+        alert("❌ CRITICAL NETWORK ERROR: Ensure your backend server is awake!");
     }
     document.getElementById('resume-link-input').disabled = false;
 }

@@ -10,7 +10,8 @@ let loggedInEmail = "";
 let loggedInPic = ""; 
 let currentGlobalStats = null; 
 let currentGlobalDrives = [];
-// Replace const BASE_URL = 'http://localhost:10000'; with this:
+
+// SMART URL: Auto-detects local vs live
 const BASE_URL = (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') 
     ? 'http://localhost:10000' 
     : 'https://portal-6crm.onrender.com';
@@ -392,6 +393,20 @@ function populatePersonalPlacement(pProfile, pApps) {
     const quant = prf.apt_quant || '0'; document.getElementById('val-a-quant').innerText = quant; document.getElementById('bar-a-quant').style.width = `${quant}%`;
     const logical = prf.apt_logical || '0'; document.getElementById('val-a-log').innerText = logical; document.getElementById('bar-a-log').style.width = `${logical}%`;
     const hr = prf.apt_hr || '0'; document.getElementById('val-a-hr').innerText = hr; document.getElementById('bar-a-hr').style.width = `${hr}%`;
+
+    // --- NEW: Safely display the Resume Link to the Admin ---
+    const resumeDisp = document.getElementById('admin-resume-display');
+    const resumeBtn = document.getElementById('admin-view-resume-btn');
+    if (resumeDisp && resumeBtn) {
+        if (prf.resume_url && prf.resume_url !== '--') {
+            resumeDisp.value = prf.resume_url;
+            resumeBtn.href = prf.resume_url;
+            resumeBtn.style.display = 'inline-flex';
+        } else {
+            resumeDisp.value = '';
+            resumeBtn.style.display = 'none';
+        }
+    }
 
     const appBody = document.getElementById('student-apps-tbody');
     if (pApps && pApps.length > 0) {
