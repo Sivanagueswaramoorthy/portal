@@ -27,7 +27,7 @@
         
         .login-right { flex: 1; padding: 60px; display: flex; flex-direction: column; justify-content: center; background: #ffffff; }
         .login-right h2 { font-size: 1.8rem; font-weight: 800; color: #0F172A; margin-bottom: 8px; }
-        .login-right p.sub-heading { color: #64748B; margin-bottom: 30px; }
+        .login-right p.sub-heading { color: #64748B; margin-bottom: 30px; font-size: 0.95rem;}
         
         .input-group { margin-bottom: 20px; }
         .input-group label { display: block; font-size: 0.85rem; font-weight: 600; color: #334155; margin-bottom: 8px; }
@@ -56,7 +56,7 @@
         /* Mobile Layout */
         @media (max-width: 900px) {
             .login-wrapper { flex-direction: column; height: 100vh; border-radius: 0; }
-            .login-left { display: none; } /* Hide splash image on phones for clean look */
+            .login-left { display: none; } 
             .login-right { padding: 30px; justify-content: flex-start; padding-top: 60px; }
             .mobile-brand { display: flex; align-items: center; gap: 10px; font-size: 1.5rem; font-weight: 800; color: #0F172A; margin-bottom: 40px; justify-content: center; }
             .mobile-brand i { color: #4F46E5; }
@@ -77,14 +77,14 @@
             <div class="mobile-brand"><i class="fa-solid fa-code"></i> BIT Sathy IT</div>
             
             <h2>Sign in</h2>
-            <p class="sub-heading">Enter your HR credentials or use College Email.</p>
+            <p class="sub-heading">Use College Email, HR, or PCDP Admin credentials.</p>
 
             <form id="traditional-login-form" onsubmit="event.preventDefault();">
                 <div class="input-group">
                     <label>Email Address</label>
                     <div class="input-wrapper">
                         <i class="fa-solid fa-envelope left-icon"></i>
-                        <input type="email" id="email" placeholder="e.g. hr@zoho.com" required>
+                        <input type="email" id="email" placeholder="hr@zoho.com or pcdp@gmail.com" required>
                     </div>
                 </div>
 
@@ -117,6 +117,6 @@
         </div>
     </div>
 
-    <script src="login.js?v=deploy_1"></script>
+    <script src="login.js?v=deploy_pcdp_fix"></script>
 </body>
 </html>

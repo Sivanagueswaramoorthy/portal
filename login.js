@@ -1,8 +1,10 @@
+// 🛑 SMART URL: Fixes the GitHub Mobile issue by automatically connecting to Render when deployed!
 const BASE_URL = (window.location.hostname.includes('github.io') || window.location.hostname.includes('render.com')) 
     ? 'https://portal-6crm.onrender.com' 
     : 'http://localhost:10000';
 
 window.onload = () => {
+    // Initialize Google Auth (Students & Admin)
     google.accounts.id.initialize({ 
         client_id: "159246343111-o9bv4lgk1hmmvdkef0qnq0ih9qefjhmj.apps.googleusercontent.com", 
         callback: handleLogin
@@ -17,14 +19,21 @@ window.onload = () => {
     const hrToken = localStorage.getItem('hr_session_token');
     const pcdpToken = localStorage.getItem('pcdp_session_token');
 
-    if (pcdpToken) { window.location.href = 'pcdp_control.html'; return; }
-    if (hrToken) { window.location.href = 'hr.html'; return; } 
-    else if (savedToken) {
+    // 🛑 NEW: Check for PCDP Token
+    if (pcdpToken) { 
+        window.location.href = 'pcdp_control.html'; 
+        return; 
+    }
+    if (hrToken) {
+        window.location.href = 'hr.html';
+        return;
+    } else if (savedToken) {
         document.getElementById('g_id_signin').style.display = 'none';
         showError("Authenticating your secure session...", true);
         handleLogin({ credential: savedToken });
     }
 
+    // HR & PCDP Manual Login Form
     const loginForm = document.getElementById('traditional-login-form');
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
@@ -51,14 +60,20 @@ window.onload = () => {
                 });
 
                 if (!req.ok) throw new Error("Server rejected request.");
+
                 const data = await req.json();
 
                 if (data.success) {
                     localStorage.setItem('hr_session_token', data.token); 
                     showSuccess("Login Successful! Opening dashboard...");
                     setTimeout(() => { window.location.href = 'hr.html'; }, 500);
-                } else { showError(data.message || "Invalid Email or Password."); }
-            } catch(err) { showError("Network Error. Backend server might be sleeping."); }
+                } else {
+                    showError(data.message || "Invalid Email or Password.");
+                }
+            } catch(err) {
+                console.error(err);
+                showError("Network Error. Backend server might be sleeping.");
+            }
         });
     }
 };
@@ -80,6 +95,7 @@ function togglePass() {
 
 async function handleLogin(response) {
     const globalToken = response.credential;
+
     try {
         const req = await fetch(`${BASE_URL}/api/auth`, {
             method: 'POST', 
@@ -90,8 +106,11 @@ async function handleLogin(response) {
 
         if (data.success) {
             localStorage.setItem('bit_session_token', globalToken);
-            if (data.isAdmin) { window.location.href = 'admin.html'; } 
-            else { window.location.href = 'student.html'; }
+            if (data.isAdmin) {
+                window.location.href = 'admin.html';
+            } else {
+                window.location.href = 'student.html';
+            }
         } else {
             localStorage.removeItem('bit_session_token');
             document.getElementById('g_id_signin').style.display = 'block';
@@ -104,14 +123,20 @@ async function handleLogin(response) {
     }
 }
 
+// UI Helper Functions
 function showError(message, isWorking = false) {
     const errBox = document.getElementById('error-msg');
     errBox.style.display = 'flex';
+    
     if (isWorking) {
-        errBox.style.background = '#F8FAFC'; errBox.style.color = '#0F172A'; errBox.style.borderColor = '#E2E8F0';
+        errBox.style.background = '#F8FAFC';
+        errBox.style.color = '#0F172A';
+        errBox.style.borderColor = '#E2E8F0';
         errBox.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> <span>${message}</span>`;
     } else {
-        errBox.style.background = '#FEF2F2'; errBox.style.color = '#EF4444'; errBox.style.borderColor = '#FECACA';
+        errBox.style.background = '#FEF2F2';
+        errBox.style.color = '#EF4444';
+        errBox.style.borderColor = '#FECACA';
         errBox.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> <span>${message}</span>`;
     }
 }
@@ -119,6 +144,8 @@ function showError(message, isWorking = false) {
 function showSuccess(message) {
     const errBox = document.getElementById('error-msg');
     errBox.style.display = 'flex';
-    errBox.style.background = '#ECFDF5'; errBox.style.color = '#10B981'; errBox.style.borderColor = '#A7F3D0';
+    errBox.style.background = '#ECFDF5';
+    errBox.style.color = '#10B981';
+    errBox.style.borderColor = '#A7F3D0';
     errBox.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>${message}</span>`;
 }
