@@ -1,4 +1,4 @@
-// SMART URL: Auto-detects if you are testing locally or on live GitHub Pages!
+// 🛑 SMART URL: Auto-detects if you are testing locally or on live GitHub Pages!
 const BASE_URL = (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') 
     ? 'http://localhost:10000' 
     : 'https://portal-6crm.onrender.com';
@@ -148,27 +148,35 @@ function populateDashboard(p, img, courses, skills, semGpas) {
     
     renderChart(courses, semGpas);
 
-    if(skills && skills.length > 0) {
+   if(skills && skills.length > 0) {
         document.getElementById('act-total-skills').innerText = skills.length; 
         document.getElementById('act-mastered').innerText = skills.filter(s => s.completed_levels >= s.total_levels).length; 
         document.getElementById('act-progress').innerText = skills.filter(s => s.completed_levels < s.total_levels).length;
         
-        document.getElementById('skills-container').innerHTML = skills.map(s => {
-            let pct = Math.round((s.completed_levels / s.total_levels) * 100) || 0;
+        // 🖼️ STUDENT PORTAL EXACT IMAGE CARDS
+        document.getElementById('skills-container').innerHTML = skills.map(c => {
+            const total = c.total_levels || 1;
+            const comp = c.completed_levels || 0;
+            const pct = Math.round((comp / total) * 100);
+            const imgUrl = c.image_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
+
+            // Generate segmented bar
+            let segmentsHtml = '';
+            for(let i=0; i<total; i++) { 
+                segmentsHtml += `<div style="flex: 1; border-radius: 4px; background: ${i < comp ? '#8B5CF6' : '#E5E7EB'}; height: 6px;"></div>`; 
+            }
+
             return `
-            <div class="skill-card">
-                <div class="skill-header flex-between">
-                    <div class="skill-title"><span>${s.skill_name}</span></div>
-                </div>
-                <div class="badge" style="margin-bottom: 12px;">${s.category || 'General'}</div>
-                <div class="progress-track"><div class="progress-fill" style="width: ${pct}%;"></div></div>
-                <div class="skill-footer flex-between">
-                    <div class="flex-center">
-                        <i class="fa-solid fa-layer-group" style="color: var(--primary);"></i> 
-                        <span style="color: var(--text-main); font-weight:800;">${s.completed_levels}</span> / 
-                        <span>${s.total_levels}</span> Lvl
+            <div style="background: #FFFFFF; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; border: 1px solid #E5E7EB; transition: transform 0.2s;">
+                <div style="height: 160px; width: 100%; overflow: hidden; background: #E5E7EB;"><img src="${imgUrl}" style="width: 100%; height: 100%; object-fit: cover;"></div>
+                <div style="padding: 16px; flex: 1; display: flex; flex-direction: column;">
+                    <div style="font-size: 1rem; font-weight: 700; color: #111827; margin-bottom: 12px; line-height: 1.3;">${c.skill_name}</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 0.75rem; font-weight: 700; color: #6B7280;">
+                        <div style="color: #9CA3AF;"><i class="fa-solid fa-layer-group"></i> Levels: ${total}</div>
+                        <div style="color: #4B5563;"><i class="fa-solid fa-medal"></i> ${c.category || 'Skill'}</div>
                     </div>
-                    <div style="color: var(--primary); font-weight: 800;">${pct}%</div>
+                    <div style="display: flex; gap: 4px; height: 6px; margin-bottom: 8px;">${segmentsHtml}</div>
+                    <div style="text-align: center; font-size: 0.7rem; color: #6B7280; font-weight: 500; margin-top: 4px;">Progress: ${comp}/${total} levels (${pct}%)</div>
                 </div>
             </div>`;
         }).join('');
@@ -176,7 +184,7 @@ function populateDashboard(p, img, courses, skills, semGpas) {
         document.getElementById('act-total-skills').innerText = "0"; 
         document.getElementById('act-mastered').innerText = "0"; 
         document.getElementById('act-progress').innerText = "0";
-        document.getElementById('skills-container').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color:var(--text-muted); font-weight: 500; border: 1px dashed var(--border); border-radius: 12px;">No PCDP activities logged yet.</div>`; 
+        document.getElementById('skills-container').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color:var(--text-muted); font-weight: 500; border: 1px dashed var(--border); border-radius: 12px;">No PCDP courses assigned yet.</div>`; 
     }
 
     if(courses && courses.length > 0) {

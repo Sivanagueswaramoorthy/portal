@@ -1,4 +1,4 @@
-let adminToken = localStorage.getItem('bit_session_token');
+let adminToken = localStorage.getItem('pcdp_session_token');
 let currentStudentEmail = null;
 
 const BASE_URL = (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') 
@@ -6,25 +6,6 @@ const BASE_URL = (window.location.hostname === '127.0.0.1' || window.location.ho
     : 'https://portal-6crm.onrender.com';
 
 if (!adminToken) window.location.href = 'index.html';
-
-// 🛠️ PCDP Course Config: Maps Category/Skill Name to visual assets
-const PCDP_CONFIG = {
-    // Technical Skills
-    "C Programming": { icon: "fa-solid fa-computer", bg: "linear-gradient(to bottom right, #f8fafc, #cbd5e1)" },
-    "Python Programming": { icon: "fa-solid fa-file-code", bg: "linear-gradient(to bottom right, #f8fafc, #cbd5e1)" },
-    "Java Programming": { icon: "fa-solid fa-terminal", bg: "linear-gradient(to bottom right, #f8fafc, #cbd5e1)" },
-    "Data Structures": { icon: "fa-solid fa-project-diagram", bg: "linear-gradient(to bottom right, #f8fafc, #cbd5e1)" },
-    
-    // Categorical Icons based on DB 'category' field if specific skill not found
-    "_DEFAULT_Aptitude": { icon: "fa-solid fa-brain" },
-    "_DEFAULT_Communication": { icon: "fa-solid fa-comments" },
-    "_DEFAULT_Technical": { icon: "fa-solid fa-code" },
-    "_DEFAULT_DEFAULT": { icon: "fa-solid fa-star" }
-};
-
-function getAvatar(name) { 
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff&bold=true&rounded=true`; 
-}
 
 function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('open'); 
@@ -34,8 +15,7 @@ function toggleSidebar() {
 window.onload = async () => {
     try {
         const req = await fetch(`${BASE_URL}/api/pcdp/admin/students`, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ adminToken: adminToken }) 
         });
         const data = await req.json();
@@ -44,14 +24,12 @@ window.onload = async () => {
     } catch (e) { signOut(); }
 };
 
-function signOut() { localStorage.removeItem('bit_session_token'); window.location.href = 'index.html'; }
+function signOut() { localStorage.removeItem('pcdp_session_token'); window.location.href = 'index.html'; }
 
 function populateStudentNav(students) {
     const nav = document.getElementById('student-list-nav');
-    if(students.length === 0) { nav.innerHTML = '<div class="student-nav-label">No Students Found</div>'; return; }
-    
     nav.innerHTML = students.map(s => `
-        <a class="nav-item" onclick="loadStudentPcdp('${s.email}', this)" style="padding-top:14px; padding-bottom:14px;">
+        <a class="nav-item" onclick="loadStudentPcdp('${s.email}', this)" style="padding:14px;">
             <div>
                 <div class="flex-center"><i class="fa-solid fa-user"></i> ${s.full_name}</div>
                 <div class="student-roll" style="padding-left: 28px;">${s.roll_no || '--'}</div>
@@ -61,124 +39,92 @@ function populateStudentNav(students) {
 
 async function loadStudentPcdp(email, element) {
     currentStudentEmail = email;
-    
-    // UI Switching
-    document.getElementById('no-student-placeholder').style.display = 'none';
-    document.getElementById('student-pcdp-view').style.display = 'block';
-    const grid = document.getElementById('pcdp-courses-grid');
-    grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin fa-3x"></i> Loading Pipeline...</div>`;
+    document.getElementById('student-pcdp-view').style.display = 'flex';
+    document.getElementById('pcdp-courses-grid').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>`;
 
-    // Highlighting current Nav item
     document.querySelectorAll('#student-list-nav .nav-item').forEach(n => n.classList.remove('active'));
-    element.classList.add('active');
-
-    if(window.innerWidth <= 768) toggleSidebar(); // close sidebar on mobile
+    if(element) element.classList.add('active');
+    if(window.innerWidth <= 768) toggleSidebar(); 
 
     try {
         const req = await fetch(`${BASE_URL}/api/pcdp/admin/student-courses`, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ adminToken: adminToken, targetEmail: email }) 
         });
         const data = await req.json();
-        
         if (data.success) {
-            updateHeader(data.profile, email);
+            document.getElementById('p-header-name').innerText = data.profile.full_name;
+            document.getElementById('p-header-roll').innerText = data.profile.roll_no;
             renderCoursesGrid(data.courses);
         }
-    } catch(e) {
-        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--danger);">Network Error. Backend server might be sleeping.</div>`;
-    }
-}
-
-function updateHeader(p, email) {
-    document.getElementById('p-header-img').src = getAvatar(p.full_name);
-    document.getElementById('p-header-name').innerText = p.full_name;
-    document.getElementById('p-header-dept').innerText = p.department;
-    document.getElementById('p-header-roll').innerText = p.roll_no;
-    document.getElementById('p-header-points').innerText = p.reward_points;
+    } catch(e) { }
 }
 
 function renderCoursesGrid(courses) {
     const grid = document.getElementById('pcdp-courses-grid');
-    if(courses.length === 0) { grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 12px;">No PCDP skills added for this student in database yet.</div>`; return; }
+    if(courses.length === 0) { grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">No assigned courses.</div>`; return; }
     
     grid.innerHTML = courses.map(c => {
-        // Map data based on image reference requirements
-        const completed = c.completed_levels || 0;
-        const total = c.total_levels || 1; // prevent divide by zero
-        const percent = Math.round((completed / total) * 100);
-        
-        // 🛑 VISUAL PROGRESS CLASSIFICATION 🛑
-        let status = 'is-locked'; let badgeText = 'GET STARTED'; let badgeIcon = 'fa-play';
-        
-        if (completed > 0 && completed < total) { 
-            status = 'is-in-progress'; badgeText = 'IN PROGRESS'; badgeIcon = 'fa-hourglass-half';
-        } else if (completed >= total) { 
-            status = 'is-completed'; badgeText = 'COMPLETED'; badgeIcon = 'fa-check-circle';
-        }
+        const total = c.total_levels || 1;
+        const comp = c.completed_levels || 0;
+        const pct = Math.round((comp / total) * 100);
+        const imgUrl = c.image_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
 
-        // Get visual config (Icon based on skill name)
-        let visual = PCDP_CONFIG[c.skill_name];
-        if(!visual) visual = PCDP_CONFIG[`_DEFAULT_${c.category}`] || PCDP_CONFIG[`_DEFAULT_DEFAULT`];
+        // Segmented Bar HTML
+        let segmentsHtml = '';
+        for(let i=0; i<total; i++) { segmentsHtml += `<div class="segment ${i < comp ? 'filled' : ''}"></div>`; }
+
+        // Level Dropdown HTML
+        let optionsHtml = '';
+        for(let i=0; i<=total; i++) { optionsHtml += `<option value="${i}" ${i === comp ? 'selected' : ''}>${i}</option>`; }
 
         return `
-        <div class="pcdp-card ${status}">
-            <div class="pcdp-card-graphic" style="${visual.bg || ''}">
-                <i class="${visual.icon} pcdp-category-icon"></i>
-                
-                <div class="level-selector-container">
-                    <span class="level-label">Completed</span>
-                    <div class="flex-center">
-                        <input type="number" class="pcdp-level-input" value="${completed}" min="0" max="${total}" onchange="updateCourseLevel(${c.id}, this)">
-                        <span class="level-slash">/</span>
-                        <span class="total-level-text">${total} Lvl</span>
-                    </div>
+        <div class="img-card">
+            <div class="card-img-wrapper"><img src="${imgUrl}"></div>
+            <div class="card-body">
+                <div class="card-title">${c.skill_name}</div>
+                <div class="card-meta">
+                    <div style="color: #9CA3AF;"><i class="fa-solid fa-layer-group"></i> Levels: ${total}</div>
+                    <div style="color: #4B5563;"><i class="fa-solid fa-medal"></i> ${c.category || 'Skill'}</div>
                 </div>
+                <div class="segmented-track">${segmentsHtml}</div>
+                <div class="progress-text">Progress: ${comp}/${total} levels (${pct}%)</div>
             </div>
-
-            <div class="pcdp-card-body">
-                <div class="pcdp-course-title">${c.skill_name}</div>
-                
-                <div class="pcdp-progress-bar-area">
-                    <div class="pcdp-native-track">
-                        <div class="pcdp-native-fill" style="width: ${percent}%;"></div>
-                    </div>
-                    <div class="pcdp-status-badge">
-                        <i class="fa-solid ${badgeIcon}"></i> ${badgeText}
-                    </div>
+            <div class="admin-level-update">
+                <div class="flex-center">
+                    <span style="font-size: 0.75rem; font-weight: 700; color: #6B7280; margin-right: 8px;">Assign Level:</span>
+                    <select onchange="updateLevel(${c.id}, this.value)">${optionsHtml}</select>
                 </div>
+                <i class="fa-solid fa-trash delete-btn" onclick="deleteCourse(${c.id})"></i>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
-async function updateCourseLevel(courseId, inputElement) {
-    const newLevel = parseInt(inputElement.value);
-    const maxLevel = parseInt(inputElement.getAttribute('max'));
-    
-    if(isNaN(newLevel) || newLevel < 0 || newLevel > maxLevel) {
-        alert("❌ ERROR: Level must be a number between 0 and " + maxLevel);
-        loadStudentPcdp(currentStudentEmail, document.querySelector('#student-list-nav .nav-item.active')); // Refresh to fix input
-        return;
-    }
+async function updateLevel(courseId, newLevel) {
+    await fetch(`${BASE_URL}/api/pcdp/admin/update-level`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminToken: adminToken, courseId: courseId, newLevel: parseInt(newLevel) })
+    });
+    loadStudentPcdp(currentStudentEmail, document.querySelector('#student-list-nav .nav-item.active'));
+}
 
-    // Lock input during save
-    inputElement.disabled = true;
-    inputElement.style.borderColor = 'var(--primary)';
-
-    try {
-        const req = await fetch(`${BASE_URL}/api/pcdp/admin/update-level`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ adminToken: adminToken, courseId: courseId, newLevel: newLevel })
-        });
-        const data = await req.json();
-        if(data.success) {
-            // Reload the view to update percentages and coloring instantly
-            loadStudentPcdp(currentStudentEmail, document.querySelector('#student-list-nav .nav-item.active'));
-        } else { alert("❌ UPDATE FAILED: " + data.message); }
-    } catch(e) { alert("❌ NETWORK ERROR: Ensure backend is running."); }
+async function submitNewCourse() {
+    const name = document.getElementById('c-name').value;
+    const levels = document.getElementById('c-levels').value;
+    const cat = document.getElementById('c-cat').value;
+    const img = document.getElementById('c-img').value;
     
-    inputElement.disabled = false;
+    await fetch(`${BASE_URL}/api/pcdp/admin/add-skill`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminToken: adminToken, targetEmail: currentStudentEmail, skill_name: name, total_levels: levels, category: cat, image_url: img })
+    });
+    closeModal('add-course-modal');
+    loadStudentPcdp(currentStudentEmail, document.querySelector('#student-list-nav .nav-item.active'));
+}
+
+async function deleteCourse(id) {
+    if(!confirm("Remove this course?")) return;
+    await fetch(`${BASE_URL}/api/pcdp/admin/delete-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: adminToken, id: id }) });
+    loadStudentPcdp(currentStudentEmail, document.querySelector('#student-list-nav .nav-item.active'));
 }

@@ -36,13 +36,16 @@ const promisePool = dbPool.promise();
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN leaves VARCHAR(10) DEFAULT '0'`); } catch(e){}
 
         await promisePool.query(`CREATE TABLE IF NOT EXISTS student_courses (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), semester INT, course_name VARCHAR(255), marks VARCHAR(50), grade VARCHAR(10))`);
-        await promisePool.query(`CREATE TABLE IF NOT EXISTS student_skills (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), skill_name VARCHAR(255), total_levels INT, completed_levels INT, category VARCHAR(100))`);
+        
+        // 🛠️ UPDATED: Added image_url to student_skills for the visual cards
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS student_skills (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), skill_name VARCHAR(255), total_levels INT, completed_levels INT, category VARCHAR(100), image_url TEXT)`);
+        try { await promisePool.query(`ALTER TABLE student_skills ADD COLUMN image_url TEXT`); } catch(e){}
+
         await promisePool.query(`CREATE TABLE IF NOT EXISTS student_sem_gpa (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255) NOT NULL, semester INT NOT NULL, gpa VARCHAR(10), UNIQUE KEY unique_sem (student_email, semester))`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_global (id INT PRIMARY KEY, total_placed VARCHAR(50), ongoing_drives VARCHAR(50), highest_ctc VARCHAR(50), avg_ctc VARCHAR(50))`);
         await promisePool.query(`INSERT IGNORE INTO placement_global (id, total_placed, ongoing_drives, highest_ctc, avg_ctc) VALUES (1, '0', '0', '0', '0')`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_drives (id INT AUTO_INCREMENT PRIMARY KEY, company VARCHAR(255), role VARCHAR(255), appeared VARCHAR(50), selected VARCHAR(50), ctc VARCHAR(50))`);
         
-        // 🛠️ CREATE TABLE & HEAL MISSING RESUME COLUMN
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_student_profile (student_email VARCHAR(255) PRIMARY KEY, offer_role VARCHAR(255) DEFAULT '--', offer_company VARCHAR(255) DEFAULT '--', offer_ctc VARCHAR(50) DEFAULT '--', status VARCHAR(50) DEFAULT 'Unplaced', assessments VARCHAR(50) DEFAULT '0', interviews VARCHAR(50) DEFAULT '0', offers VARCHAR(50) DEFAULT '0', tech_dsa VARCHAR(50) DEFAULT '0', tech_oop VARCHAR(50) DEFAULT '0', tech_core VARCHAR(50) DEFAULT '0', apt_quant VARCHAR(50) DEFAULT '0', apt_logical VARCHAR(50) DEFAULT '0', apt_hr VARCHAR(50) DEFAULT '0', resume_url LONGTEXT)`);
         try { await promisePool.query(`ALTER TABLE placement_student_profile ADD COLUMN resume_url LONGTEXT`); } catch(e){}
         try { await promisePool.query(`ALTER TABLE placement_student_profile MODIFY COLUMN resume_url LONGTEXT`); } catch(e){}
@@ -135,7 +138,6 @@ app.post('/api/student/update-resume', async (req, res) => {
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
         const email = ticket.getPayload().email.toLowerCase();
         
-        // 🛠️ FIX: BULLETPROOF UPSERT
         await promisePool.query(
             `INSERT INTO placement_student_profile (student_email, resume_url) 
              VALUES (?, ?) 
@@ -158,7 +160,84 @@ app.post('/api/student/all-rewards', async (req, res) => {
     } catch (e) { res.json({ success: false, message: "Session expired." }); }
 });
 
-// --- ADMIN ROUTES ---
+// ==============================================================================
+// --- NEW PCDP CONTROL PORTAL APIS (Separate Standalone Manual Token) ---
+// ==============================================================================
+
+async function verifyPcdpAdmin(token) {
+    // 🛠️ UPDATED: Separated from Google Auth. This allows the pcdp@gmail.com 
+    // manual login credentials from login.js to pass validation here securely.
+    if (token !== 'pcdp_admin_authorized_token_7771') throw new Error("Unauthorized Access to PCDP Portal.");
+    return true;
+}
+
+app.post('/api/pcdp/admin/students', async (req, res) => {
+    try {
+        await verifyPcdpAdmin(req.body.adminToken);
+        const [rows] = await promisePool.query("SELECT email, full_name, roll_no, department FROM student_profile ORDER BY full_name ASC");
+        res.json({ success: true, students: rows });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/pcdp/admin/student-courses', async (req, res) => {
+    try {
+        await verifyPcdpAdmin(req.body.adminToken);
+        const email = req.body.targetEmail;
+
+        const [profile] = await promisePool.query("SELECT full_name, roll_no, department, reward_points FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]);
+        
+        // 🛠️ UPDATED: Now fetches image_url for the UI cards
+        const sql = `
+            SELECT id, skill_name, total_levels, completed_levels, category, image_url
+            FROM student_skills
+            WHERE student_email = ?
+            ORDER BY id DESC
+        `;
+        const [courses] = await promisePool.query(sql, [email]);
+        
+        res.json({ success: true, profile: profile[0], courses: courses });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/pcdp/admin/add-skill', async (req, res) => {
+    try {
+        await verifyPcdpAdmin(req.body.adminToken);
+        // 🛠️ UPDATED: Includes image_url insertion
+        await promisePool.query(
+            "INSERT INTO student_skills (student_email, skill_name, total_levels, completed_levels, category, image_url) VALUES (?, ?, ?, 0, ?, ?)", 
+            [req.body.targetEmail, req.body.skill_name, req.body.total_levels, req.body.category, req.body.image_url]
+        );
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/pcdp/admin/update-level', async (req, res) => {
+    try {
+        await verifyPcdpAdmin(req.body.adminToken);
+        const { courseId, newLevel } = req.body;
+        
+        const [current] = await promisePool.query("SELECT total_levels FROM student_skills WHERE id = ?", [courseId]);
+        if(current.length === 0) throw new Error("Course not found.");
+        if(newLevel < 0 || newLevel > current[0].total_levels) throw new Error("Invalid level value.");
+
+        await promisePool.query("UPDATE student_skills SET completed_levels = ? WHERE id = ?", [newLevel, courseId]);
+        
+        res.json({ success: true, message: "PCDP Level Updated Successfully." });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/pcdp/admin/delete-skill', async (req, res) => {
+    try {
+        await verifyPcdpAdmin(req.body.adminToken);
+        await promisePool.query("DELETE FROM student_skills WHERE id = ?", [req.body.id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+// ==============================================================================
+// --- EXISTING ADMIN ROUTES ---
+// ==============================================================================
+
 async function verifyAdmin(token) {
     const ticket = await googleClient.verifyIdToken({ idToken: token, audience: CLIENT_ID });
     if (ticket.getPayload().email.toLowerCase() !== 'sivanagu7771@gmail.com') throw new Error("Unauthorized");
@@ -352,64 +431,6 @@ app.post('/api/admin/delete-course', async (req, res) => {
         res.json({ success: true });
     } catch (e) { res.json({ success: false }); }
 });
-// ==============================================================================
-// --- NEW PCDP CONTROL PORTAL APIS (Admin Only) ---
-// ==============================================================================
 
-// Helper to ensure only the specified admin can access this portal
-async function verifyPcdpAdmin(token) {
-    const ticket = await googleClient.verifyIdToken({ idToken: token, audience: CLIENT_ID });
-    if (ticket.getPayload().email.toLowerCase() !== 'sivanagu7771@gmail.com') throw new Error("Unauthorized Access to PCDP Portal.");
-    return true;
-}
-
-// 1. Get all students for the PCDP Sidebar (Sorted by name)
-app.post('/api/pcdp/admin/students', async (req, res) => {
-    try {
-        await verifyPcdpAdmin(req.body.adminToken);
-        const [rows] = await promisePool.query("SELECT email, full_name, roll_no, department FROM student_profile ORDER BY full_name ASC");
-        res.json({ success: true, students: rows });
-    } catch (e) { res.json({ success: false, message: e.message }); }
-});
-
-// 2. Get PCDP courses/skills for a specific student, mapped to standard structure
-app.post('/api/pcdp/admin/student-courses', async (req, res) => {
-    try {
-        await verifyPcdpAdmin(req.body.adminToken);
-        const email = req.body.targetEmail;
-
-        // Fetch basic student info
-        const [profile] = await promisePool.query("SELECT full_name, roll_no, department, reward_points FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]);
-        
-        // Fetch PCDP Skills/Courses
-        const sql = `
-            SELECT id, skill_name, total_levels, completed_levels, category
-            FROM student_skills
-            WHERE student_email = ?
-            ORDER BY category ASC, skill_name ASC
-        `;
-        const [courses] = await promisePool.query(sql, [email]);
-        
-        res.json({ success: true, profile: profile[0], courses: courses });
-    } catch (e) { res.json({ success: false, message: e.message }); }
-});
-
-// 3. Update the completed level for a specific PCDP course
-app.post('/api/pcdp/admin/update-level', async (req, res) => {
-    try {
-        await verifyPcdpAdmin(req.body.adminToken);
-        const { courseId, newLevel } = req.body;
-        
-        // Safety check to ensure level doesn't exceed total (Backend validation)
-        const [current] = await promisePool.query("SELECT total_levels FROM student_skills WHERE id = ?", [courseId]);
-        if(current.length === 0) throw new Error("Course not found.");
-        if(newLevel < 0 || newLevel > current[0].total_levels) throw new Error("Invalid level value.");
-
-        // Update the database
-        await promisePool.query("UPDATE student_skills SET completed_levels = ? WHERE id = ?", [newLevel, courseId]);
-        
-        res.json({ success: true, message: "PCDP Level Updated Successfully." });
-    } catch (e) { res.json({ success: false, message: e.message }); }
-});
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 BACKEND READY ON PORT ${PORT}`));
