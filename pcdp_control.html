@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise Portal | PCDP Control Center</title>
+    
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="style.css?v=deploy_final">
+
+    <style>
+        /* --- PCDP PORTAL SPECIFIC PROFESSIONAL STYLES --- */
+        body { background: var(--bg-app); }
+        
+        /* Specialized Sidebar for Student Names */
+        .sidebar { width: 280px; }
+        .student-nav-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px; margin: 20px 0 8px 12px; }
+        .nav-item .student-roll { font-family: monospace; font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
+        .nav-item:hover .student-roll { color: var(--text-main); }
+        .nav-item.active .student-roll { color: var(--primary); font-weight: 600; }
+
+        .top-header { border-left: 1px solid var(--border); }
+        .main-content { background: var(--bg-app); display: flex; flex-direction: column; }
+        
+        /* Profile Summary Card at top */
+        .pcdp-profile-bar { background: #FFFFFF; padding: 20px 32px; border-bottom: 1px solid var(--border); display: flex; gap: 32px; align-items: center; }
+        .profile-stat-item > span { font-size: 0.7rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; display: block; margin-bottom: 4px; letter-spacing: 0.5px;}
+        .profile-stat-item .val { font-size: 0.95rem; font-weight: 700; color: var(--text-main); }
+
+        .courses-view { flex: 1; padding: 32px; overflow-y: auto; }
+        .courses-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
+
+        /* ==============================================================================
+           --- PCDP COURSE CARD STYLING (Replica of referenced image) ---
+           ============================================================================== */
+        .pcdp-card { background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; display: flex; flex-direction: column; transition: transform 0.2s, box-shadow 0.2s; position: relative; }
+        .pcdp-card:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); }
+
+        /* 🛑 PROGRESS COLORING LOGIC (Border Bottom) 🛑 */
+        .pcdp-card.is-in-progress { border-bottom: 4px solid #1F2937; } /* Grey border for started, referenced from image */
+        .pcdp-card.is-completed { border-bottom: 4px solid var(--success); } /* Coloured (Green) border for completed */
+        .pcdp-card.is-locked { border-bottom: 4px solid var(--border); opacity: 0.8;}
+
+        /* Top graphic area of card */
+        .pcdp-card-graphic { height: 100px; padding: 20px; display: flex; justify-content: space-between; align-items: flex-start; }
+        .pcdp-card.is-in-progress .pcdp-card-graphic { background: linear-gradient(135deg, #f8fafc 0%, #cbd5e1 100%); }
+        .pcdp-card.is-completed .pcdp-card-graphic { background: linear-gradient(135deg, #ECFDF5 0%, #A7F3D0 100%); }
+        .pcdp-card.is-locked .pcdp-card-graphic { background: #F1F5F9; }
+
+        .pcdp-category-icon { font-size: 1.8rem; }
+        .pcdp-card.is-in-progress .pcdp-category-icon { color: #1F2937; }
+        .pcdp-card.is-completed .pcdp-category-icon { color: var(--success); }
+        .pcdp-card.is-locked .pcdp-category-icon { color: #94A3B8; }
+
+        /* Level Selector Input (Admin specific) */
+        .level-selector-container { text-align: right; }
+        .level-label { display: block; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #64748B; margin-bottom: 2px; }
+        .pcdp-level-input { font-size: 1.1rem; font-weight: 800; font-family: monospace; padding: 4px; width: 45px; border-radius: 6px; border: 2px solid #E2E8F0; text-align: center; color: var(--text-main); outline: none; transition: border-color 0.2s;}
+        .pcdp-level-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
+        .level-slash { color: #CBD5E1; font-weight: 600; }
+        .total-level-text { font-size: 0.9rem; color: #94A3B8; font-weight: 600; font-family: monospace; }
+
+        /* Content area of card */
+        .pcdp-card-body { padding: 20px; flex: 1; display: flex; flex-direction: column; justify-content: space-between;}
+        .pcdp-course-title { font-size: 0.95rem; font-weight: 800; color: var(--text-main); margin-bottom: 20px; line-height: 1.4;}
+
+        /* Lower progress section from image */
+        .pcdp-progress-bar-area { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+        
+        /* Native Percentage Track */
+        .pcdp-native-track { flex: 1; height: 10px; border-radius: 5px; background: var(--border); overflow: hidden; position: relative;}
+        .pcdp-native-fill { height: 100%; border-radius: 5px; transition: width 0.5s ease; }
+        .pcdp-card.is-in-progress .pcdp-native-fill { background: #1F2937; }
+        .pcdp-card.is-completed .pcdp-native-fill { background: var(--success); }
+        .pcdp-card.is-locked .pcdp-native-fill { background: #CBD5E1; }
+
+        /* Status Badge like "Get Started" from image */
+        .pcdp-status-badge { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; white-space: nowrap;}
+        
+        .pcdp-card.is-completed .pcdp-status-badge { background: #ECFDF5; color: var(--success); }
+        .pcdp-card.is-in-progress .pcdp-status-badge { background: #1F2937; color: #FFFFFF; cursor: pointer;}
+        .pcdp-card.is-in-progress .pcdp-status-badge:hover { background: #0F172A; }
+        .pcdp-card.is-locked .pcdp-status-badge { background: #F1F5F9; color: #94A3B8; }
+
+        /* Mobile Adjustments */
+        @media (max-width: 900px) {
+            .sidebar { position: fixed; transform: translateX(-100%); box-shadow: var(--shadow-lg); z-index: 1000; height: 100dvh;}
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-overlay.show { display: block; opacity: 1; z-index: 999; }
+            .main-content { margin-left: 0; padding-top: 64px; height: 100dvh;}
+            .pcdp-profile-bar { padding: 16px 20px; flex-wrap: wrap; gap: 16px 30px; position: fixed; top: 64px; left: 0; width: 100%; z-index: 50; }
+            .courses-view { padding: 20px; padding-top: 130px;} /* Push content down for fixed bar */
+        }
+    </style>
+</head>
+<body>
+    
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <aside class="sidebar" id="sidebar">
+        <div class="brand flex-between">
+            <div class="flex-center" style="color:var(--text-main); font-weight:800;"><i class="fa-solid fa-code" style="color:var(--primary);"></i> PCDP Control</div>
+            <i class="fa-solid fa-xmark mobile-menu-btn" style="padding:0;" onclick="toggleSidebar()"></i>
+        </div>
+        
+        <div class="student-nav-label">Student Directory</div>
+        <div class="nav-menu" id="student-list-nav">
+            <div style="text-align: center; padding: 20px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</div>
+        </div>
+
+        <div class="nav-bottom">
+            <a href="admin.html" class="nav-item" style="background: var(--bg-app);"><i class="fa-solid fa-arrow-left"></i> Full Admin Portal</a>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="top-header flex-between">
+            <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+            <div style="font-size: 1.1rem; font-weight: 800; color: var(--text-main);">Course Level Assign</div>
+            <img src="https://ui-avatars.com/api/?name=Admin&background=4F46E5&color=fff&bold=true&rounded=true" class="profile-img">
+        </header>
+
+        <div id="no-student-placeholder" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; background: #FFF;">
+            <i class="fa-solid fa-users" style="font-size: 4rem; color: var(--border); margin-bottom: 24px;"></i>
+            <h1 style="font-weight: 800; color: var(--text-main);">PCDP Control Center</h1>
+            <p style="color: var(--text-muted); max-width: 400px; margin-top: 8px;">Please select a student from the sidebar to view and assign PCDP course levels.</p>
+        </div>
+
+        <div id="student-pcdp-view" style="display: none;">
+            <div class="pcdp-profile-bar">
+                <img id="p-header-img" src="" class="hero-img" style="width: 60px; height: 60px;" referrerpolicy="no-referrer">
+                <div>
+                    <h2 id="p-header-name" style="font-weight: 800; color: var(--text-main); margin-bottom: 4px;">--</h2>
+                    <span id="p-header-dept" class="badge badge-primary">--</span>
+                </div>
+                <div class="profile-stat-item"><span>Roll No</span><div class="val" id="p-header-roll">--</div></div>
+                <div class="profile-stat-item"><span>Reward Pts</span><div class="val" style="color: #B45309;" id="p-header-points">--</div></div>
+            </div>
+
+            <div class="courses-view">
+                <div class="courses-grid" id="pcdp-courses-grid">
+                    <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>
+                </div>
+            </div>
+        </div>
+        
+    </main>
+
+    <script src="pcdp_control.js?v=deploy_final"></script>
+</body>
+</html>

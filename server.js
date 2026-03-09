@@ -352,6 +352,64 @@ app.post('/api/admin/delete-course', async (req, res) => {
         res.json({ success: true });
     } catch (e) { res.json({ success: false }); }
 });
+// ==============================================================================
+// --- NEW PCDP CONTROL PORTAL APIS (Admin Only) ---
+// ==============================================================================
 
+// Helper to ensure only the specified admin can access this portal
+async function verifyPcdpAdmin(token) {
+    const ticket = await googleClient.verifyIdToken({ idToken: token, audience: CLIENT_ID });
+    if (ticket.getPayload().email.toLowerCase() !== 'sivanagu7771@gmail.com') throw new Error("Unauthorized Access to PCDP Portal.");
+    return true;
+}
+
+// 1. Get all students for the PCDP Sidebar (Sorted by name)
+app.post('/api/pcdp/admin/students', async (req, res) => {
+    try {
+        await verifyPcdpAdmin(req.body.adminToken);
+        const [rows] = await promisePool.query("SELECT email, full_name, roll_no, department FROM student_profile ORDER BY full_name ASC");
+        res.json({ success: true, students: rows });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+// 2. Get PCDP courses/skills for a specific student, mapped to standard structure
+app.post('/api/pcdp/admin/student-courses', async (req, res) => {
+    try {
+        await verifyPcdpAdmin(req.body.adminToken);
+        const email = req.body.targetEmail;
+
+        // Fetch basic student info
+        const [profile] = await promisePool.query("SELECT full_name, roll_no, department, reward_points FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]);
+        
+        // Fetch PCDP Skills/Courses
+        const sql = `
+            SELECT id, skill_name, total_levels, completed_levels, category
+            FROM student_skills
+            WHERE student_email = ?
+            ORDER BY category ASC, skill_name ASC
+        `;
+        const [courses] = await promisePool.query(sql, [email]);
+        
+        res.json({ success: true, profile: profile[0], courses: courses });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+// 3. Update the completed level for a specific PCDP course
+app.post('/api/pcdp/admin/update-level', async (req, res) => {
+    try {
+        await verifyPcdpAdmin(req.body.adminToken);
+        const { courseId, newLevel } = req.body;
+        
+        // Safety check to ensure level doesn't exceed total (Backend validation)
+        const [current] = await promisePool.query("SELECT total_levels FROM student_skills WHERE id = ?", [courseId]);
+        if(current.length === 0) throw new Error("Course not found.");
+        if(newLevel < 0 || newLevel > current[0].total_levels) throw new Error("Invalid level value.");
+
+        // Update the database
+        await promisePool.query("UPDATE student_skills SET completed_levels = ? WHERE id = ?", [newLevel, courseId]);
+        
+        res.json({ success: true, message: "PCDP Level Updated Successfully." });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 BACKEND READY ON PORT ${PORT}`));
