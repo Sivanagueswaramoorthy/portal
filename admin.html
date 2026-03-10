@@ -12,7 +12,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=ultimate_mobile_fix">
+    <link rel="stylesheet" href="style.css?v=master_final">
 </head>
 <body>
 
@@ -26,7 +26,6 @@
         <div class="nav-menu">
             <a class="nav-item admin-global active" id="nav-dir" onclick="switchTab('directory', this)"><i class="fa-solid fa-users"></i> Staff Directory</a>
             <a class="nav-item admin-global" id="nav-col-place" onclick="switchTab('college-placement', this)"><i class="fa-solid fa-building-user"></i> College Placement</a>
-            
             
             <a class="nav-item student-nav" id="nav-back" onclick="backToDirectory()" style="color: var(--warning); background: var(--warning-light); font-weight: 800; margin-bottom: 10px; display: none;"><i class="fa-solid fa-arrow-left"></i> Back to Directory</a>
             <a class="nav-item student-nav" id="nav-dash" onclick="switchTab('dashboard', this)" style="display: none;"><i class="fa-solid fa-chart-pie"></i> Dashboard Overview</a>
@@ -232,7 +231,7 @@
             <div id="view-activities" class="view-section">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
                     <h1 class="page-title">PCDP Dashboard</h1>
-                    <button class="action-btn btn-primary" onclick="openModal('add-skill-modal')"><i class="fa-solid fa-plus"></i> Add Skill</button>
+                    <button class="action-btn btn-primary" onclick="openAssignSkillModal()"><i class="fa-solid fa-plus"></i> Assign Course</button>
                 </div>
 
                 <div class="stats-grid" style="margin-bottom: 24px;" id="act-stats-container">
@@ -399,11 +398,24 @@
     </main>
 
     <div id="add-modal" class="modal-overlay"><div class="modal-content"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Register Student</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-modal')"></i></div><input type="email" id="new-email" class="modal-input" placeholder="Google Email"><input type="text" id="new-name" class="modal-input" placeholder="Full Student Name"><input type="text" id="new-roll" class="modal-input" placeholder="Roll Number"><input type="text" id="new-dept" class="modal-input" placeholder="Department"><button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitNewStudent()">Save to Database</button></div></div>
-    <div id="add-skill-modal" class="modal-overlay"><div class="modal-content"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Add PCDP Skill</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-skill-modal')"></i></div><input type="text" id="sk-name" class="modal-input" placeholder="Skill Name"><input type="text" id="sk-cat" class="modal-input" placeholder="Category"><div style="display: flex; gap: 12px;"><input type="number" id="sk-comp" class="modal-input" placeholder="Completed"><input type="number" id="sk-tot" class="modal-input" placeholder="Total"></div><button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitNewSkill()">Add Skill</button></div></div>
+    
+    <div id="add-skill-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Assign PCDP Course</h2>
+                <i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-skill-modal')"></i>
+            </div>
+            <select id="sk-master-select" class="modal-input" style="cursor: pointer; font-size: 1rem; padding: 12px;">
+                <option value="">Loading master courses...</option>
+            </select>
+            <button class="action-btn btn-primary" style="width: 100%; margin-top: 8px; background: #8B5CF6;" onclick="submitNewSkill()">Assign to Student</button>
+        </div>
+    </div>
+    
     <div id="add-course-modal" class="modal-overlay"><div class="modal-content"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Add Course Mark</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-course-modal')"></i></div><input type="number" id="crs-sem" class="modal-input" placeholder="Semester"><input type="text" id="crs-name" class="modal-input" placeholder="Subject Name"><div style="display: flex; gap: 12px;"><input type="number" id="crs-mark" class="modal-input" placeholder="Marks"><input type="text" id="crs-grade" class="modal-input" placeholder="Grade"></div><button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitNewCourse()">Save Subject</button></div></div>
     <div id="add-drive-modal" class="modal-overlay"><div class="modal-content"><div class="flex-between" style="margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Add Campus Drive</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-drive-modal')"></i></div><input type="text" id="drv-comp" class="modal-input" placeholder="Company Name"><input type="text" id="drv-role" class="modal-input" placeholder="Role Profile"><div style="display: flex; gap: 12px;"><input type="number" id="drv-app" class="modal-input" placeholder="Appeared"><input type="number" id="drv-sel" class="modal-input" placeholder="Selected"></div><input type="text" id="drv-ctc" class="modal-input" placeholder="Salary Package"><button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitNewDrive()">Save Drive</button></div></div>
     <div id="add-app-modal" class="modal-overlay"><div class="modal-content"><div class="flex-between" style="margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Log Application</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-app-modal')"></i></div><input type="text" id="app-comp" class="modal-input" placeholder="Company Name (e.g. Zoho)"><input type="text" id="app-role" class="modal-input" placeholder="Role Applied For"><div style="display: flex; gap: 12px;"><input type="text" id="app-date" class="modal-input" placeholder="Date"><input type="text" id="app-stat" class="modal-input" placeholder="Status"></div><button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitNewApp()">Log Application</button></div></div>
 
-    <script src="admin.js?v=ultimate_mobile_fix"></script>
+    <script src="admin.js?v=master_final"></script>
 </body>
 </html>

@@ -34,12 +34,23 @@ const promisePool = dbPool.promise();
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN reward_points VARCHAR(10) DEFAULT '0'`); } catch(e){}
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN arrears VARCHAR(10) DEFAULT '0'`); } catch(e){}
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN leaves VARCHAR(10) DEFAULT '0'`); } catch(e){}
-
+        // Add these to initializeDatabase() in server.js
+await promisePool.query(`CREATE TABLE IF NOT EXISTS pcdp_master_courses (id INT AUTO_INCREMENT PRIMARY KEY, course_name VARCHAR(255), description TEXT, image_url TEXT)`);
+try { await promisePool.query(`ALTER TABLE student_skills ADD COLUMN description TEXT`); } catch(e){}
         await promisePool.query(`CREATE TABLE IF NOT EXISTS student_courses (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), semester INT, course_name VARCHAR(255), marks VARCHAR(50), grade VARCHAR(10))`);
         
         // 🛠️ UPDATED: Added image_url to student_skills for the visual cards
         await promisePool.query(`CREATE TABLE IF NOT EXISTS student_skills (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), skill_name VARCHAR(255), total_levels INT, completed_levels INT, category VARCHAR(100), image_url TEXT)`);
         try { await promisePool.query(`ALTER TABLE student_skills ADD COLUMN image_url TEXT`); } catch(e){}
+        // new table to hold PCDP library courses
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS pcdp_courses (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            course_name VARCHAR(255) UNIQUE,
+            total_levels INT DEFAULT 1,
+            category VARCHAR(100),
+            image_url TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )`);
 
         await promisePool.query(`CREATE TABLE IF NOT EXISTS student_sem_gpa (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255) NOT NULL, semester INT NOT NULL, gpa VARCHAR(10), UNIQUE KEY unique_sem (student_email, semester))`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_global (id INT PRIMARY KEY, total_placed VARCHAR(50), ongoing_drives VARCHAR(50), highest_ctc VARCHAR(50), avg_ctc VARCHAR(50))`);
@@ -232,6 +243,56 @@ app.post('/api/pcdp/admin/delete-skill', async (req, res) => {
         await promisePool.query("DELETE FROM student_skills WHERE id = ?", [req.body.id]);
         res.json({ success: true });
     } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+// -----------------------------------------------------------------------------
+// PCDP COURSE LIBRARY ENDPOINTS (global courses managed by PCDP admin)
+// -----------------------------------------------------------------------------
+
+app.post('/api/pcdp/courses', async (req, res) => {
+    try {
+        await verifyPcdpAdmin(req.body.adminToken);
+        const [rows] = await promisePool.query("SELECT * FROM pcdp_courses ORDER BY course_name ASC");
+        res.json({ success: true, courses: rows });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/pcdp/course/add', async (req, res) => {
+    try {
+        await verifyPcdpAdmin(req.body.adminToken);
+        const { course_name, total_levels, category, image_url } = req.body;
+        await promisePool.query(
+            "INSERT INTO pcdp_courses (course_name, total_levels, category, image_url) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE total_levels=VALUES(total_levels), category=VALUES(category), image_url=VALUES(image_url)",
+            [course_name, total_levels || 1, category, image_url]
+        );
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/pcdp/course/update', async (req, res) => {
+    try {
+        await verifyPcdpAdmin(req.body.adminToken);
+        const { id, field, value } = req.body;
+        await promisePool.query(`UPDATE pcdp_courses SET ${field} = ? WHERE id = ?`, [value, id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/pcdp/course/delete', async (req, res) => {
+    try {
+        await verifyPcdpAdmin(req.body.adminToken);
+        await promisePool.query("DELETE FROM pcdp_courses WHERE id = ?", [req.body.id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+// expose library to regular admins so they can populate dropdown
+app.post('/api/admin/pcdp-courses', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        const [rows] = await promisePool.query("SELECT * FROM pcdp_courses ORDER BY course_name ASC");
+        res.json({ success: true, courses: rows });
+    } catch (e) { res.json({ success: false }); }
 });
 
 // ==============================================================================
@@ -430,6 +491,42 @@ app.post('/api/admin/delete-course', async (req, res) => {
         await promisePool.query("DELETE FROM student_courses WHERE id = ?", [req.body.id]);
         res.json({ success: true });
     } catch (e) { res.json({ success: false }); }
+    // --- 1. PCDP PORTAL: Save to Master List ---
+app.post('/api/pcdp/master/add', async (req, res) => {
+    try {
+        await promisePool.query(
+            "INSERT INTO pcdp_master_courses (course_name, description, image_url) VALUES (?, ?, ?)", 
+            [req.body.course_name, req.body.description, req.body.image_url]
+        );
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+// --- 2. ADMIN PORTAL: Get Master List for Dropdown ---
+app.post('/api/admin/pcdp-master-list', async (req, res) => {
+    try {
+        const [courses] = await promisePool.query("SELECT * FROM pcdp_master_courses ORDER BY course_name ASC");
+        res.json({ success: true, courses: courses });
+    } catch (e) { res.json({ success: false }); }
+});
+
+// --- 3. ADMIN PORTAL: Assign Course to Student ---
+app.post('/api/admin/assign-pcdp', async (req, res) => {
+    try {
+        const { targetEmail, masterCourseId } = req.body;
+        // Fetch the specific master course
+        const [master] = await promisePool.query("SELECT * FROM pcdp_master_courses WHERE id = ?", [masterCourseId]);
+        if(master.length === 0) throw new Error("Course not found");
+        const mc = master[0];
+        
+        // Sync it to the student's personal profile
+        await promisePool.query(
+            "INSERT INTO student_skills (student_email, skill_name, description, image_url) VALUES (?, ?, ?, ?)",
+            [targetEmail, mc.course_name, mc.description, mc.image_url]
+        );
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
 });
 
 const PORT = process.env.PORT || 10000;

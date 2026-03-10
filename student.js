@@ -63,7 +63,23 @@ window.onload = async () => {
         
         setTopHeader(loggedInName, loggedInEmail, loggedInPic);
         
-        populateDashboard(data.profile, loggedInPic, data.courses, data.skills, data.semGpas);
+        document.getElementById('skills-container').innerHTML = skills.map(c => {
+            const imgUrl = c.image_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
+
+            return `
+            <div class="img-card" style="border: 1px solid var(--primary-light);">
+                <div class="card-img-wrapper" style="height: 140px;">
+                    <img src="${imgUrl}">
+                </div>
+                <div class="card-body">
+                    <div class="card-title" style="color: var(--primary);">${c.skill_name}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5;">
+                        ${c.description || 'No description provided by PCDP Admin.'}
+                    </div>
+                    <div class="badge badge-success" style="width: 100%; text-align: center; padding: 8px;"><i class="fa-solid fa-check-circle"></i> Assigned Course</div>
+                </div>
+            </div>`;
+        }).join('');
         populatePersonalPlacement(data.placeProfile, data.placeApps);
         populateGlobalPlacement(data.globalStats, data.globalDrives); 
         

@@ -261,7 +261,7 @@ function populateDashboard(p, img, courses, skills, semGpas) {
     document.getElementById('val-email').innerText = p.email; 
     document.getElementById('val-roll_no').innerText = p.roll_no || '--'; 
     document.getElementById('val-department').innerText = p.department || '--';
-    document.getElementById('val-cgpa').innerText = parseFloat(p.cgpa).toFixed(2); 
+    document.getElementById('val-cgpa').innerText = parseFloat(p.cgpa || 0).toFixed(2); 
     document.getElementById('val-sgpa').innerText = parseFloat(p.sgpa || 0).toFixed(2);
     document.getElementById('val-attendance').innerText = p.attendance; 
     document.getElementById('val-reward_points').innerText = p.reward_points;
@@ -270,31 +270,41 @@ function populateDashboard(p, img, courses, skills, semGpas) {
     
     renderChart(courses, semGpas);
 
+    // 🛠️ RENDER SKILLS: Notice only "Completed" can be modified
+    const skillsContainer = document.getElementById('admin-skills-container');
     if(skills && skills.length > 0) {
         document.getElementById('act-total-skills').innerText = skills.length; 
         document.getElementById('act-mastered').innerText = skills.filter(s => s.completed_levels >= s.total_levels).length; 
         document.getElementById('act-progress').innerText = skills.filter(s => s.completed_levels < s.total_levels).length;
-        
-        document.getElementById('skills-container').innerHTML = skills.map(s => {
-            let pct = Math.round((s.completed_levels / s.total_levels) * 100) || 0;
+
+        skillsContainer.innerHTML = skills.map(c => {
+            const total = c.total_levels || 1;
+            const comp = c.completed_levels || 0;
+            const pct = Math.round((comp / total) * 100);
+            const imgUrl = c.image_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
+
+            let segmentsHtml = '';
+            for(let i=0; i<total; i++) { segmentsHtml += `<div class="segment ${i < comp ? 'filled' : ''}"></div>`; }
+
             return `
-            <div class="skill-card" id="card-sk-${s.id}">
-                <div class="skill-header flex-between">
-                    <div class="skill-title"><span id="sk-n-${s.id}">${s.skill_name}</span></div>
-                    <div style="display:flex; align-items: center; gap:4px;">
-                        <i class="fa-solid fa-pen admin-table-edit" onclick="editSkillCard(${s.id})"></i>
-                        <i class="fa-solid fa-trash admin-table-del" onclick="deleteSkill(${s.id})"></i>
+            <div class="img-card" id="card-sk-${c.id}">
+                <div class="card-img-wrapper"><img src="${imgUrl}"></div>
+                <div class="card-body">
+                    <div class="card-title" style="color: var(--primary);">${c.skill_name}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5; flex: 1;">
+                        ${c.description || 'Assigned PCDP Course'}
                     </div>
+                    <div class="card-meta">
+                        <div style="color: #9CA3AF;"><i class="fa-solid fa-layer-group"></i> Total Levels: <span id="sk-t-${c.id}">${total}</span></div>
+                        <div style="color: #4B5563;"><i class="fa-solid fa-medal"></i> ${c.category || 'General'}</div>
+                    </div>
+                    <div class="segmented-track">${segmentsHtml}</div>
+                    <div class="progress-text">Progress: <span id="sk-c-${c.id}">${comp}</span>/${total} levels (${pct}%)</div>
                 </div>
-                <div class="badge" style="margin-bottom: 12px;">${s.category || 'General'}</div>
-                <div class="progress-track"><div class="progress-fill" style="width: ${pct}%;"></div></div>
-                <div class="skill-footer flex-between">
-                    <div class="flex-center">
-                        <i class="fa-solid fa-layer-group" style="color: var(--primary);"></i> 
-                        <span id="sk-c-${s.id}" style="color: var(--text-main); font-weight:800;">${s.completed_levels}</span> / 
-                        <span id="sk-t-${s.id}">${s.total_levels}</span> Lvl
-                    </div>
-                    <div style="color: var(--primary); font-weight: 800;">${pct}%</div>
+                
+                <div class="admin-level-update">
+                    <button class="action-btn btn-outline" style="font-size: 0.7rem; padding: 4px 8px;" onclick="editSkillCard(${c.id})"><i class="fa-solid fa-pen"></i> Update Progress</button>
+                    <i class="fa-solid fa-trash delete-btn" title="Remove Course" onclick="deleteSkill(${c.id})"></i>
                 </div>
             </div>`;
         }).join('');
@@ -302,7 +312,7 @@ function populateDashboard(p, img, courses, skills, semGpas) {
         document.getElementById('act-total-skills').innerText = "0"; 
         document.getElementById('act-mastered').innerText = "0"; 
         document.getElementById('act-progress').innerText = "0";
-        document.getElementById('skills-container').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color:var(--text-muted); font-weight: 500; border: 1px dashed var(--border); border-radius: 12px;">No PCDP activities logged yet.</div>`; 
+        skillsContainer.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px; color:var(--text-muted); font-weight: 500; border: 1px dashed var(--border); border-radius: 12px;">No PCDP courses assigned for this student yet.</div>`; 
     }
 
     if(courses && courses.length > 0) {
@@ -394,7 +404,6 @@ function populatePersonalPlacement(pProfile, pApps) {
     const logical = prf.apt_logical || '0'; document.getElementById('val-a-log').innerText = logical; document.getElementById('bar-a-log').style.width = `${logical}%`;
     const hr = prf.apt_hr || '0'; document.getElementById('val-a-hr').innerText = hr; document.getElementById('bar-a-hr').style.width = `${hr}%`;
 
-    // --- NEW: Safely display the Resume Link to the Admin ---
     const resumeDisp = document.getElementById('admin-resume-display');
     const resumeBtn = document.getElementById('admin-view-resume-btn');
     if (resumeDisp && resumeBtn) {
@@ -432,7 +441,80 @@ function populatePersonalPlacement(pProfile, pApps) {
     }
 }
 
-// --- SUBMISSIONS & CREATIONS ---
+// --- 🛠️ NEW: ASSIGN COURSE FROM MASTER LIST ---
+async function openAssignSkillModal() {
+    openModal('add-skill-modal');
+    const sel = document.getElementById('sk-master-select');
+    sel.innerHTML = '<option value="">Fetching global courses...</option>';
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/pcdp-master-list`, { 
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ adminToken: globalToken }) 
+        });
+        const data = await req.json();
+        
+        if(data.success) {
+            if(data.courses.length === 0) {
+                sel.innerHTML = '<option value="" disabled selected>No Master Courses created yet!</option>';
+            } else {
+                sel.innerHTML = '<option value="" disabled selected>-- Select a Course to Assign --</option>';
+                data.courses.forEach(c => {
+                    sel.innerHTML += `<option value="${c.id}">${c.course_name} (${c.category}) - ${c.total_levels} Lvl</option>`;
+                });
+            }
+        }
+    } catch(e) { sel.innerHTML = '<option value="">Error fetching courses</option>'; }
+}
+
+async function submitNewSkill() {
+    const masterId = document.getElementById('sk-master-select').value;
+    if(!masterId) return alert("Please select a course to assign.");
+    
+    await fetch(`${BASE_URL}/api/admin/assign-pcdp`, { 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, masterCourseId: masterId }) 
+    });
+    closeModal('add-skill-modal'); 
+    loadStudentData(targetStudentEmail); 
+}
+
+// 🛠️ NEW: EDIT ONLY COMPLETED LEVELS ON ASSIGNED CARD
+function editSkillCard(id) {
+    const card = document.getElementById(`card-sk-${id}`);
+    const comp = document.getElementById(`sk-c-${id}`).innerText;
+    const total = document.getElementById(`sk-t-${id}`).innerText;
+    
+    card.innerHTML = `
+        <div style="padding: 16px; flex: 1; display: flex; flex-direction: column; justify-content: center;">
+            <div style="margin-bottom:16px; font-weight:800; font-size:1.1rem; color:var(--text-main); text-align:center;">Update Progress</div>
+            <div class="flex-center" style="margin-bottom: 20px; justify-content: center;">
+                <span style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Completed:</span>
+                <input type="number" id="edit-sk-c-${id}" class="inline-input" style="width: 80px; text-align:center; font-size:1.2rem; padding: 12px;" value="${comp}" max="${total}" min="0">
+                <span style="font-size:1rem; font-weight:800; color:var(--text-muted); margin-left:8px;">/ ${total}</span>
+            </div>
+            <div style="display:flex; justify-content: center; gap: 10px;">
+                <button class="action-btn btn-success" style="width: 100px;" onclick="saveSkillCard(${id}, ${total})">Save</button>
+                <button class="action-btn btn-outline" style="width: 100px;" onclick="loadStudentData(targetStudentEmail)">Cancel</button>
+            </div>
+        </div>`;
+}
+
+async function saveSkillCard(id, totalLevels) {
+    let comp = parseInt(document.getElementById(`edit-sk-c-${id}`).value);
+    if(isNaN(comp) || comp < 0) comp = 0;
+    if(comp > totalLevels) { alert(`Cannot exceed total levels (${totalLevels})!`); return; }
+    
+    const card = document.getElementById(`card-sk-${id}`); 
+    card.innerHTML = `<div style="text-align:center; padding: 60px;"><i class="fa-solid fa-spinner fa-spin" style="color: var(--primary); font-size: 2rem;"></i></div>`;
+    
+    await fetch(`${BASE_URL}/api/admin/update-skill-level`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminToken: globalToken, courseId: id, newLevel: comp })
+    });
+    loadStudentData(targetStudentEmail);
+}
+
+// --- STANDARD CRUD ---
 async function submitNewStudent() {
     const email = document.getElementById('new-email').value;
     const full_name = document.getElementById('new-name').value;
@@ -442,8 +524,7 @@ async function submitNewStudent() {
     if(!email || !full_name) return alert("Email and Name are required.");
     
     await fetch(`${BASE_URL}/api/admin/add-student`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ adminToken: globalToken, email: email, full_name: full_name, roll_no: roll_no, department: department }) 
     });
     closeModal('add-modal'); 
@@ -453,26 +534,10 @@ async function submitNewStudent() {
 async function deleteStudent(email) {
     if(!confirm("Delete this student and ALL records permanently?")) return;
     await fetch(`${BASE_URL}/api/admin/delete-student`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ adminToken: globalToken, email: email }) 
     });
     fetchDirectory(); 
-}
-
-async function submitNewSkill() {
-    const skill_name = document.getElementById('sk-name').value;
-    const category = document.getElementById('sk-cat').value;
-    const completed_levels = document.getElementById('sk-comp').value;
-    const total_levels = document.getElementById('sk-tot').value;
-    
-    await fetch(`${BASE_URL}/api/admin/add-skill`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, skill_name: skill_name, category: category, completed_levels: completed_levels, total_levels: total_levels }) 
-    });
-    closeModal('add-skill-modal'); 
-    loadStudentData(targetStudentEmail); 
 }
 
 async function submitNewCourse() {
@@ -482,8 +547,7 @@ async function submitNewCourse() {
     const grade = document.getElementById('crs-grade').value;
     
     await fetch(`${BASE_URL}/api/admin/add-course`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, semester: semester, course_name: course_name, marks: marks, grade: grade }) 
     });
     closeModal('add-course-modal'); 
@@ -491,13 +555,13 @@ async function submitNewCourse() {
 }
 
 async function deleteSkill(id) { 
-    if(!confirm("Delete this skill?")) return; 
+    if(!confirm("Remove this assigned course?")) return; 
     await fetch(`${BASE_URL}/api/admin/delete-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); 
     loadStudentData(targetStudentEmail); 
 }
 
 async function deleteCourse(id) { 
-    if(!confirm("Delete this course?")) return; 
+    if(!confirm("Delete this subject?")) return; 
     await fetch(`${BASE_URL}/api/admin/delete-course`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); 
     loadStudentData(targetStudentEmail); 
 }
@@ -510,8 +574,7 @@ async function submitNewDrive() {
     const ctc = document.getElementById('drv-ctc').value;
     
     await fetch(`${BASE_URL}/api/admin/add-drive`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ adminToken: globalToken, company: company, role: role, appeared: appeared, selected: selected, ctc: ctc }) 
     });
     closeModal('add-drive-modal'); 
@@ -525,8 +588,7 @@ async function submitNewApp() {
     const status = document.getElementById('app-stat').value;
     
     await fetch(`${BASE_URL}/api/admin/add-app`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, company: company, role: role, date_applied: date_applied, status: status }) 
     });
     closeModal('add-app-modal'); 
@@ -568,17 +630,14 @@ async function saveProfileEdit(field, spanId, width) {
     document.getElementById(`in-${spanId}`).parentElement.parentElement.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
     
     const req = await fetch(`${BASE_URL}/api/admin/update-field`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, field: field, value: val }) 
     });
     const res = await req.json(); 
     if (res.success) { 
         if (field === 'email') targetStudentEmail = val; 
         loadStudentData(targetStudentEmail); 
-    } else {
-        cancelProfileEdit(spanId, field, width);
-    }
+    } else { cancelProfileEdit(spanId, field, width); }
 }
 
 function openSemGpaEdit(sem) {
@@ -593,10 +652,8 @@ function openSemGpaEdit(sem) {
 async function saveSemGpa(sem) {
     const val = document.getElementById(`in-semgpa-${sem}`).value; 
     document.getElementById(`wrap-semgpa-${sem}`).innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:var(--primary); font-size:0.8rem;"></i>`;
-    
     await fetch(`${BASE_URL}/api/admin/update-sem-gpa`, { 
-        method: 'POST', 
-        headers: {'Content-Type': 'application/json'}, 
+        method: 'POST', headers: {'Content-Type': 'application/json'}, 
         body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, semester: sem, gpa: val }) 
     });
     loadStudentData(targetStudentEmail);
@@ -616,10 +673,8 @@ function openGlobalStatEdit(field, spanId, width) {
 async function saveGlobalStat(field, spanId, width) {
     const val = document.getElementById(`in-${spanId}`).value; 
     document.getElementById(`in-${spanId}`).parentElement.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    
     await fetch(`${BASE_URL}/api/admin/update-global-stat`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ adminToken: globalToken, field: field, value: val }) 
     });
     window.location.reload();
@@ -639,10 +694,8 @@ function openPlacementProfileEdit(field, spanId, width) {
 async function savePlacementProfileEdit(field, spanId, width) {
     const val = document.getElementById(`in-${spanId}`).value; 
     document.getElementById(`in-${spanId}`).parentElement.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    
     await fetch(`${BASE_URL}/api/admin/update-placement-profile`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, field: field, value: val }) 
     });
     loadStudentData(targetStudentEmail);
@@ -650,12 +703,7 @@ async function savePlacementProfileEdit(field, spanId, width) {
 
 function editDriveRow(id) {
     const tr = document.getElementById(`row-drv-${id}`);
-    const comp = tr.children[0].innerText;
-    const role = tr.children[1].innerText;
-    const app = tr.children[2].innerText;
-    const sel = tr.children[3].innerText;
-    const ctc = tr.children[4].innerText;
-    
+    const comp = tr.children[0].innerText; const role = tr.children[1].innerText; const app = tr.children[2].innerText; const sel = tr.children[3].innerText; const ctc = tr.children[4].innerText;
     tr.innerHTML = `
         <td><input type="text" id="e-drv-c-${id}" class="inline-input" style="width: 100%;" value="${comp}"></td>
         <td><input type="text" id="e-drv-r-${id}" class="inline-input" style="width: 100%;" value="${role}"></td>
@@ -669,33 +717,15 @@ function editDriveRow(id) {
 }
 
 async function saveDriveRow(id) {
-    const tr = document.getElementById(`row-drv-${id}`); 
-    tr.lastElementChild.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    
-    const updates = [
-        { field: 'company', value: document.getElementById(`e-drv-c-${id}`).value },
-        { field: 'role', value: document.getElementById(`e-drv-r-${id}`).value },
-        { field: 'appeared', value: document.getElementById(`e-drv-a-${id}`).value },
-        { field: 'selected', value: document.getElementById(`e-drv-s-${id}`).value },
-        { field: 'ctc', value: document.getElementById(`e-drv-ctc-${id}`).value }
-    ];
-
-    await Promise.all(updates.map(u => 
-        fetch(`${BASE_URL}/api/admin/update-drive`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ adminToken: globalToken, id: id, field: u.field, value: u.value })
-        })
-    ));
+    const tr = document.getElementById(`row-drv-${id}`); tr.lastElementChild.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
+    const updates = [{ field: 'company', value: document.getElementById(`e-drv-c-${id}`).value }, { field: 'role', value: document.getElementById(`e-drv-r-${id}`).value }, { field: 'appeared', value: document.getElementById(`e-drv-a-${id}`).value }, { field: 'selected', value: document.getElementById(`e-drv-s-${id}`).value }, { field: 'ctc', value: document.getElementById(`e-drv-ctc-${id}`).value }];
+    await Promise.all(updates.map(u => fetch(`${BASE_URL}/api/admin/update-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id, field: u.field, value: u.value }) })));
     window.location.reload();
 }
 
 function editAppRow(id) {
     const tr = document.getElementById(`row-app-${id}`);
-    const comp = tr.children[0].innerText;
-    const role = tr.children[1].innerText;
-    const date = tr.children[2].innerText;
-    const stat = tr.children[3].innerText;
-    
+    const comp = tr.children[0].innerText; const role = tr.children[1].innerText; const date = tr.children[2].innerText; const stat = tr.children[3].innerText;
     tr.innerHTML = `
         <td><input type="text" id="e-app-c-${id}" class="inline-input" style="width: 100%;" value="${comp}"></td>
         <td><input type="text" id="e-app-r-${id}" class="inline-input" style="width: 100%;" value="${role}"></td>
@@ -708,31 +738,15 @@ function editAppRow(id) {
 }
 
 async function saveAppRow(id) {
-    const tr = document.getElementById(`row-app-${id}`); 
-    tr.lastElementChild.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    
-    const updates = [
-        { field: 'company', value: document.getElementById(`e-app-c-${id}`).value },
-        { field: 'role', value: document.getElementById(`e-app-r-${id}`).value },
-        { field: 'date_applied', value: document.getElementById(`e-app-d-${id}`).value },
-        { field: 'status', value: document.getElementById(`e-app-s-${id}`).value }
-    ];
-
-    await Promise.all(updates.map(u => 
-        fetch(`${BASE_URL}/api/admin/update-app`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ adminToken: globalToken, id: id, field: u.field, value: u.value })
-        })
-    ));
+    const tr = document.getElementById(`row-app-${id}`); tr.lastElementChild.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
+    const updates = [{ field: 'company', value: document.getElementById(`e-app-c-${id}`).value }, { field: 'role', value: document.getElementById(`e-app-r-${id}`).value }, { field: 'date_applied', value: document.getElementById(`e-app-d-${id}`).value }, { field: 'status', value: document.getElementById(`e-app-s-${id}`).value }];
+    await Promise.all(updates.map(u => fetch(`${BASE_URL}/api/admin/update-app`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id, field: u.field, value: u.value }) })));
     loadStudentData(targetStudentEmail);
 }
 
 function editCourseRow(id) {
     const tr = document.getElementById(`row-crs-${id}`);
-    const name = tr.children[0].innerText;
-    const marks = tr.children[1].innerText;
-    const grade = tr.children[2].innerText;
-    
+    const name = tr.children[0].innerText; const marks = tr.children[1].innerText; const grade = tr.children[2].innerText;
     tr.innerHTML = `
         <td style="padding-left:24px;"><input type="text" id="edit-crs-n-${id}" class="inline-input" style="width: 100%; text-align:left;" value="${name}"></td>
         <td><input type="number" id="edit-crs-m-${id}" class="inline-input" style="width: 70px;" value="${marks}"></td>
@@ -744,61 +758,8 @@ function editCourseRow(id) {
 }
 
 async function saveCourseRow(id) {
-    const tr = document.getElementById(`row-crs-${id}`); 
-    tr.lastElementChild.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    
-    const updates = [
-        { field: 'course_name', value: document.getElementById(`edit-crs-n-${id}`).value },
-        { field: 'marks', value: document.getElementById(`edit-crs-m-${id}`).value },
-        { field: 'grade', value: document.getElementById(`edit-crs-g-${id}`).value }
-    ];
-
-    await Promise.all(updates.map(u => 
-        fetch(`${BASE_URL}/api/admin/update-course`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ adminToken: globalToken, id: id, field: u.field, value: u.value })
-        })
-    ));
-    loadStudentData(targetStudentEmail);
-}
-
-function editSkillCard(id) {
-    const card = document.getElementById(`card-sk-${id}`);
-    const name = document.getElementById(`sk-n-${id}`).innerText;
-    const comp = document.getElementById(`sk-c-${id}`).innerText;
-    const total = document.getElementById(`sk-t-${id}`).innerText;
-    
-    card.innerHTML = `
-        <div style="margin-bottom:16px;">
-            <input type="text" id="edit-sk-n-${id}" class="inline-input" style="width: 100%; text-align:left; font-size:0.95rem;" value="${name}">
-        </div>
-        <div class="flex-center" style="margin-bottom: 20px;">
-            <span style="font-size:0.7rem; font-weight:700; color:var(--text-muted);">CMP:</span>
-            <input type="number" id="edit-sk-c-${id}" class="inline-input" style="width: 60px;" value="${comp}">
-            <span style="font-size:0.7rem; font-weight:700; color:var(--text-muted); margin-left:12px;">TOT:</span>
-            <input type="number" id="edit-sk-t-${id}" class="inline-input" style="width: 60px;" value="${total}">
-        </div>
-        <div style="display:flex; justify-content: flex-end;">
-            <i class="fa-solid fa-check action-icon save" onclick="saveSkillCard(${id})"></i>
-            <i class="fa-solid fa-xmark action-icon cancel" onclick="loadStudentData(targetStudentEmail)"></i>
-        </div>`;
-}
-
-async function saveSkillCard(id) {
-    const card = document.getElementById(`card-sk-${id}`); 
-    card.innerHTML = `<div style="text-align:center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin" style="color: var(--primary); font-size: 2rem;"></i></div>`;
-    
-    const updates = [
-        { field: 'skill_name', value: document.getElementById(`edit-sk-n-${id}`).value },
-        { field: 'completed_levels', value: document.getElementById(`edit-sk-c-${id}`).value },
-        { field: 'total_levels', value: document.getElementById(`edit-sk-t-${id}`).value }
-    ];
-
-    await Promise.all(updates.map(u => 
-        fetch(`${BASE_URL}/api/admin/update-skill`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ adminToken: globalToken, id: id, field: u.field, value: u.value })
-        })
-    ));
+    const tr = document.getElementById(`row-crs-${id}`); tr.lastElementChild.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
+    const updates = [{ field: 'course_name', value: document.getElementById(`edit-crs-n-${id}`).value }, { field: 'marks', value: document.getElementById(`edit-crs-m-${id}`).value }, { field: 'grade', value: document.getElementById(`edit-crs-g-${id}`).value }];
+    await Promise.all(updates.map(u => fetch(`${BASE_URL}/api/admin/update-course`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id, field: u.field, value: u.value }) })));
     loadStudentData(targetStudentEmail);
 }

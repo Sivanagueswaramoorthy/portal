@@ -3,94 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Portal | PCDP Control Center</title>
+    <title>Enterprise Portal | PCDP Global Master</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=deploy_final">
-    
-    <style>
-        body { background: #F3F4F6; }
-        .sidebar { width: 280px; }
-        .student-nav-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px; margin: 20px 0 8px 12px; }
-        .nav-item .student-roll { font-family: monospace; font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
-        .nav-item:hover .student-roll { color: var(--text-main); }
-        .nav-item.active .student-roll { color: var(--primary); font-weight: 600; }
-        .main-content { background: #F3F4F6; display: flex; flex-direction: column; }
-        
-        .courses-view { padding: 32px; overflow-y: auto; }
-        .courses-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; }
-
-        /* 🖼️ EXACT CARD REPLICA STYLES */
-        .img-card { background: #FFFFFF; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; transition: transform 0.2s; position: relative; border: 1px solid #E5E7EB;}
-        .img-card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
-        
-        .card-img-wrapper { height: 160px; width: 100%; overflow: hidden; background: #E5E7EB; position: relative; }
-        .card-img-wrapper img { width: 100%; height: 100%; object-fit: cover; }
-        .card-body { padding: 16px; flex: 1; display: flex; flex-direction: column; }
-        
-        .card-title { font-size: 1rem; font-weight: 700; color: #111827; margin-bottom: 12px; line-height: 1.3; }
-        .card-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 0.75rem; font-weight: 700; color: #6B7280; }
-        
-        /* SEGMENTED PROGRESS BAR */
-        .segmented-track { display: flex; gap: 4px; height: 6px; margin-bottom: 8px; }
-        .segment { flex: 1; border-radius: 4px; background: #E5E7EB; }
-        .segment.filled { background: #8B5CF6; } /* Purple from your image */
-        
-        .progress-text { text-align: center; font-size: 0.7rem; color: #6B7280; margin-bottom: 16px; }
-
-        /* ADMIN LEVEL SELECTOR (Only visible in this portal) */
-        .admin-level-update { background: #F9FAFB; border-top: 1px solid #E5E7EB; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
-        .admin-level-update select { padding: 6px 12px; border-radius: 6px; border: 1px solid #D1D5DB; font-weight: 600; outline: none; cursor: pointer; }
-        .delete-btn { color: #EF4444; cursor: pointer; font-size: 0.9rem; padding: 4px; transition: transform 0.2s; }
-        .delete-btn:hover { transform: scale(1.1); }
-
-        @media (max-width: 900px) {
-            .sidebar { position: fixed; transform: translateX(-100%); z-index: 1000; height: 100dvh;}
-            .sidebar.open { transform: translateX(0); }
-            .sidebar-overlay.show { display: block; opacity: 1; z-index: 999; }
-            .main-content { margin-left: 0; padding-top: 64px; height: 100dvh;}
-        }
-    </style>
+    <link rel="stylesheet" href="style.css?v=master_final">
 </head>
-<body>
-    
-    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
-
-    <aside class="sidebar" id="sidebar">
-        <div class="brand flex-between">
-            <div class="flex-center" style="color:var(--text-main); font-weight:800;"><i class="fa-solid fa-graduation-cap" style="color:var(--primary);"></i> PCDP Control</div>
-            <i class="fa-solid fa-xmark mobile-menu-btn" style="padding:0;" onclick="toggleSidebar()"></i>
-        </div>
-        
-        <div class="student-nav-label">Student Directory</div>
-        <div class="nav-menu" id="student-list-nav">
-            <div style="text-align: center; padding: 20px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</div>
-        </div>
-
-        <div class="nav-bottom">
-            <a onclick="signOut()" class="nav-item" style="color: var(--danger); cursor: pointer;"><i class="fa-solid fa-power-off"></i> Secure Logout</a>
-        </div>
-    </aside>
-
-    <main class="main-content">
-        <header class="top-header flex-between">
-            <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
-            <div style="font-size: 1.1rem; font-weight: 800; color: var(--text-main);">Curriculum Progress Control</div>
-            <img src="https://ui-avatars.com/api/?name=PCDP&background=8B5CF6&color=fff&bold=true&rounded=true" class="profile-img">
+<body style="background: #F3F4F6;">
+    <main class="main-content" style="background: #F3F4F6; display: flex; flex-direction: column; width: 100vw; margin: 0;">
+        <header class="top-header flex-between" style="border-bottom: 1px solid var(--border);">
+            <div class="flex-center" style="font-size: 1.2rem; font-weight: 800; color: var(--primary);">
+                <i class="fa-solid fa-graduation-cap"></i> PCDP Master Hub
+            </div>
+            <div class="flex-center">
+                <button class="action-btn btn-primary" onclick="openModal('add-course-modal')"><i class="fa-solid fa-plus"></i> Create Master Course</button>
+                <button class="action-btn btn-outline" style="color: var(--danger); margin-left: 10px;" onclick="signOut()"><i class="fa-solid fa-power-off"></i> Exit</button>
+            </div>
         </header>
 
-        <div id="student-pcdp-view" style="display: none; height: 100%; display: flex; flex-direction: column;">
-            <div style="background: white; padding: 20px 32px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <h2 id="p-header-name" style="font-weight: 800; color: var(--text-main); margin-bottom: 4px; font-size: 1.5rem;">--</h2>
-                    <span id="p-header-roll" style="color: var(--text-muted); font-family: monospace; font-weight: 600;">--</span>
-                </div>
-                <button class="action-btn btn-primary" onclick="openModal('add-course-modal')"><i class="fa-solid fa-plus"></i> Assign Course</button>
+        <div style="padding: 32px; overflow-y: auto; flex: 1; max-width: 1400px; margin: 0 auto; width: 100%;">
+            <div style="margin-bottom: 24px;">
+                <h1 class="page-title">Global Course Repository</h1>
+                <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.95rem;">Courses created here will be available for Admins to assign to students.</p>
             </div>
-
-            <div class="courses-view">
-                <div class="courses-grid" id="pcdp-courses-grid"></div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px;" id="pcdp-courses-grid">
+                <div style="grid-column: 1/-1; text-align: center; padding: 60px;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>
             </div>
         </div>
     </main>
@@ -98,18 +35,22 @@
     <div id="add-course-modal" class="modal-overlay">
         <div class="modal-content">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Assign New Course</h2>
+                <h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Add Course to Master List</h2>
                 <i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-course-modal')"></i>
             </div>
-            <input type="text" id="c-name" class="modal-input" placeholder="Course Name (e.g. Algebra)">
-            <input type="number" id="c-levels" class="modal-input" placeholder="Total Levels (e.g. 3)">
-            <input type="text" id="c-cat" class="modal-input" placeholder="Category (e.g. GENERAL Skill)">
-            <input type="text" id="c-img" class="modal-input" placeholder="Image URL Link (Optional)">
-            <button class="action-btn btn-primary" style="width: 100%; margin-top: 8px; background: #8B5CF6;" onclick="submitNewCourse()">Add to Curriculum</button>
+            <input type="text" id="c-name" class="modal-input" placeholder="Course Name (e.g. Full Stack Dev)">
+            <textarea id="c-desc" class="modal-input" placeholder="Course Description..." rows="3" style="resize: vertical;"></textarea>
+            <div style="display: flex; gap: 12px;">
+                <input type="number" id="c-levels" class="modal-input" placeholder="Total Levels">
+                <input type="text" id="c-cat" class="modal-input" placeholder="Category">
+            </div>
+            <input type="url" id="c-img" class="modal-input" placeholder="Image Upload (Paste Drive/Image URL)">
+            
+            <button class="action-btn btn-primary" style="width: 100%; margin-top: 8px; background: #8B5CF6;" onclick="submitNewMasterCourse()">Save to Global Hub</button>
         </div>
     </div>
 
-    <script src="pcdp_control.js?v=deploy_final"></script>
+    <script src="pcdp_control.js?v=master_final"></script>
     <script>function openModal(id) { document.getElementById(id).style.display = 'flex'; } function closeModal(id) { document.getElementById(id).style.display = 'none'; }</script>
 </body>
 </html>
