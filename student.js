@@ -61,10 +61,8 @@ window.onload = async () => {
         let loggedInEmail = data.profile.email; 
         let loggedInPic = data.picture || getAvatar(loggedInName);
         
-        // 1. Set the top header
         setTopHeader(loggedInName, loggedInEmail, loggedInPic);
         
-        // 2. Call all population functions (This was missing!)
         populateDashboard(data.profile, loggedInPic, data.courses, data.skills, data.semGpas);
         populatePersonalPlacement(data.placeProfile, data.placeApps);
         populateGlobalPlacement(data.globalStats, data.globalDrives); 
@@ -152,7 +150,6 @@ function populateDashboard(p, img, courses, skills, semGpas) {
     
     renderChart(courses, semGpas);
 
-    // 🛠️ Render the new modernized UI cards for the student
     if(skills && skills.length > 0) {
         document.getElementById('act-total-skills').innerText = skills.length; 
         document.getElementById('act-mastered').innerText = skills.filter(s => s.completed_levels >= s.total_levels).length; 
@@ -164,34 +161,28 @@ function populateDashboard(p, img, courses, skills, semGpas) {
             const pct = Math.round((comp / total) * 100);
             const imgUrl = c.image_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
 
-            // Generate segmented bar matching the admin theme
+            // Generate segmented bar matching the sleek UI
             let segmentsHtml = '';
             for(let i=0; i<total; i++) { 
-                segmentsHtml += `<div style="flex: 1; border-radius: 4px; background: ${i < comp ? 'var(--primary)' : 'var(--border)'};"></div>`; 
+                segmentsHtml += `<div style="flex: 1; border-radius: 4px; background: ${i < comp ? '#8B5CF6' : '#E2E8F0'}; height: 6px;"></div>`; 
             }
 
             return `
-            <div class="skill-card" style="padding: 0; overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 12px; background: white; box-shadow: var(--shadow-sm); transition: transform 0.2s; min-height: 380px;">
-                <div style="height: 160px; width: 100%; overflow: hidden; background: #E5E7EB; position: relative; flex-shrink: 0;">
-                    <img src="${imgUrl}" style="width: 100%; height: 100%; object-fit: cover;">
-                    <div style="position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.95); padding: 4px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 800; color: var(--primary); box-shadow: var(--shadow-sm); backdrop-filter: blur(4px);">
-                        <i class="fa-solid fa-medal"></i> ${c.category || 'Skill'}
-                    </div>
-                </div>
-                <div style="padding: 20px; flex: 1; display: flex; flex-direction: column;">
-                    <div style="font-size: 1.1rem; font-weight: 800; color: var(--text-main); margin-bottom: 8px; line-height: 1.3;">${c.skill_name}</div>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6; flex: 1;">
-                        ${c.description || 'Assigned PCDP Course'}
+            <div style="background: white; border-radius: 8px; border: 1px solid #E2E8F0; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: transform 0.2s;">
+                <img src="${imgUrl}" style="width: 100%; height: 140px; object-fit: cover;">
+                <div style="padding: 16px; flex: 1; display: flex; flex-direction: column;">
+                    <h4 style="margin: 0 0 12px 0; font-size: 0.95rem; color: #1e293b; font-weight: 700; line-height: 1.3;">${c.skill_name}</h4>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; color: #64748b; font-size: 0.75rem; font-weight: 600; margin-bottom: 12px;">
+                        <span><i class="fa-solid fa-layer-group" style="opacity: 0.7;"></i> Levels: ${total}</span>
+                        <span><i class="fa-solid fa-medal" style="opacity: 0.7;"></i> ${c.category || 'General'}</span>
                     </div>
                     
-                    <div style="margin-top: auto; background: var(--bg-app); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 800; color: var(--text-muted); margin-bottom: 8px;">
-                            <span style="text-transform: uppercase;">Progress (${comp}/${total})</span>
-                            <span style="color: var(--primary);">${pct}%</span>
-                        </div>
-                        <div style="display: flex; gap: 4px; height: 6px;">
+                    <div style="margin-top: auto;">
+                        <div style="display: flex; gap: 4px; height: 6px; margin-bottom: 8px;">
                             ${segmentsHtml}
                         </div>
+                        <div style="text-align: center; font-size: 0.7rem; color: #64748b;">Progress: ${comp}/${total} levels (${pct}%)</div>
                     </div>
                 </div>
             </div>`;
@@ -280,7 +271,6 @@ function populatePersonalPlacement(pProfile, pApps) {
     const logical = prf.apt_logical || '0'; document.getElementById('val-a-log').innerText = logical; document.getElementById('bar-a-log').style.width = `${logical}%`;
     const hr = prf.apt_hr || '0'; document.getElementById('val-a-hr').innerText = hr; document.getElementById('bar-a-hr').style.width = `${hr}%`;
 
-    // Safely insert Resume Link
     document.getElementById('resume-link-input').value = (prf.resume_url && prf.resume_url !== '--') ? prf.resume_url : '';
     if (prf.resume_url && prf.resume_url !== '--') {
         document.getElementById('view-resume-btn').href = prf.resume_url;

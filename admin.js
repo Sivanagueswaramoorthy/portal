@@ -11,7 +11,6 @@ let loggedInPic = "";
 let currentGlobalStats = null; 
 let currentGlobalDrives = [];
 
-// SMART URL: Auto-detects local vs live
 const BASE_URL = (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') 
     ? 'http://localhost:10000' 
     : 'https://portal-6crm.onrender.com';
@@ -270,7 +269,14 @@ function populateDashboard(p, img, courses, skills, semGpas) {
     
     renderChart(courses, semGpas);
 
-   skillsContainer.innerHTML = skills.map(c => {
+    // Render the robust UI with the actionable footer
+    const skillsContainer = document.getElementById('skills-container');
+    if(skills && skills.length > 0) {
+        document.getElementById('act-total-skills').innerText = skills.length; 
+        document.getElementById('act-mastered').innerText = skills.filter(s => s.completed_levels >= s.total_levels).length; 
+        document.getElementById('act-progress').innerText = skills.filter(s => s.completed_levels < s.total_levels).length;
+
+        skillsContainer.innerHTML = skills.map(c => {
             const total = c.total_levels || 1;
             const comp = c.completed_levels || 0;
             const pct = Math.round((comp / total) * 100);
@@ -278,37 +284,26 @@ function populateDashboard(p, img, courses, skills, semGpas) {
 
             let segmentsHtml = '';
             for(let i=0; i<total; i++) { 
-                segmentsHtml += `<div style="flex: 1; border-radius: 4px; background: ${i < comp ? 'var(--primary)' : 'var(--border)'};"></div>`; 
+                segmentsHtml += `<div style="flex: 1; border-radius: 4px; background: ${i < comp ? '#8B5CF6' : '#E2E8F0'}; height: 6px;"></div>`; 
             }
 
             return `
-            <div class="skill-card" id="card-sk-${c.id}" style="padding: 0; overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 12px; background: white; box-shadow: var(--shadow-sm); transition: transform 0.2s; min-height: 380px;">
-                <div style="height: 160px; width: 100%; overflow: hidden; background: #E5E7EB; position: relative; flex-shrink: 0;">
-                    <img src="${imgUrl}" style="width: 100%; height: 100%; object-fit: cover;">
-                    <div style="position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.95); padding: 4px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 800; color: var(--primary); box-shadow: var(--shadow-sm); backdrop-filter: blur(4px);">
-                        <i class="fa-solid fa-medal"></i> ${c.category || 'Skill'}
+            <div id="card-sk-${c.id}" style="background: white; border-radius: 8px; border: 1px solid #E2E8F0; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <img src="${imgUrl}" style="width: 100%; height: 140px; object-fit: cover;">
+                <div style="padding: 16px; flex: 1; display: flex; flex-direction: column;">
+                    <h4 style="margin: 0 0 12px 0; font-size: 0.95rem; color: #1e293b; font-weight: 700; line-height: 1.3;">${c.skill_name}</h4>
+                    <div style="display: flex; justify-content: space-between; align-items: center; color: #64748b; font-size: 0.75rem; font-weight: 600; margin-bottom: 12px;">
+                        <span><i class="fa-solid fa-layer-group" style="opacity: 0.7;"></i> Levels: <span id="sk-t-${c.id}">${total}</span></span>
+                        <span><i class="fa-solid fa-medal" style="opacity: 0.7;"></i> ${c.category || 'General'}</span>
+                    </div>
+                    <div style="margin-top: auto;">
+                        <div style="display: flex; gap: 4px; height: 6px; margin-bottom: 8px;">${segmentsHtml}</div>
+                        <div style="text-align: center; font-size: 0.7rem; color: #64748b;">Progress: <span id="sk-c-${c.id}">${comp}</span>/${total} levels (${pct}%)</div>
                     </div>
                 </div>
-                <div style="padding: 20px; flex: 1; display: flex; flex-direction: column;">
-                    <div style="font-size: 1.1rem; font-weight: 800; color: var(--text-main); margin-bottom: 8px; line-height: 1.3;">${c.skill_name}</div>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6; flex: 1;">
-                        ${c.description || 'Assigned PCDP Course'}
-                    </div>
-                    
-                    <div style="margin-bottom: 20px; background: var(--bg-app); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 800; color: var(--text-muted); margin-bottom: 8px;">
-                            <span style="text-transform: uppercase;">Progress (<span id="sk-c-${c.id}">${comp}</span>/<span id="sk-t-${c.id}">${total}</span>)</span>
-                            <span style="color: var(--primary);">${pct}%</span>
-                        </div>
-                        <div style="display: flex; gap: 4px; height: 6px;">
-                            ${segmentsHtml}
-                        </div>
-                    </div>
-                    
-                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-                        <button class="action-btn btn-primary" style="flex: 1; font-size: 0.75rem; justify-content: center; padding: 10px;" onclick="editSkillCard(${c.id})"><i class="fa-solid fa-pen"></i> Update</button>
-                        <button class="action-btn" style="background: var(--danger-light); color: var(--danger); font-size: 0.85rem; padding: 10px 14px; border: none; flex-shrink: 0;" title="Remove Course" onclick="deleteSkill(${c.id})"><i class="fa-solid fa-trash"></i></button>
-                    </div>
+                <div style="display: flex; border-top: 1px solid #E2E8F0; background: #F8FAFC;">
+                    <button onclick="editSkillCard(${c.id})" style="flex: 1; padding: 10px; border: none; background: none; color: #4F46E5; font-size: 0.8rem; font-weight: 700; cursor: pointer; border-right: 1px solid #E2E8F0; transition: background 0.2s;" onmouseover="this.style.background='#EEF2FF'" onmouseout="this.style.background='none'"><i class="fa-solid fa-pen"></i> Update Progress</button>
+                    <button onclick="deleteSkill(${c.id})" style="padding: 10px 16px; border: none; background: none; color: #EF4444; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#FEF2F2'" onmouseout="this.style.background='none'"><i class="fa-solid fa-trash"></i></button>
                 </div>
             </div>`;
         }).join('');
@@ -445,7 +440,6 @@ function populatePersonalPlacement(pProfile, pApps) {
     }
 }
 
-// --- 🛠️ NEW: ASSIGN COURSE FROM MASTER LIST ---
 async function openAssignSkillModal() {
     openModal('add-skill-modal');
     const sel = document.getElementById('sk-master-select');
@@ -482,25 +476,24 @@ async function submitNewSkill() {
     loadStudentData(targetStudentEmail); 
 }
 
-// 🛠️ NEW: EDIT ONLY COMPLETED LEVELS ON ASSIGNED CARD
 function editSkillCard(id) {
     const card = document.getElementById(`card-sk-${id}`);
     const comp = document.getElementById(`sk-c-${id}`).innerText;
     const total = document.getElementById(`sk-t-${id}`).innerText;
     
     card.innerHTML = `
-        <div style="padding: 30px 20px; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; background: white; height: 100%; border-radius: 12px;">
-            <div style="margin-bottom:8px; font-weight:800; font-size:1.2rem; color:var(--text-main); text-align:center;"><i class="fa-solid fa-sliders" style="color: var(--primary); margin-right: 6px;"></i> Set Progress</div>
-            <p style="font-size: 0.8rem; color: var(--text-muted); text-align: center; margin-bottom: 24px; line-height: 1.5;">Adjust the completed levels for this student.</p>
+        <div style="padding: 30px 20px; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; background: white; height: 100%; border-radius: 8px;">
+            <div style="margin-bottom:8px; font-weight:800; font-size:1.1rem; color:#1e293b; text-align:center;"><i class="fa-solid fa-sliders" style="color: #4F46E5; margin-right: 6px;"></i> Set Progress</div>
+            <p style="font-size: 0.8rem; color: #64748b; text-align: center; margin-bottom: 24px; line-height: 1.5;">Adjust completed levels for this student.</p>
             
-            <div class="flex-center" style="margin-bottom: 30px; justify-content: center; background: #F8FAFC; padding: 16px; border-radius: 12px; width: 100%; border: 1px solid var(--border);">
-                <input type="number" id="edit-sk-c-${id}" class="inline-input" style="width: 80px; text-align:center; font-size:1.4rem; padding: 10px; font-weight: 800; color: var(--primary); background: white;" value="${comp}" max="${total}" min="0">
-                <span style="font-size:1.4rem; font-weight:800; color:var(--text-muted); margin-left:12px;">/ ${total}</span>
+            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 24px; background: #F8FAFC; border: 1px solid #E2E8F0; padding: 12px; border-radius: 8px; width: 100%;">
+                <input type="number" id="edit-sk-c-${id}" style="width: 70px; text-align:center; font-size:1.4rem; padding: 8px; font-weight: 800; color: #4F46E5; background: white; border: 1px solid #E2E8F0; border-radius: 6px; outline: none;" value="${comp}" max="${total}" min="0">
+                <span style="font-size:1.4rem; font-weight:800; color:#64748b; margin-left:12px;">/ ${total}</span>
             </div>
             
             <div style="display:flex; justify-content: center; gap: 12px; width: 100%;">
-                <button class="action-btn btn-success" style="flex: 1; justify-content: center; padding: 12px; font-size: 0.85rem;" onclick="saveSkillCard(${id}, ${total})"><i class="fa-solid fa-check"></i> Save</button>
-                <button class="action-btn btn-outline" style="flex: 1; justify-content: center; padding: 12px; font-size: 0.85rem;" onclick="loadStudentData(targetStudentEmail)"><i class="fa-solid fa-xmark"></i> Cancel</button>
+                <button style="flex: 1; padding: 10px; border-radius: 8px; background: #10B981; color: white; border: none; font-weight: 600; cursor: pointer;" onclick="saveSkillCard(${id}, ${total})"><i class="fa-solid fa-check"></i> Save</button>
+                <button style="flex: 1; padding: 10px; border-radius: 8px; background: white; color: #64748b; border: 1px solid #E2E8F0; font-weight: 600; cursor: pointer;" onclick="loadStudentData(targetStudentEmail)"><i class="fa-solid fa-xmark"></i> Cancel</button>
             </div>
         </div>`;
 }
@@ -511,7 +504,7 @@ async function saveSkillCard(id, totalLevels) {
     if(comp > totalLevels) { alert(`Cannot exceed total levels (${totalLevels})!`); return; }
     
     const card = document.getElementById(`card-sk-${id}`); 
-    card.innerHTML = `<div style="text-align:center; padding: 60px;"><i class="fa-solid fa-spinner fa-spin" style="color: var(--primary); font-size: 2rem;"></i></div>`;
+    card.innerHTML = `<div style="text-align:center; padding: 60px;"><i class="fa-solid fa-spinner fa-spin fa-2x" style="color: #4F46E5;"></i></div>`;
     
     await fetch(`${BASE_URL}/api/admin/update-skill-level`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -613,7 +606,6 @@ async function deleteApp(id) {
     loadStudentData(targetStudentEmail); 
 }
 
-// --- INLINE EDITING ---
 function openProfileEdit(field, spanId, width) {
     const span = document.getElementById(spanId); 
     originalValues[spanId] = span.innerText.trim();
