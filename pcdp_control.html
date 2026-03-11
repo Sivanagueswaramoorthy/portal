@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Portal | PCDP Global Master</title>
+    <title>BIT Sathy | PCDP Global Master</title>
     
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
@@ -11,97 +11,131 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=pcdp_portal_final">
+    <link rel="stylesheet" href="style.css?v=premium_pcdp_v1">
 </head>
-<body style="background: #F8FAFC;">
-    <main class="main-content" style="background: #F8FAFC; display: flex; flex-direction: column; width: 100vw; margin: 0; height: 100vh;">
-        
-        <header class="top-header flex-between" style="border-bottom: 1px solid var(--border); background: white; padding: 16px 32px;">
-            <div class="flex-center" style="font-size: 1.2rem; font-weight: 800; color: var(--text-main);">
-                <i class="fa-solid fa-graduation-cap" style="color: var(--primary);"></i> PCDP Master Hub
-            </div>
+<body>
+
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <aside class="sidebar" id="sidebar">
+        <div class="brand flex-between">
+            <div class="flex-center"><i class="fa-solid fa-code"></i> BIT Sathy IT</div>
+            <i class="fa-solid fa-xmark mobile-menu-btn" style="padding:0;" onclick="toggleSidebar()"></i>
+        </div>
+        <div class="nav-menu">
+            <a class="nav-item active" style="background: var(--purple-light); color: var(--purple);">
+                <i class="fa-solid fa-layer-group"></i> Global Repository
+            </a>
+        </div>
+        <div class="nav-bottom">
+            <a class="nav-item" style="color: var(--danger);" onclick="signOut()">
+                <i class="fa-solid fa-power-off"></i> Secure Logout
+            </a>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="top-header">
             <div class="flex-center">
-                <button class="action-btn btn-primary" onclick="openModal('add-course-modal')"><i class="fa-solid fa-plus"></i> Create Master Course</button>
-                <button class="action-btn btn-outline" style="color: var(--danger); margin-left: 10px;" onclick="signOut()"><i class="fa-solid fa-power-off"></i> Exit Hub</button>
+                <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+                <div id="admin-badge" style="background: var(--purple-light); color: var(--purple); padding: 4px 10px; border-radius: 6px; font-size: 0.65rem; font-weight: 800; display: flex; align-items: center; gap: 6px; margin-left: 16px;">
+                    <i class="fa-solid fa-bolt fa-fade"></i> PCDP MASTER
+                </div>
+            </div>
+            <div class="user-profile">
+                <div class="user-info">
+                    <div class="user-name">PCDP Controller</div>
+                    <div class="user-email">pcdp@gmail.com</div>
+                </div>
+                <img src="https://ui-avatars.com/api/?name=PCDP+Admin&background=8B5CF6&color=fff&bold=true" class="profile-img">
             </div>
         </header>
 
-        <div class="scrollable-area" style="padding: 32px; overflow-y: auto; flex: 1; max-width: 1400px; margin: 0 auto; width: 100%;">
-            <div style="margin-bottom: 24px;">
-                <h1 class="page-title">Global Course Repository</h1>
-                <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.95rem;">Courses created here will be available for College Admins to assign directly to students.</p>
-            </div>
+        <div class="scrollable-area">
             
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px;" id="pcdp-courses-grid">
+            <div class="view-section active">
+                <div class="flex-between" style="align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+                    <div>
+                        <h1 class="page-title">Global Course Repository</h1>
+                        <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.85rem;">Master hub for all PCDP courses. These are pushed globally to College Admins.</p>
+                    </div>
+                    <button class="action-btn btn-primary" onclick="openModal('add-course-modal')" style="background: var(--purple); box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);">
+                        <i class="fa-solid fa-plus"></i> Create Master Course
+                    </button>
                 </div>
+
+                <div class="skills-grid" id="pcdp-courses-grid">
+                    </div>
+            </div>
+
         </div>
     </main>
 
     <div id="add-course-modal" class="modal-overlay">
         <div class="modal-content">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Add Course to Master List</h2>
+                <h2 style="margin:0; font-weight: 800; font-size: 1.15rem; color: var(--text-main);">Add New Master Course</h2>
                 <i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-course-modal')"></i>
             </div>
             
-            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Course Title</label>
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block; text-transform: uppercase;">Course Title</label>
             <input type="text" id="c-name" class="modal-input" placeholder="e.g. Full Stack Web Development">
             
-            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Description</label>
-            <textarea id="c-desc" class="modal-input" placeholder="Brief details about the course..." rows="3" style="resize: vertical;"></textarea>
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block; text-transform: uppercase;">Description</label>
+            <textarea id="c-desc" class="modal-input" placeholder="Brief details about the course content..." rows="3" style="resize: vertical;"></textarea>
             
-            <div style="display: flex; gap: 12px;">
+            <div style="display: flex; gap: 16px;">
                 <div style="flex: 1;">
-                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Total Levels</label>
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block; text-transform: uppercase;">Total Levels</label>
                     <input type="number" id="c-levels" class="modal-input" placeholder="e.g. 7" min="1">
                 </div>
                 <div style="flex: 1;">
-                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Category</label>
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block; text-transform: uppercase;">Category</label>
                     <input type="text" id="c-cat" class="modal-input" placeholder="e.g. Software">
                 </div>
             </div>
             
-            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Cover Image URL</label>
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block; text-transform: uppercase;">Cover Image URL</label>
             <input type="url" id="c-img" class="modal-input" placeholder="Paste a public web image link here...">
             
-            <button class="action-btn btn-primary" style="width: 100%; margin-top: 12px; background: var(--primary); padding: 12px;" onclick="submitNewMasterCourse()">Save to Global Hub</button>
+            <button class="action-btn btn-primary" style="width: 100%; margin-top: 12px; background: var(--purple); padding: 12px; font-size: 0.9rem;" onclick="submitNewMasterCourse()">Save to Global Hub</button>
         </div>
     </div>
 
     <div id="edit-course-modal" class="modal-overlay">
         <div class="modal-content">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Edit Master Course</h2>
+                <h2 style="margin:0; font-weight: 800; font-size: 1.15rem; color: var(--text-main);">Edit Master Course</h2>
                 <i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('edit-course-modal')"></i>
             </div>
             
             <input type="hidden" id="edit-c-id">
             
-            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Course Title</label>
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block; text-transform: uppercase;">Course Title</label>
             <input type="text" id="edit-c-name" class="modal-input">
             
-            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Description</label>
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block; text-transform: uppercase;">Description</label>
             <textarea id="edit-c-desc" class="modal-input" rows="3" style="resize: vertical;"></textarea>
             
-            <div style="display: flex; gap: 12px;">
+            <div style="display: flex; gap: 16px;">
                 <div style="flex: 1;">
-                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Max Levels</label>
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block; text-transform: uppercase;">Max Levels</label>
                     <input type="number" id="edit-c-levels" class="modal-input" min="1">
                 </div>
                 <div style="flex: 1;">
-                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Category</label>
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block; text-transform: uppercase;">Category</label>
                     <input type="text" id="edit-c-cat" class="modal-input">
                 </div>
             </div>
             
-            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Cover Image URL</label>
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block; text-transform: uppercase;">Cover Image URL</label>
             <input type="url" id="edit-c-img" class="modal-input">
             
-            <button class="action-btn btn-success" style="width: 100%; margin-top: 12px; padding: 12px; background: #10B981;" onclick="submitEditMasterCourse()">Save Changes</button>
+            <button class="action-btn btn-success" style="width: 100%; margin-top: 12px; padding: 12px; font-size: 0.9rem;" onclick="submitEditMasterCourse()">Save Changes</button>
         </div>
     </div>
 
-    <script src="pcdp_control.js?v=pcdp_portal_final"></script>
+    <script src="pcdp_control.js?v=premium_pcdp_v1"></script>
     <script>
         function openModal(id) { document.getElementById(id).style.display = 'flex'; } 
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }

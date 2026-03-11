@@ -9,10 +9,25 @@ if (!adminToken) window.location.href = 'index.html';
 
 window.onload = async () => { loadMasterCourses(); };
 
-function signOut() { localStorage.removeItem('pcdp_session_token'); window.location.href = 'index.html'; }
+// Mobile Sidebar Toggle
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar'); 
+    const overlay = document.getElementById('sidebar-overlay');
+    sidebar.classList.toggle('open');
+    if (sidebar.classList.contains('open')) {
+        overlay.classList.add('show'); 
+    } else {
+        overlay.classList.remove('show');
+    }
+}
+
+function signOut() { 
+    localStorage.removeItem('pcdp_session_token'); 
+    window.location.href = 'index.html'; 
+}
 
 async function loadMasterCourses() {
-    document.getElementById('pcdp-courses-grid').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px;"><i class="fa-solid fa-spinner fa-spin fa-2x" style="color: var(--primary);"></i></div>`;
+    document.getElementById('pcdp-courses-grid').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px;"><i class="fa-solid fa-spinner fa-spin fa-2x" style="color: var(--purple);"></i></div>`;
     try {
         const req = await fetch(`${BASE_URL}/api/pcdp/master/courses`, { 
             method: 'POST', headers: { 'Content-Type': 'application/json' }, 
@@ -20,18 +35,18 @@ async function loadMasterCourses() {
         });
         const data = await req.json();
         if (data.success) { 
-            masterCoursesData = data.courses; // Cache data for editing
+            masterCoursesData = data.courses; 
             renderMasterGrid(masterCoursesData); 
         } else { signOut(); }
     } catch(e) { 
-        document.getElementById('pcdp-courses-grid').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px; color: var(--danger);">Network Error. Backend might be sleeping.</div>`;
+        document.getElementById('pcdp-courses-grid').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px; color: var(--danger); background: var(--danger-bg); border-radius: 12px; border: 1px solid var(--danger-light);">Network Error. Backend might be sleeping.</div>`;
     }
 }
 
 function renderMasterGrid(courses) {
     const grid = document.getElementById('pcdp-courses-grid');
     if(courses.length === 0) { 
-        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; border: 1px dashed var(--border); color: var(--text-muted); border-radius: 12px;">No global courses created yet. Click "Create Master Course" to begin.</div>`; 
+        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px; border: 1px dashed var(--border); background: white; color: var(--text-muted); border-radius: 12px;">No global courses created yet.<br><br>Click "Create Master Course" to begin.</div>`; 
         return; 
     }
     
@@ -40,21 +55,29 @@ function renderMasterGrid(courses) {
         const imgUrl = (c.image_url && c.image_url.trim() !== "") ? c.image_url : fallbackImg;
         
         return `
-        <div id="master-card-${c.id}" style="background: white; border-radius: 8px; border: 1px solid #E2E8F0; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: transform 0.2s;">
-            <img src="${imgUrl}" onerror="this.onerror=null; this.src='${fallbackImg}';" style="width: 100%; height: 140px; object-fit: cover;">
-            <div style="padding: 16px; flex: 1; display: flex; flex-direction: column;">
-                <h4 style="margin: 0 0 12px 0; font-size: 1.05rem; color: #1e293b; font-weight: 800; line-height: 1.3;">${c.course_name}</h4>
-                <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 20px; line-height: 1.6; flex: 1;">${c.description || 'No description provided.'}</p>
-                
-                <div style="display: flex; justify-content: space-between; align-items: center; color: #64748b; font-size: 0.8rem; font-weight: 700; background: #F8FAFC; padding: 10px; border-radius: 8px; border: 1px solid #E2E8F0;">
-                    <span><i class="fa-solid fa-layer-group" style="opacity: 0.7; color: var(--primary);"></i> Max Levels: <span style="color: var(--text-main); font-weight: 800;">${c.total_levels}</span></span>
-                    <span><i class="fa-solid fa-medal" style="opacity: 0.7;"></i> ${c.category || 'General'}</span>
+        <div class="skill-card" id="master-card-${c.id}" style="padding: 0; display: flex; flex-direction: column; height: 100%; min-height: 380px; border: 1px solid var(--border); border-radius: 12px; background: white; box-shadow: var(--shadow-sm); transition: all 0.2s ease;">
+            <div style="height: 160px; width: 100%; position: relative; flex-shrink: 0; border-radius: 12px 12px 0 0; overflow: hidden; background: var(--bg-app);">
+                <img src="${imgUrl}" onerror="this.onerror=null; this.src='${fallbackImg}';" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s ease;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                <div style="position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.95); padding: 4px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 800; color: var(--purple); box-shadow: var(--shadow-sm); backdrop-filter: blur(4px);">
+                    <i class="fa-solid fa-medal"></i> ${c.category || 'General'}
                 </div>
             </div>
             
-            <div style="display: flex; border-top: 1px solid #E2E8F0; background: #F8FAFC;">
-                <button onclick="openEditModal(${c.id})" style="flex: 1; padding: 12px; border: none; background: none; color: #4F46E5; font-size: 0.85rem; font-weight: 700; cursor: pointer; border-right: 1px solid #E2E8F0; transition: background 0.2s;" onmouseover="this.style.background='#EEF2FF'" onmouseout="this.style.background='none'"><i class="fa-solid fa-pen"></i> Edit Course</button>
-                <button onclick="deleteMasterCourse(${c.id})" style="padding: 12px 16px; border: none; background: none; color: #EF4444; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#FEF2F2'" onmouseout="this.style.background='none'"><i class="fa-solid fa-trash"></i></button>
+            <div style="padding: 20px; flex: 1; display: flex; flex-direction: column;">
+                <h4 style="margin: 0 0 8px 0; font-size: 1.1rem; color: var(--text-main); font-weight: 800; line-height: 1.3;">${c.course_name}</h4>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6; flex: 1;">${c.description || 'No description provided.'}</p>
+                
+                <div style="background: var(--bg-app); padding: 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">
+                        <span><i class="fa-solid fa-layer-group" style="color: var(--purple); opacity: 0.8; margin-right: 4px;"></i> Max Levels</span>
+                        <span style="color: var(--text-main); font-size: 1.1rem; font-weight: 800;" id="m-lvl-${c.id}">${c.total_levels}</span>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="openEditModal(${c.id})" class="action-btn btn-outline" style="flex: 1; justify-content: center; color: var(--purple); border-color: rgba(139, 92, 246, 0.3); padding: 10px;"><i class="fa-solid fa-pen"></i> Edit</button>
+                    <button onclick="deleteMasterCourse(${c.id})" class="action-btn btn-outline" style="justify-content: center; color: var(--danger); border-color: rgba(239, 68, 68, 0.3); padding: 10px 14px;"><i class="fa-solid fa-trash"></i></button>
+                </div>
             </div>
         </div>`;
     }).join('');
@@ -62,7 +85,6 @@ function renderMasterGrid(courses) {
 
 // Open the Edit Modal and populate it with existing data
 function openEditModal(id) {
-    // Using loose equality (==) in case ID is passed as string
     const course = masterCoursesData.find(c => c.id == id);
     
     if(!course) {
@@ -80,7 +102,7 @@ function openEditModal(id) {
         
         openModal('edit-course-modal');
     } catch (e) {
-        alert("Error rendering modal. Make sure the HTML for 'edit-course-modal' exists.");
+        alert("Error rendering modal.");
     }
 }
 
@@ -95,8 +117,8 @@ async function submitEditMasterCourse() {
 
     if(!name || !levels) return alert("Course Title and Max Levels are required.");
 
-    // Visual feedback while saving
-    document.querySelector('#edit-course-modal .btn-success').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    const btn = document.querySelector('#edit-course-modal .btn-success');
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
 
     await fetch(`${BASE_URL}/api/pcdp/master/edit`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -111,11 +133,12 @@ async function submitEditMasterCourse() {
         })
     });
 
-    document.querySelector('#edit-course-modal .btn-success').innerHTML = 'Save Changes';
+    btn.innerHTML = 'Save Changes';
     closeModal('edit-course-modal');
     loadMasterCourses();
 }
 
+// Create new data
 async function submitNewMasterCourse() {
     const name = document.getElementById('c-name').value;
     const desc = document.getElementById('c-desc').value;
@@ -125,7 +148,8 @@ async function submitNewMasterCourse() {
     
     if(!name || !levels) return alert("Course Title and Max Levels are required.");
 
-    document.querySelector('#add-course-modal .btn-primary').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    const btn = document.querySelector('#add-course-modal .btn-primary');
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
 
     await fetch(`${BASE_URL}/api/pcdp/master/add`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -139,7 +163,7 @@ async function submitNewMasterCourse() {
     document.getElementById('c-cat').value = ''; 
     document.getElementById('c-img').value = '';
     
-    document.querySelector('#add-course-modal .btn-primary').innerHTML = 'Save to Global Hub';
+    btn.innerHTML = '<i class="fa-solid fa-plus"></i> Save to Global Hub';
     closeModal('add-course-modal'); 
     loadMasterCourses();
 }
