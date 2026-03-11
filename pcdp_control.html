@@ -66,6 +66,38 @@
             
             <button class="action-btn btn-primary" style="width: 100%; margin-top: 12px; background: var(--primary); padding: 12px;" onclick="submitNewMasterCourse()">Save to Global Hub</button>
         </div>
+        <div id="edit-course-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Edit Master Course</h2>
+                <i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('edit-course-modal')"></i>
+            </div>
+            
+            <input type="hidden" id="edit-c-id">
+            
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Course Title</label>
+            <input type="text" id="edit-c-name" class="modal-input">
+            
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Description</label>
+            <textarea id="edit-c-desc" class="modal-input" rows="3" style="resize: vertical;"></textarea>
+            
+            <div style="display: flex; gap: 12px;">
+                <div style="flex: 1;">
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Max Levels</label>
+                    <input type="number" id="edit-c-levels" class="modal-input" min="1">
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Category</label>
+                    <input type="text" id="edit-c-cat" class="modal-input">
+                </div>
+            </div>
+            
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Cover Image URL</label>
+            <input type="url" id="edit-c-img" class="modal-input">
+            
+            <button class="action-btn btn-success" style="width: 100%; margin-top: 12px; padding: 12px;" onclick="submitEditMasterCourse()">Save Changes</button>
+        </div>
+    </div>
     </div>
 
     <script src="pcdp_control.js?v=pcdp_portal_fix"></script>

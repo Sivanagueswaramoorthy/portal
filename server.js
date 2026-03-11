@@ -552,6 +552,17 @@ app.post('/api/admin/assign-pcdp', async (req, res) => {
         res.json({ success: true });
     } catch (e) { res.json({ success: false }); }
 });
-
+// --- NEW: PCDP PORTAL: Edit Master Course ---
+app.post('/api/pcdp/master/edit', async (req, res) => {
+    try {
+        await verifyPcdpAdmin(req.body.adminToken);
+        const { id, course_name, description, total_levels, category, image_url } = req.body;
+        await promisePool.query(
+            "UPDATE pcdp_master_courses SET course_name = ?, description = ?, total_levels = ?, category = ?, image_url = ? WHERE id = ?", 
+            [course_name, description, total_levels, category, image_url, id]
+        );
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 BACKEND READY ON PORT ${PORT}`));
