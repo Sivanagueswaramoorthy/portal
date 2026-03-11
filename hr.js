@@ -50,7 +50,7 @@ async function fetchApplicants() {
             calculateStats(allApplicants);
             applyFilters(); 
         } else {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 20px;">${data.message || 'No applicants found.'}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 20px;">${data.message || 'No applicants found for your company.'}</td></tr>`;
         }
     } catch(e) {
         tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 20px;">Server Error. Please refresh.</td></tr>`;
@@ -60,8 +60,10 @@ async function fetchApplicants() {
 // 3. Update Dashboard Stats
 function calculateStats(list) {
     document.getElementById('total-count').innerText = list.length;
+    
+    // Safely calculate CGPA even if some students have it missing/null
     const cgpas = list.map(a => parseFloat(a.cgpa) || 0).filter(c => c > 0);
-    const avg = cgpas.length ? (cgpas.reduce((a, b) => a + b, 0) / cgpas.length).toFixed(2) : "0.0";
+    const avg = cgpas.length ? (cgpas.reduce((a, b) => a + b, 0) / cgpas.length).toFixed(2) : "0.00";
     document.getElementById('avg-cgpa').innerText = avg;
 }
 
@@ -76,8 +78,9 @@ function applyFilters() {
     const filtered = allApplicants.filter(a => {
         const name = a.full_name ? a.full_name.toLowerCase() : "";
         const roll = a.roll_no ? a.roll_no.toLowerCase() : "";
+        const role = a.role ? a.role.toLowerCase() : "";
         
-        const matchesSearch = name.includes(searchTerm) || roll.includes(searchTerm);
+        const matchesSearch = name.includes(searchTerm) || roll.includes(searchTerm) || role.includes(searchTerm);
         const matchesBranch = (branch === 'all' || a.department === branch);
         const matchesCgpa = (parseFloat(a.cgpa) || 0) >= minCgpa;
         
@@ -96,50 +99,61 @@ function renderTable(list) {
         return;
     }
 
-    tbody.innerHTML = list.map(a => `
+    tbody.innerHTML = list.map(a => {
+        // Handle Resume Link State
+        const hasResume = a.resume_url && a.resume_url !== '--' && a.resume_url.trim() !== '';
+        const resumeBtn = hasResume 
+            ? `<a href="${a.resume_url}" target="_blank" class="action-icon" style="background: var(--bg-app); color: var(--primary); border: 1px solid var(--border);" title="View Resume"><i class="fa-solid fa-file-pdf"></i></a>`
+            : `<button class="action-icon" style="background: var(--bg-app); color: var(--text-muted); border: 1px solid var(--border); opacity: 0.5; cursor: not-allowed;" title="No Resume Uploaded"><i class="fa-solid fa-file-pdf"></i></button>`;
+
+        return `
         <tr class="dir-row">
             <td>
                 <div style="font-weight: 700; color: var(--text-main);">${a.full_name || 'N/A'}</div>
-                <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">${a.roll_no || '--'} | ${a.email || '--'}</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">${a.roll_no || '--'} | ${a.role || 'General App'}</div>
             </td>
             <td><span class="badge badge-primary">${a.cgpa ? parseFloat(a.cgpa).toFixed(2) : '0.00'}</span></td>
             <td><span class="badge" style="border: 1px solid var(--border);">${a.department || '--'}</span></td>
             <td>
-                <div style="font-size: 0.75rem; font-weight: 700;">
-                    <span style="color:var(--primary);">DSA: ${a.tech_dsa || 0}%</span><br>
-                    <span style="color:var(--success);">OOP: ${a.tech_oop || 0}%</span>
+                <div style="font-size: 0.7rem; font-weight: 700;">
+                    <span style="color:var(--primary);">DSA: ${a.tech_dsa || 0}%</span> | 
+                    <span style="color:var(--success);">OOP: ${a.tech_oop || 0}%</span><br>
+                    <span style="color:#B45309;">CORE: ${a.tech_core || 0}%</span>
                 </div>
             </td>
-            <td><span class="badge ${a.status === 'Shortlisted' ? 'badge-success' : 'badge-warning'}">${a.status || 'Pending'}</span></td>
+            <td><span class="badge ${a.status && a.status.toLowerCase().includes('shortlist') ? 'badge-success' : 'badge-warning'}">${a.status || 'Pending'}</span></td>
             <td>
                 <div class="flex-center">
-                    <a href="${a.resume_url || '#'}" target="_blank" class="action-icon" style="background: var(--bg-app); color: var(--primary); border: 1px solid var(--border);" title="View Resume">
-                        <i class="fa-solid fa-file-pdf"></i>
-                    </a>
-                    <button class="action-icon save" onclick="updateStatus('${a.roll_no}', 'Shortlisted')" title="Shortlist Candidate">
+                    ${resumeBtn}
+                    <button class="action-icon save" onclick="updateStatus('${a.app_id}', 'Shortlisted')" title="Shortlist Candidate">
                         <i class="fa-solid fa-check"></i>
                     </button>
-                    <a href="mailto:${a.email || ''}" class="action-icon cancel" title="Email Candidate">
+                    <a href="mailto:${a.email || ''}?subject=Interview Invitation: ${a.role}" class="action-icon cancel" title="Email Candidate" style="background: var(--bg-app); color: var(--text-muted); border-color: var(--border);">
                         <i class="fa-solid fa-envelope"></i>
                     </a>
                 </div>
             </td>
-        </tr>`).join('');
+        </tr>`;
+    }).join('');
 }
 
 // 6. Update Shortlist Status to Database
-async function updateStatus(rollNo, status) {
+async function updateStatus(appId, status) {
+    if(!appId || appId === 'undefined') {
+        return showToast("Application ID missing. Ensure backend sends 'a.id as app_id'.", "danger");
+    }
+
     try {
         const req = await fetch(`${BASE_URL}/api/hr/update-status`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: hrToken, roll_no: rollNo, status: status })
+            body: JSON.stringify({ token: hrToken, app_id: appId, status: status })
         });
         const data = await req.json();
 
         if (data.success) {
-            showToast(`Candidate ${rollNo} has been ${status}!`, "success");
-            fetchApplicants(); // Refresh list from DB
+            showToast(`Candidate has been ${status}!`, "success");
+            fetchApplicants(); // Refresh list from DB to show updated status
         } else {
             showToast(data.message || "Failed to update status", "danger");
         }
@@ -152,14 +166,15 @@ async function updateStatus(rollNo, status) {
 function exportToExcel() {
     if(allApplicants.length === 0) return showToast("No data to export.", "danger");
 
-    let csvContent = "data:text/csv;charset=utf-8,Name,Roll No,Email,Department,CGPA,Status\n";
+    let csvContent = "data:text/csv;charset=utf-8,Name,Roll No,Email,Department,Role Applied,CGPA,DSA Score,OOP Score,Core Score,Status\n";
     allApplicants.forEach(a => {
-        csvContent += `"${a.full_name}","${a.roll_no}","${a.email}","${a.department}","${a.cgpa}","${a.status}"\n`;
+        csvContent += `"${a.full_name || ''}","${a.roll_no || ''}","${a.email || ''}","${a.department || ''}","${a.role || ''}","${a.cgpa || '0'}","${a.tech_dsa || '0'}","${a.tech_oop || '0'}","${a.tech_core || '0'}","${a.status || 'Pending'}"\n`;
     });
+    
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "BIT_Placement_Applicants.csv");
+    link.setAttribute("download", `Candidates_${document.getElementById('hr-company').innerText}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

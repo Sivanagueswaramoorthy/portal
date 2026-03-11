@@ -35,7 +35,6 @@ const promisePool = dbPool.promise();
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN arrears VARCHAR(10) DEFAULT '0'`); } catch(e){}
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN leaves VARCHAR(10) DEFAULT '0'`); } catch(e){}
         
-        // 🛠️ UPDATED: Added total_levels and category to the master courses table
         await promisePool.query(`CREATE TABLE IF NOT EXISTS pcdp_master_courses (id INT AUTO_INCREMENT PRIMARY KEY, course_name VARCHAR(255), description TEXT, total_levels INT DEFAULT 1, category VARCHAR(100), image_url TEXT)`);
         try { await promisePool.query(`ALTER TABLE pcdp_master_courses ADD COLUMN total_levels INT DEFAULT 1`); } catch(e){}
         try { await promisePool.query(`ALTER TABLE pcdp_master_courses ADD COLUMN category VARCHAR(100)`); } catch(e){}
@@ -122,7 +121,10 @@ app.post('/api/auth', async (req, res) => {
     }
 });
 
-// --- HR DATA APIS ---
+// ==============================================================================
+// --- HR DATA APIS (UPDATED) ---
+// ==============================================================================
+
 app.post('/api/hr/verify', async (req, res) => {
     try {
         const decoded = jwt.verify(req.body.token, HR_SECRET_KEY);
@@ -130,12 +132,15 @@ app.post('/api/hr/verify', async (req, res) => {
     } catch(e) { res.json({ success: false }); }
 });
 
+// 🛠️ FIX 1: Modified SQL query to pull a.id as app_id, s.cgpa, and p.tech_core
 app.post('/api/hr/applicants', async (req, res) => {
     try {
         const decoded = jwt.verify(req.body.token, HR_SECRET_KEY);
         
         const sql = `
-            SELECT a.role, a.date_applied, a.status, s.full_name, s.roll_no, s.department, s.email, p.resume_url, p.tech_dsa, p.tech_oop, p.tech_core
+            SELECT a.id as app_id, a.role, a.date_applied, a.status, 
+                   s.full_name, s.roll_no, s.department, s.email, s.cgpa, 
+                   p.resume_url, p.tech_dsa, p.tech_oop, p.tech_core
             FROM placement_apps a
             JOIN student_profile s ON a.student_email = s.email
             LEFT JOIN placement_student_profile p ON a.student_email = p.student_email
@@ -143,7 +148,28 @@ app.post('/api/hr/applicants', async (req, res) => {
         `;
         const [applicants] = await promisePool.query(sql, [decoded.company]);
         res.json({ success: true, applicants });
-    } catch(e) { res.json({ success: false }); }
+    } catch(e) { 
+        console.error("Fetch Applicants Error:", e.message);
+        res.json({ success: false }); 
+    }
+});
+
+// 🛠️ FIX 2: Added the missing status update route for HR Dashboard
+app.post('/api/hr/update-status', async (req, res) => {
+    try {
+        const decoded = jwt.verify(req.body.token, HR_SECRET_KEY);
+        const { app_id, status } = req.body;
+        
+        // Secure update ensuring the HR only updates apps for their specific company
+        await promisePool.query(
+            "UPDATE placement_apps SET status = ? WHERE id = ? AND LOWER(company) = LOWER(?)", 
+            [status, app_id, decoded.company]
+        );
+        res.json({ success: true });
+    } catch(e) { 
+        console.error("Status Update Error:", e.message);
+        res.json({ success: false, message: "Invalid session or server error." }); 
+    }
 });
 
 // --- STUDENT APIS ---
@@ -175,7 +201,7 @@ app.post('/api/student/all-rewards', async (req, res) => {
 });
 
 // ==============================================================================
-// --- NEW PCDP CONTROL PORTAL APIS ---
+// --- PCDP CONTROL PORTAL APIS ---
 // ==============================================================================
 
 async function verifyPcdpAdmin(token) {
@@ -495,7 +521,6 @@ app.post('/api/admin/delete-course', async (req, res) => {
 // --- MASTER COURSE APIS FOR PCDP & ADMIN PORTALS ---
 // ==============================================================================
 
-// --- 1. PCDP PORTAL: Save to Master List ---
 app.post('/api/pcdp/master/add', async (req, res) => {
     try {
         await verifyPcdpAdmin(req.body.adminToken);
@@ -507,7 +532,6 @@ app.post('/api/pcdp/master/add', async (req, res) => {
     } catch (e) { res.json({ success: false }); }
 });
 
-// --- 2. PCDP PORTAL: Fetch Master Courses ---
 app.post('/api/pcdp/master/courses', async (req, res) => {
     try {
         await verifyPcdpAdmin(req.body.adminToken);
@@ -516,7 +540,6 @@ app.post('/api/pcdp/master/courses', async (req, res) => {
     } catch (e) { res.json({ success: false }); }
 });
 
-// --- 3. PCDP PORTAL: Delete Master Course ---
 app.post('/api/pcdp/master/delete', async (req, res) => {
     try {
         await verifyPcdpAdmin(req.body.adminToken);
@@ -525,7 +548,6 @@ app.post('/api/pcdp/master/delete', async (req, res) => {
     } catch (e) { res.json({ success: false }); }
 });
 
-// --- 4. ADMIN PORTAL: Get Master List for Dropdown ---
 app.post('/api/admin/pcdp-master-list', async (req, res) => {
     try {
         await verifyAdmin(req.body.adminToken);
@@ -534,17 +556,14 @@ app.post('/api/admin/pcdp-master-list', async (req, res) => {
     } catch (e) { res.json({ success: false }); }
 });
 
-// --- 5. ADMIN PORTAL: Assign Course to Student ---
 app.post('/api/admin/assign-pcdp', async (req, res) => {
     try {
         await verifyAdmin(req.body.adminToken);
         const { targetEmail, masterCourseId } = req.body;
-        // Fetch the specific master course
         const [master] = await promisePool.query("SELECT * FROM pcdp_master_courses WHERE id = ?", [masterCourseId]);
         if(master.length === 0) throw new Error("Course not found");
         const mc = master[0];
         
-        // Sync it to the student's personal profile (Including total_levels and category so UI bars work!)
         await promisePool.query(
             "INSERT INTO student_skills (student_email, skill_name, description, total_levels, completed_levels, category, image_url) VALUES (?, ?, ?, ?, 0, ?, ?)",
             [targetEmail, mc.course_name, mc.description, mc.total_levels, mc.category, mc.image_url]
@@ -552,7 +571,7 @@ app.post('/api/admin/assign-pcdp', async (req, res) => {
         res.json({ success: true });
     } catch (e) { res.json({ success: false }); }
 });
-// --- NEW: PCDP PORTAL: Edit Master Course ---
+
 app.post('/api/pcdp/master/edit', async (req, res) => {
     try {
         await verifyPcdpAdmin(req.body.adminToken);
@@ -564,5 +583,6 @@ app.post('/api/pcdp/master/edit', async (req, res) => {
         res.json({ success: true });
     } catch (e) { res.json({ success: false }); }
 });
+
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 BACKEND READY ON PORT ${PORT}`));
