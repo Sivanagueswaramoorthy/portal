@@ -1,5 +1,5 @@
 let adminToken = localStorage.getItem('pcdp_session_token');
-let masterCoursesData = []; // 🛑 NEW: Stores all data so we can edit it
+let masterCoursesData = []; // Stores all data so we can edit it
 
 const BASE_URL = (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') 
     ? 'http://localhost:10000' 
@@ -20,7 +20,7 @@ async function loadMasterCourses() {
         });
         const data = await req.json();
         if (data.success) { 
-            masterCoursesData = data.courses; // Store it
+            masterCoursesData = data.courses; // Cache data for editing
             renderMasterGrid(masterCoursesData); 
         } else { signOut(); }
     } catch(e) { 
@@ -47,7 +47,7 @@ function renderMasterGrid(courses) {
                 <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 20px; line-height: 1.6; flex: 1;">${c.description || 'No description provided.'}</p>
                 
                 <div style="display: flex; justify-content: space-between; align-items: center; color: #64748b; font-size: 0.8rem; font-weight: 700; background: #F8FAFC; padding: 10px; border-radius: 8px; border: 1px solid #E2E8F0;">
-                    <span><i class="fa-solid fa-layer-group" style="opacity: 0.7; color: var(--primary);"></i> Max Levels: <span id="m-lvl-${c.id}" style="color: var(--text-main); font-weight: 800;">${c.total_levels}</span></span>
+                    <span><i class="fa-solid fa-layer-group" style="opacity: 0.7; color: var(--primary);"></i> Max Levels: <span style="color: var(--text-main); font-weight: 800;">${c.total_levels}</span></span>
                     <span><i class="fa-solid fa-medal" style="opacity: 0.7;"></i> ${c.category || 'General'}</span>
                 </div>
             </div>
@@ -60,21 +60,31 @@ function renderMasterGrid(courses) {
     }).join('');
 }
 
-// 🛑 NEW: Full Edit Modal logic
+// Open the Edit Modal and populate it with existing data
 function openEditModal(id) {
-    const course = masterCoursesData.find(c => c.id === id);
-    if(!course) return;
+    // Using loose equality (==) in case ID is passed as string
+    const course = masterCoursesData.find(c => c.id == id);
     
-    document.getElementById('edit-c-id').value = course.id;
-    document.getElementById('edit-c-name').value = course.course_name || '';
-    document.getElementById('edit-c-desc').value = course.description || '';
-    document.getElementById('edit-c-levels').value = course.total_levels || 1;
-    document.getElementById('edit-c-cat').value = course.category || '';
-    document.getElementById('edit-c-img').value = course.image_url || '';
+    if(!course) {
+        alert("Error: Could not locate course data. Please refresh the page.");
+        return;
+    }
     
-    openModal('edit-course-modal');
+    try {
+        document.getElementById('edit-c-id').value = course.id;
+        document.getElementById('edit-c-name').value = course.course_name || '';
+        document.getElementById('edit-c-desc').value = course.description || '';
+        document.getElementById('edit-c-levels').value = course.total_levels || 1;
+        document.getElementById('edit-c-cat').value = course.category || '';
+        document.getElementById('edit-c-img').value = course.image_url || '';
+        
+        openModal('edit-course-modal');
+    } catch (e) {
+        alert("Error rendering modal. Make sure the HTML for 'edit-course-modal' exists.");
+    }
 }
 
+// Send the edited data to the server
 async function submitEditMasterCourse() {
     const id = document.getElementById('edit-c-id').value;
     const name = document.getElementById('edit-c-name').value;
@@ -84,6 +94,9 @@ async function submitEditMasterCourse() {
     const img = document.getElementById('edit-c-img').value;
 
     if(!name || !levels) return alert("Course Title and Max Levels are required.");
+
+    // Visual feedback while saving
+    document.querySelector('#edit-course-modal .btn-success').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
 
     await fetch(`${BASE_URL}/api/pcdp/master/edit`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -98,6 +111,7 @@ async function submitEditMasterCourse() {
         })
     });
 
+    document.querySelector('#edit-course-modal .btn-success').innerHTML = 'Save Changes';
     closeModal('edit-course-modal');
     loadMasterCourses();
 }
@@ -111,17 +125,21 @@ async function submitNewMasterCourse() {
     
     if(!name || !levels) return alert("Course Title and Max Levels are required.");
 
+    document.querySelector('#add-course-modal .btn-primary').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+
     await fetch(`${BASE_URL}/api/pcdp/master/add`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ adminToken: adminToken, course_name: name, description: desc, total_levels: levels, category: cat, image_url: img })
     });
     
+    // Clear inputs
     document.getElementById('c-name').value = ''; 
     document.getElementById('c-desc').value = '';
     document.getElementById('c-levels').value = ''; 
     document.getElementById('c-cat').value = ''; 
     document.getElementById('c-img').value = '';
     
+    document.querySelector('#add-course-modal .btn-primary').innerHTML = 'Save to Global Hub';
     closeModal('add-course-modal'); 
     loadMasterCourses();
 }

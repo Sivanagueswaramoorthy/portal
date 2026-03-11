@@ -11,7 +11,7 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=pcdp_portal_fix">
+    <link rel="stylesheet" href="style.css?v=pcdp_portal_final">
 </head>
 <body style="background: #F8FAFC;">
     <main class="main-content" style="background: #F8FAFC; display: flex; flex-direction: column; width: 100vw; margin: 0; height: 100vh;">
@@ -66,7 +66,9 @@
             
             <button class="action-btn btn-primary" style="width: 100%; margin-top: 12px; background: var(--primary); padding: 12px;" onclick="submitNewMasterCourse()">Save to Global Hub</button>
         </div>
-        <div id="edit-course-modal" class="modal-overlay">
+    </div>
+
+    <div id="edit-course-modal" class="modal-overlay">
         <div class="modal-content">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Edit Master Course</h2>
@@ -95,12 +97,11 @@
             <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Cover Image URL</label>
             <input type="url" id="edit-c-img" class="modal-input">
             
-            <button class="action-btn btn-success" style="width: 100%; margin-top: 12px; padding: 12px;" onclick="submitEditMasterCourse()">Save Changes</button>
+            <button class="action-btn btn-success" style="width: 100%; margin-top: 12px; padding: 12px; background: #10B981;" onclick="submitEditMasterCourse()">Save Changes</button>
         </div>
     </div>
-    </div>
 
-    <script src="pcdp_control.js?v=pcdp_portal_fix"></script>
+    <script src="pcdp_control.js?v=pcdp_portal_final"></script>
     <script>
         function openModal(id) { document.getElementById(id).style.display = 'flex'; } 
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
