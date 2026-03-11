@@ -61,29 +61,16 @@ window.onload = async () => {
         let loggedInEmail = data.profile.email; 
         let loggedInPic = data.picture || getAvatar(loggedInName);
         
+        // 1. Set the top header
         setTopHeader(loggedInName, loggedInEmail, loggedInPic);
         
-        document.getElementById('skills-container').innerHTML = data.skills.map(c => {
-            const imgUrl = c.image_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
-
-            return `
-            <div class="img-card" style="border: 1px solid var(--primary-light);">
-                <div class="card-img-wrapper" style="height: 140px;">
-                    <img src="${imgUrl}">
-                </div>
-                <div class="card-body">
-                    <div class="card-title" style="color: var(--primary);">${c.skill_name}</div>
-                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5;">
-                        ${c.description || 'No description provided by PCDP Admin.'}
-                    </div>
-                    <div class="badge badge-success" style="width: 100%; text-align: center; padding: 8px;"><i class="fa-solid fa-check-circle"></i> Assigned Course</div>
-                </div>
-            </div>`;
-        }).join('');
+        // 2. Call all population functions (This was missing!)
+        populateDashboard(data.profile, loggedInPic, data.courses, data.skills, data.semGpas);
         populatePersonalPlacement(data.placeProfile, data.placeApps);
         populateGlobalPlacement(data.globalStats, data.globalDrives); 
         
     } catch (e) { 
+        console.error("Initialization Error:", e);
         localStorage.removeItem('bit_session_token');
         window.location.href = 'index.html'; 
     }
@@ -152,47 +139,60 @@ function renderChart(courses, semGpas) {
 
 function populateDashboard(p, img, courses, skills, semGpas) {
     document.getElementById('cardProfileName').innerText = p.full_name; 
+    document.getElementById('cardProfileImg').src = img || getAvatar(p.full_name);
     document.getElementById('val-email').innerText = p.email; 
     document.getElementById('val-roll_no').innerText = p.roll_no || '--'; 
     document.getElementById('val-department').innerText = p.department || '--';
     document.getElementById('val-cgpa').innerText = parseFloat(p.cgpa || 0).toFixed(2); 
     document.getElementById('val-sgpa').innerText = parseFloat(p.sgpa || 0).toFixed(2);
-    document.getElementById('val-attendance').innerText = p.attendance; 
-    document.getElementById('val-reward_points').innerText = p.reward_points;
-    document.getElementById('val-arrears').innerText = p.arrears; 
-    document.getElementById('val-leaves').innerText = p.leaves;
+    document.getElementById('val-attendance').innerText = p.attendance || '0'; 
+    document.getElementById('val-reward_points').innerText = p.reward_points || '0';
+    document.getElementById('val-arrears').innerText = p.arrears || '0'; 
+    document.getElementById('val-leaves').innerText = p.leaves || '0';
     
     renderChart(courses, semGpas);
 
-   if(skills && skills.length > 0) {
+    // 🛠️ Render the new modernized UI cards for the student
+    if(skills && skills.length > 0) {
         document.getElementById('act-total-skills').innerText = skills.length; 
         document.getElementById('act-mastered').innerText = skills.filter(s => s.completed_levels >= s.total_levels).length; 
         document.getElementById('act-progress').innerText = skills.filter(s => s.completed_levels < s.total_levels).length;
         
-        // 🖼️ STUDENT PORTAL EXACT IMAGE CARDS
         document.getElementById('skills-container').innerHTML = skills.map(c => {
             const total = c.total_levels || 1;
             const comp = c.completed_levels || 0;
             const pct = Math.round((comp / total) * 100);
             const imgUrl = c.image_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
 
-            // Generate segmented bar
+            // Generate segmented bar matching the admin theme
             let segmentsHtml = '';
             for(let i=0; i<total; i++) { 
-                segmentsHtml += `<div style="flex: 1; border-radius: 4px; background: ${i < comp ? '#8B5CF6' : '#E5E7EB'}; height: 6px;"></div>`; 
+                segmentsHtml += `<div style="flex: 1; border-radius: 4px; background: ${i < comp ? 'var(--primary)' : 'var(--border)'};"></div>`; 
             }
 
             return `
-            <div style="background: #FFFFFF; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; border: 1px solid #E5E7EB; transition: transform 0.2s;">
-                <div style="height: 160px; width: 100%; overflow: hidden; background: #E5E7EB;"><img src="${imgUrl}" style="width: 100%; height: 100%; object-fit: cover;"></div>
-                <div style="padding: 16px; flex: 1; display: flex; flex-direction: column;">
-                    <div style="font-size: 1rem; font-weight: 700; color: #111827; margin-bottom: 12px; line-height: 1.3;">${c.skill_name}</div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 0.75rem; font-weight: 700; color: #6B7280;">
-                        <div style="color: #9CA3AF;"><i class="fa-solid fa-layer-group"></i> Levels: ${total}</div>
-                        <div style="color: #4B5563;"><i class="fa-solid fa-medal"></i> ${c.category || 'Skill'}</div>
+            <div class="skill-card" style="padding: 0; overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 12px; background: white; box-shadow: var(--shadow-sm); transition: transform 0.2s; min-height: 380px;">
+                <div style="height: 160px; width: 100%; overflow: hidden; background: #E5E7EB; position: relative; flex-shrink: 0;">
+                    <img src="${imgUrl}" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.95); padding: 4px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 800; color: var(--primary); box-shadow: var(--shadow-sm); backdrop-filter: blur(4px);">
+                        <i class="fa-solid fa-medal"></i> ${c.category || 'Skill'}
                     </div>
-                    <div style="display: flex; gap: 4px; height: 6px; margin-bottom: 8px;">${segmentsHtml}</div>
-                    <div style="text-align: center; font-size: 0.7rem; color: #6B7280; font-weight: 500; margin-top: 4px;">Progress: ${comp}/${total} levels (${pct}%)</div>
+                </div>
+                <div style="padding: 20px; flex: 1; display: flex; flex-direction: column;">
+                    <div style="font-size: 1.1rem; font-weight: 800; color: var(--text-main); margin-bottom: 8px; line-height: 1.3;">${c.skill_name}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6; flex: 1;">
+                        ${c.description || 'Assigned PCDP Course'}
+                    </div>
+                    
+                    <div style="margin-top: auto; background: var(--bg-app); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 800; color: var(--text-muted); margin-bottom: 8px;">
+                            <span style="text-transform: uppercase;">Progress (${comp}/${total})</span>
+                            <span style="color: var(--primary);">${pct}%</span>
+                        </div>
+                        <div style="display: flex; gap: 4px; height: 6px;">
+                            ${segmentsHtml}
+                        </div>
+                    </div>
                 </div>
             </div>`;
         }).join('');
@@ -326,9 +326,8 @@ async function saveResume() {
             document.getElementById('view-resume-btn').href = link;
             document.getElementById('view-resume-btn').style.display = 'inline-flex';
         } else {
-            // Show the exact error (e.g., "Token used too late")
             alert(`❌ ERROR: ${data.details || data.message}\n\nYour Google Session has reached its 1-hour limit. You will now be redirected to log in again.`);
-            signOut(); // Automatically log them out to get a fresh 1-hour token!
+            signOut(); 
         }
     } catch(e) {
         alert("❌ CRITICAL NETWORK ERROR: Ensure your backend server is awake!");
