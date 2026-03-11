@@ -269,7 +269,6 @@ function populateDashboard(p, img, courses, skills, semGpas) {
     
     renderChart(courses, semGpas);
 
-    // Render the robust UI with the actionable footer
     const skillsContainer = document.getElementById('skills-container');
     if(skills && skills.length > 0) {
         document.getElementById('act-total-skills').innerText = skills.length; 
@@ -280,7 +279,8 @@ function populateDashboard(p, img, courses, skills, semGpas) {
             const total = c.total_levels || 1;
             const comp = c.completed_levels || 0;
             const pct = Math.round((comp / total) * 100);
-            const imgUrl = c.image_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
+            const fallbackImg = 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
+            const imgUrl = (c.image_url && c.image_url.trim() !== "") ? c.image_url : fallbackImg;
 
             let segmentsHtml = '';
             for(let i=0; i<total; i++) { 
@@ -289,7 +289,7 @@ function populateDashboard(p, img, courses, skills, semGpas) {
 
             return `
             <div id="card-sk-${c.id}" style="background: white; border-radius: 8px; border: 1px solid #E2E8F0; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <img src="${imgUrl}" style="width: 100%; height: 140px; object-fit: cover;">
+                <img src="${imgUrl}" onerror="this.onerror=null; this.src='${fallbackImg}';" style="width: 100%; height: 140px; object-fit: cover;">
                 <div style="padding: 16px; flex: 1; display: flex; flex-direction: column;">
                     <h4 style="margin: 0 0 12px 0; font-size: 0.95rem; color: #1e293b; font-weight: 700; line-height: 1.3;">${c.skill_name}</h4>
                     <div style="display: flex; justify-content: space-between; align-items: center; color: #64748b; font-size: 0.75rem; font-weight: 600; margin-bottom: 12px;">
@@ -498,6 +498,7 @@ function editSkillCard(id) {
         </div>`;
 }
 
+// 🛑 THIS IS THE FIX: Pointing to the correct backend API!
 async function saveSkillCard(id, totalLevels) {
     let comp = parseInt(document.getElementById(`edit-sk-c-${id}`).value);
     if(isNaN(comp) || comp < 0) comp = 0;
@@ -506,10 +507,15 @@ async function saveSkillCard(id, totalLevels) {
     const card = document.getElementById(`card-sk-${id}`); 
     card.innerHTML = `<div style="text-align:center; padding: 60px;"><i class="fa-solid fa-spinner fa-spin fa-2x" style="color: #4F46E5;"></i></div>`;
     
-    await fetch(`${BASE_URL}/api/admin/update-skill-level`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminToken: globalToken, courseId: id, newLevel: comp })
-    });
+    try {
+        await fetch(`${BASE_URL}/api/admin/update-skill`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adminToken: globalToken, id: id, field: 'completed_levels', value: comp })
+        });
+    } catch (e) {
+        console.error("Failed to save progress", e);
+    }
+    
     loadStudentData(targetStudentEmail);
 }
 

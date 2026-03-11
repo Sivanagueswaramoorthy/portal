@@ -7,6 +7,9 @@ let globalToken = localStorage.getItem('bit_session_token');
 let gpaChartInstance = null;
 let allRewardsData = [];
 
+// Track picture for use in polling loop
+let studentProfilePicture = "";
+
 if (!globalToken) window.location.href = 'index.html';
 
 function getAvatar(name) { 
@@ -23,7 +26,11 @@ function toggleSidebar() {
     const sidebar = document.getElementById('sidebar'); 
     const overlay = document.getElementById('sidebar-overlay');
     sidebar.classList.toggle('open');
-    if (sidebar.classList.contains('open')) overlay.classList.add('show'); else overlay.classList.remove('show');
+    if (sidebar.classList.contains('open')) {
+        overlay.classList.add('show'); 
+    } else {
+        overlay.classList.remove('show');
+    }
 }
 
 function switchTab(tabId, element) {
@@ -39,7 +46,47 @@ function switchTab(tabId, element) {
     }
 }
 
+function signOut() { localStorage.removeItem('bit_session_token'); window.location.href = 'index.html'; }
+
+// -----------------------------------------------------------------------------
+// Core Initialization & Auto-Refresh Polling Logic
+// -----------------------------------------------------------------------------
 window.onload = async () => {
+    // Initial critical check
+    const initialReq = await fetch(`${BASE_URL}/api/auth`, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ token: globalToken }) 
+    });
+    const initialData = await initialReq.json();
+    
+    if (!initialData.success) { 
+        localStorage.removeItem('bit_session_token'); 
+        window.location.href = 'index.html'; 
+        return; 
+    }
+    
+    if (initialData.isAdmin) { window.location.href = 'admin.html'; return; }
+    if (initialData.isHR) { window.location.href = 'hr.html'; return; }
+    
+    // Setup Header & Global variables
+    let loggedInName = initialData.profile.full_name; 
+    let loggedInEmail = initialData.profile.email; 
+    studentProfilePicture = initialData.picture || getAvatar(loggedInName);
+    
+    setTopHeader(loggedInName, loggedInEmail, studentProfilePicture);
+    
+    // Initial Render
+    renderDataViews(initialData);
+
+    // --- Start Auto-Refresh Polling Loop ---
+    // Every 5 seconds, check for progress updates in the background
+    setInterval(backgroundRefreshLoop, 5000);
+};
+
+// Polling function that runs in background
+async function backgroundRefreshLoop() {
+    if(!globalToken) return;
     try {
         const req = await fetch(`${BASE_URL}/api/auth`, { 
             method: 'POST', 
@@ -48,33 +95,20 @@ window.onload = async () => {
         });
         const data = await req.json();
         
-        if (!data.success) { 
-            localStorage.removeItem('bit_session_token'); 
-            window.location.href = 'index.html'; 
-            return; 
+        if (data.success && !data.isAdmin && !data.isHR) {
+            renderDataViews(data);
+        } else if (data.success === false) {
+            signOut();
         }
-        
-        if (data.isAdmin) { window.location.href = 'admin.html'; return; }
-        if (data.isHR) { window.location.href = 'hr.html'; return; }
-        
-        let loggedInName = data.profile.full_name; 
-        let loggedInEmail = data.profile.email; 
-        let loggedInPic = data.picture || getAvatar(loggedInName);
-        
-        setTopHeader(loggedInName, loggedInEmail, loggedInPic);
-        
-        populateDashboard(data.profile, loggedInPic, data.courses, data.skills, data.semGpas);
-        populatePersonalPlacement(data.placeProfile, data.placeApps);
-        populateGlobalPlacement(data.globalStats, data.globalDrives); 
-        
-    } catch (e) { 
-        console.error("Initialization Error:", e);
-        localStorage.removeItem('bit_session_token');
-        window.location.href = 'index.html'; 
-    }
-};
+    } catch(e) { }
+}
 
-function signOut() { localStorage.removeItem('bit_session_token'); window.location.href = 'index.html'; }
+// Reusable function to render data to dashboard
+function renderDataViews(data) {
+    populateDashboard(data.profile, studentProfilePicture, data.courses, data.skills, data.semGpas);
+    populatePersonalPlacement(data.placeProfile, data.placeApps);
+    populateGlobalPlacement(data.globalStats, data.globalDrives); 
+}
 
 function renderChart(courses, semGpas) {
     const ctx = document.getElementById('gpaChart').getContext('2d');
@@ -143,10 +177,10 @@ function populateDashboard(p, img, courses, skills, semGpas) {
     document.getElementById('val-department').innerText = p.department || '--';
     document.getElementById('val-cgpa').innerText = parseFloat(p.cgpa || 0).toFixed(2); 
     document.getElementById('val-sgpa').innerText = parseFloat(p.sgpa || 0).toFixed(2);
-    document.getElementById('val-attendance').innerText = p.attendance || '0'; 
-    document.getElementById('val-reward_points').innerText = p.reward_points || '0';
-    document.getElementById('val-arrears').innerText = p.arrears || '0'; 
-    document.getElementById('val-leaves').innerText = p.leaves || '0';
+    document.getElementById('val-attendance').innerText = p.attendance; 
+    document.getElementById('val-reward_points').innerText = p.reward_points;
+    document.getElementById('val-arrears').innerText = p.arrears; 
+    document.getElementById('val-leaves').innerText = p.leaves;
     
     renderChart(courses, semGpas);
 
@@ -159,9 +193,9 @@ function populateDashboard(p, img, courses, skills, semGpas) {
             const total = c.total_levels || 1;
             const comp = c.completed_levels || 0;
             const pct = Math.round((comp / total) * 100);
-            const imgUrl = c.image_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
+            const fallbackImg = 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
+            const imgUrl = (c.image_url && c.image_url.trim() !== "") ? c.image_url : fallbackImg;
 
-            // Generate segmented bar matching the sleek UI
             let segmentsHtml = '';
             for(let i=0; i<total; i++) { 
                 segmentsHtml += `<div style="flex: 1; border-radius: 4px; background: ${i < comp ? '#8B5CF6' : '#E2E8F0'}; height: 6px;"></div>`; 
@@ -169,7 +203,7 @@ function populateDashboard(p, img, courses, skills, semGpas) {
 
             return `
             <div style="background: white; border-radius: 8px; border: 1px solid #E2E8F0; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: transform 0.2s;">
-                <img src="${imgUrl}" style="width: 100%; height: 140px; object-fit: cover;">
+                <img src="${imgUrl}" onerror="this.onerror=null; this.src='${fallbackImg}';" style="width: 100%; height: 140px; object-fit: cover;">
                 <div style="padding: 16px; flex: 1; display: flex; flex-direction: column;">
                     <h4 style="margin: 0 0 12px 0; font-size: 0.95rem; color: #1e293b; font-weight: 700; line-height: 1.3;">${c.skill_name}</h4>
                     

@@ -4,31 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Enterprise Portal | PCDP Global Master</title>
+    
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=master_final">
+    <link rel="stylesheet" href="style.css?v=pcdp_portal_fix">
 </head>
-<body style="background: #F3F4F6;">
-    <main class="main-content" style="background: #F3F4F6; display: flex; flex-direction: column; width: 100vw; margin: 0;">
-        <header class="top-header flex-between" style="border-bottom: 1px solid var(--border);">
-            <div class="flex-center" style="font-size: 1.2rem; font-weight: 800; color: var(--primary);">
-                <i class="fa-solid fa-graduation-cap"></i> PCDP Master Hub
+<body style="background: #F8FAFC;">
+    <main class="main-content" style="background: #F8FAFC; display: flex; flex-direction: column; width: 100vw; margin: 0; height: 100vh;">
+        
+        <header class="top-header flex-between" style="border-bottom: 1px solid var(--border); background: white; padding: 16px 32px;">
+            <div class="flex-center" style="font-size: 1.2rem; font-weight: 800; color: var(--text-main);">
+                <i class="fa-solid fa-graduation-cap" style="color: var(--primary);"></i> PCDP Master Hub
             </div>
             <div class="flex-center">
                 <button class="action-btn btn-primary" onclick="openModal('add-course-modal')"><i class="fa-solid fa-plus"></i> Create Master Course</button>
-                <button class="action-btn btn-outline" style="color: var(--danger); margin-left: 10px;" onclick="signOut()"><i class="fa-solid fa-power-off"></i> Exit</button>
+                <button class="action-btn btn-outline" style="color: var(--danger); margin-left: 10px;" onclick="signOut()"><i class="fa-solid fa-power-off"></i> Exit Hub</button>
             </div>
         </header>
 
-        <div style="padding: 32px; overflow-y: auto; flex: 1; max-width: 1400px; margin: 0 auto; width: 100%;">
+        <div class="scrollable-area" style="padding: 32px; overflow-y: auto; flex: 1; max-width: 1400px; margin: 0 auto; width: 100%;">
             <div style="margin-bottom: 24px;">
                 <h1 class="page-title">Global Course Repository</h1>
-                <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.95rem;">Courses created here will be available for Admins to assign to students.</p>
+                <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.95rem;">Courses created here will be available for College Admins to assign directly to students.</p>
             </div>
+            
             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px;" id="pcdp-courses-grid">
-                <div style="grid-column: 1/-1; text-align: center; padding: 60px;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>
-            </div>
+                </div>
         </div>
     </main>
 
@@ -38,19 +43,35 @@
                 <h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Add Course to Master List</h2>
                 <i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-course-modal')"></i>
             </div>
-            <input type="text" id="c-name" class="modal-input" placeholder="Course Name (e.g. Full Stack Dev)">
-            <textarea id="c-desc" class="modal-input" placeholder="Course Description..." rows="3" style="resize: vertical;"></textarea>
-            <div style="display: flex; gap: 12px;">
-                <input type="number" id="c-levels" class="modal-input" placeholder="Total Levels">
-                <input type="text" id="c-cat" class="modal-input" placeholder="Category">
-            </div>
-            <input type="url" id="c-img" class="modal-input" placeholder="Image Upload (Paste Drive/Image URL)">
             
-            <button class="action-btn btn-primary" style="width: 100%; margin-top: 8px; background: #8B5CF6;" onclick="submitNewMasterCourse()">Save to Global Hub</button>
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Course Title</label>
+            <input type="text" id="c-name" class="modal-input" placeholder="e.g. Full Stack Web Development">
+            
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Description</label>
+            <textarea id="c-desc" class="modal-input" placeholder="Brief details about the course..." rows="3" style="resize: vertical;"></textarea>
+            
+            <div style="display: flex; gap: 12px;">
+                <div style="flex: 1;">
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Total Levels</label>
+                    <input type="number" id="c-levels" class="modal-input" placeholder="e.g. 7" min="1">
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Category</label>
+                    <input type="text" id="c-cat" class="modal-input" placeholder="e.g. Software">
+                </div>
+            </div>
+            
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; display: block;">Cover Image URL</label>
+            <input type="url" id="c-img" class="modal-input" placeholder="Paste a public web image link here...">
+            
+            <button class="action-btn btn-primary" style="width: 100%; margin-top: 12px; background: var(--primary); padding: 12px;" onclick="submitNewMasterCourse()">Save to Global Hub</button>
         </div>
     </div>
 
-    <script src="pcdp_control.js?v=master_final"></script>
-    <script>function openModal(id) { document.getElementById(id).style.display = 'flex'; } function closeModal(id) { document.getElementById(id).style.display = 'none'; }</script>
+    <script src="pcdp_control.js?v=pcdp_portal_fix"></script>
+    <script>
+        function openModal(id) { document.getElementById(id).style.display = 'flex'; } 
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    </script>
 </body>
 </html>
