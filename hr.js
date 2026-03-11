@@ -1,44 +1,4 @@
-// SMART URL
-const BASE_URL = (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') 
-    ? 'http://localhost:10000' 
-    : 'https://portal-6crm.onrender.com';
-
-const hrToken = localStorage.getItem('hr_session_token');
-
-if (!hrToken) {
-    window.location.href = 'index.html';
-} else {
-    window.onload = initializeHRPortal;
-}
-
-async function initializeHRPortal() {
-    try {
-        const req = await fetch(`${BASE_URL}/api/hr/verify`, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ token: hrToken }) 
-        });
-        
-        if (!req.ok) throw new Error("Server not responding");
-
-        const data = await req.json();
-        
-        if (!data.success) { 
-            signOut(); 
-            return; 
-        }
-        
-        if(document.getElementById('headerName')) document.getElementById('headerName').innerText = "Recruiter"; 
-        if(document.getElementById('headerEmail')) document.getElementById('headerEmail').innerText = data.email; 
-        if(document.getElementById('hr-company')) document.getElementById('hr-company').innerText = data.company;
-        if(document.getElementById('headerImage')) document.getElementById('headerImage').src = "https://ui-avatars.com/api/?name=HR&background=4F46E5&color=fff"; 
-
-        fetchApplicants();
-    } catch (e) { 
-        console.error("Dashboard Error:", e);
-        document.getElementById('hr-applicants-tbody').innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--danger); font-weight: bold;">Connection lost. Is backend running?</td></tr>`;
-    }
-}
+let allApplicants = []; 
 
 async function fetchApplicants() {
     const tbody = document.getElementById('hr-applicants-tbody');
@@ -51,52 +11,88 @@ async function fetchApplicants() {
         const data = await req.json();
 
         if (data.success) {
-            if(data.applicants.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">No candidates have applied to your company yet.</td></tr>`;
-                return;
-            }
-
-            tbody.innerHTML = data.applicants.map(a => {
-                let resumeBtn = a.resume_url && a.resume_url !== '--' 
-                    ? `<a href="${a.resume_url}" target="_blank" class="action-btn btn-primary" style="padding: 6px 12px; font-size: 0.75rem;"><i class="fa-solid fa-file-pdf"></i> View Resume</a>`
-                    : `<span style="font-size: 0.7rem; color: var(--danger); font-weight: 700;">No Resume</span>`;
-
-                return `
-                <tr class="dir-row">
-                    <td>
-                        <div style="font-weight: 700; color: var(--text-main);">${a.full_name}</div>
-                        <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">${a.roll_no || '--'} | ${a.email}</div>
-                    </td>
-                    <td><span class="badge badge-primary">${a.department || '--'}</span></td>
-                    <td style="font-weight: 600; color: var(--text-main);">${a.role}</td>
-                    <td style="font-size: 0.8rem; font-weight: 700;">
-                        <span style="color:var(--primary);">${a.tech_dsa || 0}%</span> / 
-                        <span style="color:var(--success);">${a.tech_oop || 0}%</span> / 
-                        <span style="color:var(--warning);">${a.tech_core || 0}%</span>
-                    </td>
-                    <td><span class="badge badge-warning">${a.status}</span></td>
-                    <td>${resumeBtn}</td>
-                </tr>`;
-            }).join('');
+            allApplicants = data.applicants;
+            document.getElementById('stat-total').innerText = allApplicants.length;
+            applyFilters(); // Initial render
         }
     } catch(e) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--danger); font-weight: bold;">Failed to load candidates. Server disconnected.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Failed to load data.</td></tr>`;
     }
 }
 
-// --- MOBILE MENU FUNCTION ---
-function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar'); 
-    const overlay = document.getElementById('sidebar-overlay');
-    sidebar.classList.toggle('open');
-    if (sidebar.classList.contains('open')) {
-        overlay.classList.add('show');
-    } else {
-        overlay.classList.remove('show');
-    }
+function applyFilters() {
+    const searchTerm = document.getElementById('nameSearch').value.toLowerCase();
+    const branch = document.getElementById('branchFilter').value;
+    const minCgpa = parseFloat(document.getElementById('cgpaRange').value);
+    
+    // Update Labels
+    document.getElementById('cgpaLabel').innerText = minCgpa.toFixed(1);
+    document.getElementById('stat-min-cgpa').innerText = minCgpa.toFixed(1);
+
+    const filtered = allApplicants.filter(a => {
+        const matchesSearch = a.full_name.toLowerCase().includes(searchTerm) || 
+                              a.roll_no.includes(searchTerm) || 
+                              a.role.toLowerCase().includes(searchTerm);
+        const matchesBranch = (branch === 'all' || a.department === branch);
+        const matchesCgpa = (parseFloat(a.cgpa) || 0) >= minCgpa;
+
+        return matchesSearch && matchesBranch && matchesCgpa;
+    });
+
+    document.getElementById('stat-filtered').innerText = filtered.length;
+    renderTable(filtered);
 }
 
-function signOut() { 
-    localStorage.removeItem('hr_session_token'); 
-    window.location.href = 'index.html'; 
+function renderTable(list) {
+    const tbody = document.getElementById('hr-applicants-tbody');
+    if(list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:50px;">No candidates match these filters.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = list.map(a => `
+        <tr class="dir-row">
+            <td>
+                <div style="font-weight:700;">${a.full_name}</div>
+                <div style="font-size:0.75rem; color:var(--text-muted);">${a.department} | ${a.role}</div>
+            </td>
+            <td><span class="cgpa-badge">${a.cgpa || '0.0'}</span></td>
+            <td>
+                <span style="color:var(--primary); font-weight:600;">DSA: ${a.tech_dsa}%</span><br>
+                <span style="color:var(--success); font-size:0.8rem;">OOP: ${a.tech_oop}%</span>
+            </td>
+            <td><span class="status-pill status-${a.status.toLowerCase()}">${a.status}</span></td>
+            <td>
+                <div style="display:flex; gap:8px;">
+                    <a href="${a.resume_url}" target="_blank" class="icon-btn" style="color:var(--primary);" title="View Resume">
+                        <i class="fa-solid fa-file-pdf"></i>
+                    </a>
+                    <button class="icon-btn" style="color:var(--success);" onclick="updateStatus('${a.id}', 'Shortlisted')" title="Shortlist">
+                        <i class="fa-solid fa-check-circle"></i>
+                    </button>
+                    <button class="icon-btn" style="color:var(--danger);" onclick="sendEmail('${a.email}')" title="Email Candidate">
+                        <i class="fa-solid fa-envelope"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// Simple CSV Export Function
+function exportToExcel() {
+    let csvContent = "data:text/csv;charset=utf-8,Name,Roll No,Department,CGPA,Status\n";
+    allApplicants.forEach(a => {
+        csvContent += `${a.full_name},${a.roll_no},${a.department},${a.cgpa},${a.status}\n`;
+    });
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "placement_applicants.csv");
+    document.body.appendChild(link);
+    link.click();
+}
+
+function sendEmail(email) {
+    window.location.href = `mailto:${email}?subject=Placement Interview Invitation&body=Dear Student, you have been invited for an interview...`;
 }
