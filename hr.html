@@ -2,22 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HR Portal | BIT Sathy Placement</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HR Portal | BIT Placements</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <style>
-        /* Custom tweaks for the HR Advanced Features */
-        .filter-container { background: var(--bg-surface); border-radius: var(--radius); padding: 20px; border: 1px solid var(--border); margin-bottom: 24px; box-shadow: var(--shadow-sm); }
-        .cgpa-range-wrapper { display: flex; align-items: center; gap: 15px; flex: 1; min-width: 200px; }
-        .cgpa-range-wrapper input { flex: 1; accent-color: var(--primary); }
-        .status-shortlisted { background: var(--success-bg); color: var(--success); border: 1px solid #A7F3D0; }
-        .status-pending { background: var(--warning-light); color: #B45309; border: 1px solid #FDE68A; }
-    </style>
 </head>
 <body>
-    
+
     <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
     <aside class="sidebar" id="sidebar">
@@ -26,19 +18,19 @@
             <span>HR Portal</span>
         </div>
         <div class="nav-menu">
-            <a class="nav-item active"><i class="fa-solid fa-users"></i> Applicant Tracking</a>
-            <a class="nav-item"><i class="fa-solid fa-chart-line"></i> Hiring Analytics</a>
+            <a class="nav-item active"><i class="fa-solid fa-users-viewfinder"></i> Candidate Pipeline</a>
+            <a class="nav-item"><i class="fa-solid fa-chart-simple"></i> Hiring Analytics</a>
         </div>
         <div class="nav-bottom">
             <a class="nav-item" style="color: var(--danger);" onclick="signOut()">
-                <i class="fa-solid fa-power-off"></i> Secure Logout
+                <i class="fa-solid fa-power-off"></i> Logout
             </a>
         </div>
     </aside>
 
     <main class="main-content">
         <header class="top-header">
-            <div class="flex-center">
+            <div class="flex-center" style="gap: 15px;">
                 <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
                 <h2 class="page-title" style="font-size: 1.1rem;">Recruiter: <span id="hr-company" style="color: var(--primary);">Loading...</span></h2>
             </div>
@@ -48,74 +40,78 @@
                     <div class="user-name" id="headerName">Recruiter</div>
                     <div class="user-email" id="headerEmail">...</div>
                 </div>
-                <img id="headerImage" src="https://ui-avatars.com/api/?background=4F46E5&color=fff" class="profile-img">
+                <img id="headerImage" src="https://ui-avatars.com/api/?background=4F46E5&color=fff&name=HR" class="profile-img">
             </div>
         </header>
 
         <div class="scrollable-area">
             <div class="view-section active">
-                <div style="margin-bottom: 24px;">
-                    <h1 class="page-title">Candidate Pipeline</h1>
-                    <p style="color: var(--text-muted); margin-top: 4px;">Manage and shortlist students for the current placement drive.</p>
-                </div>
-
-                <div class="stats-grid" style="margin-bottom: 24px;">
+                
+                <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 24px;">
                     <div class="stat-box">
                         <span class="stat-title">Total Applied</span>
-                        <span class="stat-val" id="total-count">0</span>
+                        <div class="stat-val" id="total-count">0</div>
                     </div>
                     <div class="stat-box">
                         <span class="stat-title">Avg. CGPA</span>
-                        <span class="stat-val" id="avg-cgpa" style="color: var(--success);">0.0</span>
+                        <div class="stat-val" id="avg-cgpa" style="color: var(--success);">0.0</div>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-title">Filtered</span>
-                        <span class="stat-val" id="filtered-count" style="color: var(--primary);">0</span>
+                        <span class="stat-title">Filtered Pool</span>
+                        <div class="stat-val" id="filtered-count" style="color: var(--primary);">0</div>
                     </div>
                 </div>
 
-                <div class="filter-container">
-                    <div class="dir-controls-wrapper">
+                <div class="card">
+                    <h2 class="page-title" style="margin-bottom: 20px;">Candidate Pipeline</h2>
+                    
+                    <div class="dir-controls-wrapper" style="flex-wrap: wrap;">
                         <div class="search-wrapper">
                             <i class="fa-solid fa-magnifying-glass"></i>
-                            <input type="text" id="nameSearch" class="control-input" placeholder="Search by name or roll no..." oninput="applyFilters()">
+                            <input type="text" id="nameSearch" class="control-input" placeholder="Search by name or roll no..." style="width: 100%;" oninput="applyFilters()">
                         </div>
+                        
                         <select id="branchFilter" class="control-input" onchange="applyFilters()">
                             <option value="all">All Departments</option>
                             <option value="IT">Information Technology</option>
                             <option value="CSE">Computer Science</option>
                             <option value="ECE">Electronics</option>
                         </select>
-                        <div class="cgpa-range-wrapper">
-                            <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">MIN CGPA: <b id="cgpaVal" style="color: var(--primary);">0.0</b></span>
+
+                        <div class="cgpa-filter-wrapper">
+                            <label>Min CGPA: <span id="cgpaVal" style="color: var(--primary);">0.0</span></label>
                             <input type="range" id="cgpaRange" min="0" max="10" step="0.1" value="0" oninput="applyFilters()">
                         </div>
-                        <button class="action-btn btn-success" onclick="exportToExcel()">
-                            <i class="fa-solid fa-file-excel"></i> Export CSV
+
+                        <button class="btn-success action-btn" onclick="exportToExcel()" style="height: 40px; padding: 0 20px;">
+                            <i class="fa-solid fa-file-excel"></i> Export
                         </button>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table class="modern-table">
+                            <thead>
+                                <tr>
+                                    <th>Candidate Details</th>
+                                    <th>CGPA</th>
+                                    <th>Department</th>
+                                    <th>Tech / Core</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hr-applicants-tbody">
+                                <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Fetching from Database...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                <div class="table-wrapper">
-                    <table class="modern-table">
-                        <thead>
-                            <tr>
-                                <th>Student Details</th>
-                                <th>CGPA</th>
-                                <th>Department</th>
-                                <th>DSA / OOP / Core</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="hr-applicants-tbody">
-                            <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Initializing Pipeline...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
             </div>
         </div>
     </main>
+
+    <div id="toast-container" class="toast-container"></div>
 
     <script src="hr.js"></script>
 </body>

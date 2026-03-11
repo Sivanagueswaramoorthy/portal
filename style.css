@@ -233,6 +233,13 @@ tr:hover .admin-table-edit, tr:hover .admin-table-del, .skill-card:hover .admin-
     #placement-personal .card:first-child > div:last-child { text-align: center !important; }
     #view-activities .stats-grid { grid-template-columns: 1fr; }
 }
+/* --- HR PORTAL SPECIFIC ADDITIONS --- */
+.cgpa-filter-wrapper { display: flex; align-items: center; gap: 12px; background: white; padding: 0 16px; border-radius: 10px; border: 1px solid var(--border); box-shadow: var(--shadow-sm); flex: 1; min-width: 250px; }
+.cgpa-filter-wrapper label { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
+.cgpa-filter-wrapper input[type="range"] { flex: 1; accent-color: var(--primary); }
+.toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 10px; z-index: 9999; pointer-events: none; }
+.toast-msg { background: var(--text-main); color: white; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 0.85rem; box-shadow: var(--shadow-lg); animation: slideInUp 0.3s ease forwards; display: flex; align-items: center; gap: 10px; }
+@keyframes slideInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (max-width: 480px) {
     .stats-grid { grid-template-columns: 1fr !important; }
