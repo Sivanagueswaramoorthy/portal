@@ -7,6 +7,22 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    
+    <style>
+        @media (max-width: 768px) {
+            .table-wrapper { background: transparent; border: none; box-shadow: none; }
+            .modern-table, .modern-table tbody, .modern-table tr, .modern-table td { display: block; width: 100%; }
+            .modern-table thead { display: none; }
+            .modern-table tr { margin-bottom: 20px; background: white; border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 16px; }
+            .modern-table td { display: flex; justify-content: space-between; align-items: center; text-align: right; border-bottom: 1px solid var(--bg-app); padding: 12px 8px; }
+            .modern-table td:last-child { border-bottom: none; }
+            .modern-table td::before { content: attr(data-label); font-weight: 800; text-transform: uppercase; font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.5px; }
+            .modern-table td > div { text-align: right; }
+            .modern-table td[data-label="Candidate Details"] { flex-direction: column; align-items: flex-start; text-align: left; background: var(--bg-app); border-radius: 8px; padding: 16px; margin-bottom: 12px; border-bottom: none; }
+            .modern-table td[data-label="Candidate Details"]::before { display: none; }
+            .modern-table td[data-label="Candidate Details"] > div { text-align: left; }
+        }
+    </style>
 </head>
 <body>
 
@@ -96,12 +112,13 @@
                                     <th>CGPA</th>
                                     <th>Department</th>
                                     <th>Tech / Core</th>
+                                    <th>Resume</th>
                                     <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="hr-applicants-tbody">
-                                <tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Fetching from Database...</td></tr>
+                                <tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Fetching from Database...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -110,6 +127,27 @@
             </div>
         </div>
     </main>
+
+    <div id="offer-modal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.5); z-index: 3000; align-items: center; justify-content: center;">
+        <div class="modal-content" style="background: white; padding: 24px; border-radius: 12px; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin:0; font-weight: 800; font-size: 1.15rem; color: var(--text-main);">Issue Offer / Call Letter</h2>
+                <i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeOfferModal()"></i>
+            </div>
+            
+            <input type="hidden" id="offer-appid">
+            <input type="hidden" id="offer-email">
+            <input type="hidden" id="offer-role">
+            
+            <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-main); margin-bottom: 8px; display: block;">Salary Package (CTC)</label>
+            <input type="text" id="offer-ctc" class="control-input" style="width: 100%; margin-bottom: 16px;" placeholder="e.g., 8.5 LPA">
+            
+            <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-main); margin-bottom: 8px; display: block;">Offer Letter Link (Google Drive / PDF)</label>
+            <input type="url" id="offer-link" class="control-input" style="width: 100%; margin-bottom: 24px;" placeholder="Paste URL here...">
+            
+            <button class="action-btn btn-success" style="width: 100%; height: 44px; font-size: 1rem;" onclick="submitOffer()">Confirm Placement</button>
+        </div>
+    </div>
 
     <div id="toast-container" class="toast-container"></div>
 

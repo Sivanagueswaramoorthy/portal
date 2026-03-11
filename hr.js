@@ -50,18 +50,16 @@ async function fetchApplicants() {
             calculateStats(allApplicants);
             applyFilters(); 
         } else {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 20px;">${data.message || 'No applicants found for your company.'}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger); padding: 20px;">${data.message || 'No applicants found for your company.'}</td></tr>`;
         }
     } catch(e) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 20px;">Server Error. Please refresh.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger); padding: 20px;">Server Error. Please refresh.</td></tr>`;
     }
 }
 
 // 3. Update Dashboard Stats
 function calculateStats(list) {
     document.getElementById('total-count').innerText = list.length;
-    
-    // Safely calculate CGPA even if some students have it missing/null
     const cgpas = list.map(a => parseFloat(a.cgpa) || 0).filter(c => c > 0);
     const avg = cgpas.length ? (cgpas.reduce((a, b) => a + b, 0) / cgpas.length).toFixed(2) : "0.00";
     document.getElementById('avg-cgpa').innerText = avg;
@@ -91,75 +89,126 @@ function applyFilters() {
     renderTable(filtered);
 }
 
-// 5. Render Table with Database Data
+// 5. Render Table with Action Buttons
 function renderTable(list) {
     const tbody = document.getElementById('hr-applicants-tbody');
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">No candidates match your criteria.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">No candidates match your criteria.</td></tr>`;
         return;
     }
 
     tbody.innerHTML = list.map(a => {
-        // Handle Resume Link State
         const hasResume = a.resume_url && a.resume_url !== '--' && a.resume_url.trim() !== '';
         const resumeBtn = hasResume 
-            ? `<a href="${a.resume_url}" target="_blank" class="action-icon" style="background: var(--bg-app); color: var(--primary); border: 1px solid var(--border);" title="View Resume"><i class="fa-solid fa-file-pdf"></i></a>`
-            : `<button class="action-icon" style="background: var(--bg-app); color: var(--text-muted); border: 1px solid var(--border); opacity: 0.5; cursor: not-allowed;" title="No Resume Uploaded"><i class="fa-solid fa-file-pdf"></i></button>`;
+            ? `<a href="${a.resume_url}" target="_blank" class="action-icon" style="background: var(--primary-light); color: var(--primary); border: 1px solid var(--primary-light);" title="View Resume"><i class="fa-solid fa-file-pdf"></i> View</a>`
+            : `<button class="action-icon" style="background: var(--bg-app); color: var(--text-muted); border: 1px solid var(--border); opacity: 0.5; cursor: not-allowed;" title="No Resume Uploaded"><i class="fa-solid fa-file-pdf"></i> N/A</button>`;
+
+        let statusClass = 'badge-warning';
+        if(a.status && a.status.toLowerCase().includes('shortlist') || a.status.toLowerCase().includes('placed')) statusClass = 'badge-success';
+        if(a.status && a.status.toLowerCase().includes('reject')) statusClass = 'badge-danger';
 
         return `
         <tr class="dir-row">
-            <td>
-                <div style="font-weight: 700; color: var(--text-main);">${a.full_name || 'N/A'}</div>
+            <td data-label="Candidate Details">
+                <div style="font-weight: 700; color: var(--text-main); font-size: 0.95rem;">${a.full_name || 'N/A'}</div>
                 <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">${a.roll_no || '--'} | ${a.role || 'General App'}</div>
             </td>
-            <td><span class="badge badge-primary">${a.cgpa ? parseFloat(a.cgpa).toFixed(2) : '0.00'}</span></td>
-            <td><span class="badge" style="border: 1px solid var(--border);">${a.department || '--'}</span></td>
-            <td>
-                <div style="font-size: 0.7rem; font-weight: 700;">
+            <td data-label="CGPA">
+                <span class="badge badge-primary" style="font-size: 0.85rem;">${a.cgpa ? parseFloat(a.cgpa).toFixed(2) : '0.00'}</span>
+            </td>
+            <td data-label="Department">
+                <span class="badge" style="border: 1px solid var(--border);">${a.department || '--'}</span>
+            </td>
+            <td data-label="Tech / Core">
+                <div style="font-size: 0.7rem; font-weight: 700; text-align: right;">
                     <span style="color:var(--primary);">DSA: ${a.tech_dsa || 0}%</span> | 
                     <span style="color:var(--success);">OOP: ${a.tech_oop || 0}%</span><br>
                     <span style="color:#B45309;">CORE: ${a.tech_core || 0}%</span>
                 </div>
             </td>
-            <td><span class="badge ${a.status && a.status.toLowerCase().includes('shortlist') ? 'badge-success' : 'badge-warning'}">${a.status || 'Pending'}</span></td>
-            <td>
+            <td data-label="Resume">
+                ${resumeBtn}
+            </td>
+            <td data-label="Status">
+                <span class="badge ${statusClass}">${a.status || 'Pending'}</span>
+            </td>
+            <td data-label="Actions">
                 <div class="flex-center">
-                    ${resumeBtn}
-                    <button class="action-icon save" onclick="updateStatus('${a.app_id}', 'Shortlisted')" title="Shortlist Candidate">
+                    <button class="action-icon save" onclick="openOfferModal('${a.app_id}', '${a.email}', '${a.role}')" title="Select Candidate & Send Offer">
                         <i class="fa-solid fa-check"></i>
                     </button>
-                    <a href="mailto:${a.email || ''}?subject=Interview Invitation: ${a.role}" class="action-icon cancel" title="Email Candidate" style="background: var(--bg-app); color: var(--text-muted); border-color: var(--border);">
-                        <i class="fa-solid fa-envelope"></i>
-                    </a>
+                    <button class="action-icon cancel" onclick="rejectCandidate('${a.app_id}', '${a.email}', '${a.role}')" title="Disqualify/Reject">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
                 </div>
             </td>
         </tr>`;
     }).join('');
 }
 
-// 6. Update Shortlist Status to Database
-async function updateStatus(appId, status) {
-    if(!appId || appId === 'undefined') {
-        return showToast("Application ID missing. Ensure backend sends 'a.id as app_id'.", "danger");
-    }
+// 6. --- NEW OFFER MODAL & REJECTION LOGIC ---
+function openOfferModal(appId, email, role) {
+    document.getElementById('offer-appid').value = appId;
+    document.getElementById('offer-email').value = email;
+    document.getElementById('offer-role').value = role;
+    document.getElementById('offer-ctc').value = '';
+    document.getElementById('offer-link').value = '';
+    document.getElementById('offer-modal').style.display = 'flex';
+}
+
+function closeOfferModal() {
+    document.getElementById('offer-modal').style.display = 'none';
+}
+
+async function submitOffer() {
+    const appId = document.getElementById('offer-appid').value;
+    const email = document.getElementById('offer-email').value;
+    const role = document.getElementById('offer-role').value;
+    const ctc = document.getElementById('offer-ctc').value;
+    const link = document.getElementById('offer-link').value;
+
+    if(!ctc) return showToast("Please enter the Salary Package.", "danger");
+
+    document.querySelector('#offer-modal .btn-success').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
 
     try {
         const req = await fetch(`${BASE_URL}/api/hr/update-status`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: hrToken, app_id: appId, status: status })
+            body: JSON.stringify({ 
+                token: hrToken, app_id: appId, status: 'Placed', 
+                ctc: ctc, offer_link: link, student_email: email, role: role 
+            })
         });
         const data = await req.json();
 
         if (data.success) {
-            showToast(`Candidate has been ${status}!`, "success");
-            fetchApplicants(); // Refresh list from DB to show updated status
+            showToast("Offer Sent! Student Dashboard Updated.", "success");
+            closeOfferModal();
+            fetchApplicants(); 
         } else {
-            showToast(data.message || "Failed to update status", "danger");
+            showToast("Failed to process offer.", "danger");
         }
-    } catch (e) {
-        showToast("Server connection error.", "danger");
-    }
+    } catch (e) { showToast("Server error.", "danger"); }
+    
+    document.querySelector('#offer-modal .btn-success').innerHTML = 'Confirm Placement';
+}
+
+async function rejectCandidate(appId, email, role) {
+    if(!confirm("Are you sure you want to disqualify this candidate?")) return;
+    
+    try {
+        const req = await fetch(`${BASE_URL}/api/hr/update-status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: hrToken, app_id: appId, status: 'Rejected', student_email: email, role: role })
+        });
+        const data = await req.json();
+        if (data.success) {
+            showToast("Candidate Rejected.", "danger");
+            fetchApplicants();
+        }
+    } catch(e) { showToast("Error connecting to server.", "danger"); }
 }
 
 // 7. Export Data to CSV

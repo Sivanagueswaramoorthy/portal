@@ -315,15 +315,29 @@ function populatePersonalPlacement(pProfile, pApps) {
     if (pApps && pApps.length > 0) {
         appBody.innerHTML = pApps.map(a => {
             let bClass = 'badge-primary';
-            if(a.status.toLowerCase().includes('select') || a.status.toLowerCase().includes('offer')) bClass = 'badge-success';
+            if(a.status.toLowerCase().includes('select') || a.status.toLowerCase().includes('offer') || a.status.toLowerCase().includes('placed')) bClass = 'badge-success';
             if(a.status.toLowerCase().includes('clear') || a.status.toLowerCase().includes('reject')) bClass = 'badge-danger';
             if(a.status.toLowerCase().includes('pend') || a.status.toLowerCase().includes('wait')) bClass = 'badge-warning';
+            
+            // Format CTC text if provided
+            const ctcText = (a.ctc_offered && a.ctc_offered !== '--') ? `<br><span style="font-size:0.75rem; color:var(--success); font-weight:800;"><i class="fa-solid fa-money-bill-wave"></i> ${a.ctc_offered}</span>` : '';
+            
+            // Generate Download Button if HR provided a link
+            const letterBtn = (a.offer_link && a.offer_link.trim() !== '') 
+                ? `<a href="${a.offer_link}" target="_blank" class="action-btn btn-outline" style="padding: 4px 8px; font-size: 0.7rem; margin-top: 6px; display: inline-flex; border-color: var(--primary); color: var(--primary);"><i class="fa-solid fa-download"></i> Call Letter</a>` 
+                : '';
+
             return `
             <tr>
                 <td style="font-weight: 700; color: var(--text-main);">${a.company}</td>
-                <td style="color: var(--text-muted);">${a.role}</td>
+                <td style="color: var(--text-muted);">${a.role} ${ctcText}</td>
                 <td>${a.date_applied}</td>
-                <td><span class="badge ${bClass}">${a.status}</span></td>
+                <td>
+                    <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                        <span class="badge ${bClass}">${a.status}</span>
+                        ${letterBtn}
+                    </div>
+                </td>
             </tr>`;
         }).join('');
     } else { 

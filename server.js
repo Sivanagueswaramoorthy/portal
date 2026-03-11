@@ -45,14 +45,7 @@ const promisePool = dbPool.promise();
         try { await promisePool.query(`ALTER TABLE student_skills ADD COLUMN image_url TEXT`); } catch(e){}
         try { await promisePool.query(`ALTER TABLE student_skills ADD COLUMN description TEXT`); } catch(e){}
 
-        await promisePool.query(`CREATE TABLE IF NOT EXISTS pcdp_courses (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            course_name VARCHAR(255) UNIQUE,
-            total_levels INT DEFAULT 1,
-            category VARCHAR(100),
-            image_url TEXT,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        )`);
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS pcdp_courses (id INT AUTO_INCREMENT PRIMARY KEY, course_name VARCHAR(255) UNIQUE, total_levels INT DEFAULT 1, category VARCHAR(100), image_url TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)`);
 
         await promisePool.query(`CREATE TABLE IF NOT EXISTS student_sem_gpa (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255) NOT NULL, semester INT NOT NULL, gpa VARCHAR(10), UNIQUE KEY unique_sem (student_email, semester))`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_global (id INT PRIMARY KEY, total_placed VARCHAR(50), ongoing_drives VARCHAR(50), highest_ctc VARCHAR(50), avg_ctc VARCHAR(50))`);
@@ -64,6 +57,10 @@ const promisePool = dbPool.promise();
         try { await promisePool.query(`ALTER TABLE placement_student_profile MODIFY COLUMN resume_url LONGTEXT`); } catch(e){}
 
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_apps (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), company VARCHAR(255), role VARCHAR(255), date_applied VARCHAR(50), status VARCHAR(50))`);
+        // 🛠️ DYNAMIC COLUMNS FOR OFFERS
+        try { await promisePool.query(`ALTER TABLE placement_apps ADD COLUMN ctc_offered VARCHAR(50) DEFAULT '--'`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE placement_apps ADD COLUMN offer_link LONGTEXT`); } catch(e){}
+
         await promisePool.query(`CREATE TABLE IF NOT EXISTS hr_profile (email VARCHAR(255) PRIMARY KEY, company_name VARCHAR(255), password VARCHAR(255))`);
         
         console.log("✅ Database Verified: All enterprise tables and HR module ready.");
@@ -116,13 +113,12 @@ app.post('/api/auth', async (req, res) => {
 
         res.json({ success: true, isAdmin: false, profile: profile[0], courses, skills, semGpas, globalStats: globalStats[0], globalDrives, placeProfile: placeProfile[0], placeApps, picture: payload.picture });
     } catch (error) { 
-        console.error("AUTH ERROR CAUGHT:", error.message);
         res.json({ success: false, message: `Login Error: ${error.message}` }); 
     }
 });
 
 // ==============================================================================
-// --- HR DATA APIS (UPDATED) ---
+// --- HR DATA APIS ---
 // ==============================================================================
 
 app.post('/api/hr/verify', async (req, res) => {
@@ -132,7 +128,6 @@ app.post('/api/hr/verify', async (req, res) => {
     } catch(e) { res.json({ success: false }); }
 });
 
-// 🛠️ FIX 1: Modified SQL query to pull a.id as app_id, s.cgpa, and p.tech_core
 app.post('/api/hr/applicants', async (req, res) => {
     try {
         const decoded = jwt.verify(req.body.token, HR_SECRET_KEY);
@@ -149,22 +144,32 @@ app.post('/api/hr/applicants', async (req, res) => {
         const [applicants] = await promisePool.query(sql, [decoded.company]);
         res.json({ success: true, applicants });
     } catch(e) { 
-        console.error("Fetch Applicants Error:", e.message);
         res.json({ success: false }); 
     }
 });
 
-// 🛠️ FIX 2: Added the missing status update route for HR Dashboard
 app.post('/api/hr/update-status', async (req, res) => {
     try {
         const decoded = jwt.verify(req.body.token, HR_SECRET_KEY);
-        const { app_id, status } = req.body;
+        const { app_id, status, ctc, offer_link, student_email, role } = req.body;
         
-        // Secure update ensuring the HR only updates apps for their specific company
+        // 1. Update the specific application record in placement_apps
         await promisePool.query(
-            "UPDATE placement_apps SET status = ? WHERE id = ? AND LOWER(company) = LOWER(?)", 
-            [status, app_id, decoded.company]
+            "UPDATE placement_apps SET status = ?, ctc_offered = ?, offer_link = ? WHERE id = ? AND LOWER(company) = LOWER(?)", 
+            [status, ctc || '--', offer_link || '', app_id, decoded.company]
         );
+
+        // 2. If selected/placed, automatically update the student's main placement profile hub
+        if (status === 'Placed' || status === 'Selected') {
+            await promisePool.query(
+                `INSERT INTO placement_student_profile (student_email, status, offer_company, offer_role, offer_ctc, offers) 
+                 VALUES (?, 'Placed', ?, ?, ?, 1)
+                 ON DUPLICATE KEY UPDATE 
+                 status = 'Placed', offer_company = ?, offer_role = ?, offer_ctc = ?, offers = CAST(IFNULL(offers, 0) AS UNSIGNED) + 1`,
+                [student_email, decoded.company, role, ctc, decoded.company, role, ctc]
+            );
+        }
+
         res.json({ success: true });
     } catch(e) { 
         console.error("Status Update Error:", e.message);
@@ -177,19 +182,9 @@ app.post('/api/student/update-resume', async (req, res) => {
     try {
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
         const email = ticket.getPayload().email.toLowerCase();
-        
-        await promisePool.query(
-            `INSERT INTO placement_student_profile (student_email, resume_url) 
-             VALUES (?, ?) 
-             ON DUPLICATE KEY UPDATE resume_url = ?`, 
-            [email, req.body.resume_url, req.body.resume_url]
-        );
-        
+        await promisePool.query(`INSERT INTO placement_student_profile (student_email, resume_url) VALUES (?, ?) ON DUPLICATE KEY UPDATE resume_url = ?`, [email, req.body.resume_url, req.body.resume_url]);
         res.json({ success: true });
-    } catch(e) { 
-        console.error("Resume Save Error:", e.message);
-        res.json({ success: false, message: "Session Expired", details: e.message }); 
-    }
+    } catch(e) { res.json({ success: false, message: "Session Expired", details: e.message }); }
 });
 
 app.post('/api/student/all-rewards', async (req, res) => {
@@ -269,10 +264,6 @@ app.post('/api/pcdp/admin/delete-skill', async (req, res) => {
         res.json({ success: true });
     } catch (e) { res.json({ success: false, message: e.message }); }
 });
-
-// -----------------------------------------------------------------------------
-// PCDP COURSE LIBRARY ENDPOINTS (global courses managed by PCDP admin)
-// -----------------------------------------------------------------------------
 
 app.post('/api/pcdp/courses', async (req, res) => {
     try {
