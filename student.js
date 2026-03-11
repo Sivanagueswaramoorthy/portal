@@ -63,7 +63,7 @@ window.onload = async () => {
         
         setTopHeader(loggedInName, loggedInEmail, loggedInPic);
         
-        document.getElementById('skills-container').innerHTML = skills.map(c => {
+        document.getElementById('skills-container').innerHTML = data.skills.map(c => {
             const imgUrl = c.image_url || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
 
             return `

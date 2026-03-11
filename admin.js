@@ -271,7 +271,7 @@ function populateDashboard(p, img, courses, skills, semGpas) {
     renderChart(courses, semGpas);
 
     // 🛠️ RENDER SKILLS: Notice only "Completed" can be modified
-    const skillsContainer = document.getElementById('admin-skills-container');
+    const skillsContainer = document.getElementById('skills-container');
     if(skills && skills.length > 0) {
         document.getElementById('act-total-skills').innerText = skills.length; 
         document.getElementById('act-mastered').innerText = skills.filter(s => s.completed_levels >= s.total_levels).length; 
