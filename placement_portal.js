@@ -90,30 +90,78 @@ async function fetchDirectory() {
 function renderTable(students) {
     const tbody = document.getElementById('student-list-tbody');
     if(students.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`;
         return;
     }
     
-    tbody.innerHTML = students.map(s => `
-        <tr class="dir-row" onclick="openStudentDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')" style="cursor: pointer;">
-            <td style="font-weight:600; color: var(--text-main);">
+    tbody.innerHTML = students.map(s => {
+        // 1. Check if resume exists
+        const resumeLink = (s.resume_url && s.resume_url !== '--' && s.resume_url.trim() !== '')
+            ? `<a href="${s.resume_url}" target="_blank" class="action-btn btn-outline" style="padding: 4px 8px; font-size: 0.75rem; border-color: var(--primary); color: var(--primary); text-decoration: none;"><i class="fa-solid fa-file-pdf"></i> View</a>`
+            : `<span style="font-size: 0.75rem; color: var(--text-muted); background: #f1f5f9; padding: 4px 8px; border-radius: 4px;">Not Uploaded</span>`;
+            
+        // 2. Set default status if null
+        const currentStatus = s.status || 'Unplaced';
+        
+        return `
+        <tr class="dir-row">
+            <td style="font-weight:600; color: var(--text-main); cursor: pointer;" onclick="openStudentDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')">
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;">
                     <div>
                         <div>${s.full_name}</div>
-                        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">${s.email}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">${s.email} | ${s.roll_no || '--'}</div>
                     </div>
                 </div>
             </td>
-            <td style="font-family: monospace; font-size: 0.95rem;">${s.roll_no || '--'}</td>
             <td><span class="badge badge-primary">${s.department || '--'}</span></td>
+            
+            <td style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">
+                ${s.offer_company && s.offer_company !== '--' ? s.offer_company : '<span style="color:#94a3b8; font-weight:400;">N/A</span>'}
+            </td>
+            
+            <td>${resumeLink}</td>
+            
             <td>
-                <button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; pointer-events: none;">
-                    View Detailed Profile <i class="fa-solid fa-arrow-right" style="margin-left: 6px;"></i>
+                <select onchange="updateStudentStatus('${s.email}', this.value)" class="control-input" style="padding: 6px; font-size: 0.8rem; width: 120px; cursor: pointer; border-color: var(--border); font-weight: 600; color: var(--text-main);">
+                    <option value="Unplaced" ${currentStatus === 'Unplaced' ? 'selected' : ''}>Unplaced</option>
+                    <option value="Ongoing" ${currentStatus === 'Ongoing' ? 'selected' : ''}>Ongoing / In-Process</option>
+                    <option value="Placed" ${currentStatus === 'Placed' ? 'selected' : ''}>Placed</option>
+                    <option value="Rejected" ${currentStatus === 'Rejected' ? 'selected' : ''}>Rejected</option>
+                </select>
+            </td>
+            
+            <td>
+                <button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem;" onclick="openStudentDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')">
+                    Full Profile <i class="fa-solid fa-arrow-right" style="margin-left: 6px;"></i>
                 </button>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
+}
+
+// 🛑 NEW FUNCTION: This saves the dropdown change to the database immediately
+async function updateStudentStatus(email, newStatus) {
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/update-placement-profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adminToken: globalToken, targetEmail: email, field: 'status', value: newStatus })
+        });
+        const data = await req.json();
+        
+        if (data.success) {
+            showToast(`Status updated to ${newStatus}!`);
+            
+            // Update the local list so the filter still works properly
+            const student = allStudentsList.find(s => s.email === email);
+            if (student) student.status = newStatus;
+        } else {
+            showToast("Failed to update status in database.");
+        }
+    } catch (e) {
+        showToast("Network Error updating status.");
+    }
 }
 
 function filterStudents() {

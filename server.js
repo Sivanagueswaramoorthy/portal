@@ -189,7 +189,22 @@ async function verifyAdmin(token) {
     return true;
 }
 
-app.post('/api/admin/list', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const [rows] = await promisePool.query("SELECT email, full_name, roll_no, department FROM student_profile ORDER BY full_name ASC"); res.json({ success: true, students: rows }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/list', async (req, res) => { 
+    try { 
+        await verifyAdmin(req.body.adminToken); 
+        // 🛑 NEW: Joined query to get Resume, Company, and Status alongside basic info
+        const [rows] = await promisePool.query(`
+            SELECT sp.email, sp.full_name, sp.roll_no, sp.department, 
+                   psp.offer_company, psp.status, psp.resume_url 
+            FROM student_profile sp 
+            LEFT JOIN placement_student_profile psp ON LOWER(sp.email) = LOWER(psp.student_email) 
+            ORDER BY sp.full_name ASC
+        `); 
+        res.json({ success: true, students: rows }); 
+    } catch (e) { 
+        res.json({ success: false }); 
+    } 
+});
 app.post('/api/admin/student-data', async (req, res) => {
     try {
         await verifyAdmin(req.body.adminToken); const email = req.body.targetEmail;
