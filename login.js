@@ -64,7 +64,7 @@ window.onload = () => {
 
                 if (data.success) {
                     // 🛑 NEW LOGIC: Check where the server wants to redirect us
-                    if (data.redirect === 'placement_hub.html') {
+                    if (data.redirect === 'placement_portal.html') {
                         // It's the Coordinator
                         localStorage.setItem('bit_session_token', data.token); 
                         showSuccess("Coordinator Verified! Opening Placement Hub...");
