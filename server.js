@@ -77,7 +77,7 @@ app.post('/api/hr/login', async (req, res) => {
             return res.json({ 
                 success: true, 
                 token: 'custom_admin_token_pc123', 
-                redirect: 'placement_hub.html' // Tells frontend where to go
+                redirect: 'placement_portal.html' // Tells frontend where to go
             });
         }
 

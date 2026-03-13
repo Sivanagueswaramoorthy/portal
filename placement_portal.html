@@ -63,7 +63,7 @@
                 if (data.success) {
                     // Set the token that the placement hub JS expects
                     localStorage.setItem('bit_session_token', data.token);
-                    window.location.href = 'placement_hub.html';
+                    window.location.href = 'placement_portal.html';
                 } else {
                     err.innerText = data.message;
                     err.style.display = 'block';
