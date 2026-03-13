@@ -1,9 +1,7 @@
 let adminToken = localStorage.getItem('pcdp_session_token');
 let masterCoursesData = []; // Stores all data so we can edit it
 
-const BASE_URL = (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') 
-    ? 'http://localhost:10000' 
-    : 'https://portal-6crm.onrender.com';
+const BASE_URL = 'https://portal-6crm.onrender.com';
 
 if (!adminToken) window.location.href = 'index.html';
 

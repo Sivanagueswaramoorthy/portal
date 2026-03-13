@@ -1,7 +1,5 @@
-// 🛑 SMART URL: Fixes the GitHub Mobile issue by automatically connecting to Render when deployed!
-const BASE_URL = (window.location.hostname.includes('github.io') || window.location.hostname.includes('render.com')) 
-    ? 'https://portal-6crm.onrender.com' 
-    : 'http://localhost:10000';
+// 🛑 FORCED LIVE SERVER: This tells your local computer AND GitHub to always use the live Render backend.
+const BASE_URL = 'https://portal-6crm.onrender.com';
 
 window.onload = () => {
     // Initialize Google Auth (Students & Admin)
@@ -19,7 +17,7 @@ window.onload = () => {
     const hrToken = localStorage.getItem('hr_session_token');
     const pcdpToken = localStorage.getItem('pcdp_session_token');
 
-    // 🛑 NEW: Check for PCDP Token
+    // 🛑 Check for existing sessions
     if (pcdpToken) { 
         window.location.href = 'pcdp_control.html'; 
         return; 
@@ -33,7 +31,7 @@ window.onload = () => {
         handleLogin({ credential: savedToken });
     }
 
-    // HR & PCDP Manual Login Form
+    // Traditional Manual Login Form
     const loginForm = document.getElementById('traditional-login-form');
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
@@ -42,7 +40,7 @@ window.onload = () => {
             const email = document.getElementById('email').value.trim();
             const pass = document.getElementById('password').value.trim();
             
-            // 🛑 NEW: Intercept PCDP Manual Login
+            // 🛑 Intercept PCDP Manual Login
             if (email === 'pcdp@gmail.com' && pass === 'pcdp@123') {
                 localStorage.setItem('pcdp_session_token', 'pcdp_admin_authorized_token_7771');
                 showSuccess("PCDP Access Verified! Opening Control Center...");
@@ -50,9 +48,10 @@ window.onload = () => {
                 return;
             }
 
-            showError("Verifying HR Credentials...", true);
+            showError("Verifying Credentials. Please wait...", true);
 
             try {
+                // Send to the unified HR/Coordinator login route
                 const req = await fetch(`${BASE_URL}/api/hr/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -64,15 +63,24 @@ window.onload = () => {
                 const data = await req.json();
 
                 if (data.success) {
-                    localStorage.setItem('hr_session_token', data.token); 
-                    showSuccess("Login Successful! Opening dashboard...");
-                    setTimeout(() => { window.location.href = 'hr.html'; }, 500);
+                    // 🛑 NEW LOGIC: Check where the server wants to redirect us
+                    if (data.redirect === 'placement_hub.html') {
+                        // It's the Coordinator
+                        localStorage.setItem('bit_session_token', data.token); 
+                        showSuccess("Coordinator Verified! Opening Placement Hub...");
+                        setTimeout(() => { window.location.href = data.redirect; }, 500);
+                    } else {
+                        // It's a Trainer (HR)
+                        localStorage.setItem('hr_session_token', data.token); 
+                        showSuccess("Trainer Verified! Opening Training Portal...");
+                        setTimeout(() => { window.location.href = data.redirect || 'hr.html'; }, 500);
+                    }
                 } else {
                     showError(data.message || "Invalid Email or Password.");
                 }
             } catch(err) {
                 console.error(err);
-                showError("Network Error. Backend server might be sleeping.");
+                showError("Backend server is waking up (takes ~30s on free tier). Please wait and try again.", true);
             }
         });
     }
@@ -95,6 +103,7 @@ function togglePass() {
 
 async function handleLogin(response) {
     const globalToken = response.credential;
+    showError("Connecting to live server, please wait...", true);
 
     try {
         const req = await fetch(`${BASE_URL}/api/auth`, {
@@ -119,7 +128,7 @@ async function handleLogin(response) {
     } catch (e) {
         localStorage.removeItem('bit_session_token');
         document.getElementById('g_id_signin').style.display = 'block';
-        showError("Connection Failed. Live server might be sleeping.");
+        showError("Server is waking up from sleep. Please try logging in again in 10 seconds.", true);
     }
 }
 

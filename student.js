@@ -1,7 +1,4 @@
-// 🛑 SMART URL: Auto-detects if you are testing locally or on live GitHub Pages!
-const BASE_URL = (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') 
-    ? 'http://localhost:10000' 
-    : 'https://portal-6crm.onrender.com';
+const BASE_URL = 'https://portal-6crm.onrender.com';
 
 let globalToken = localStorage.getItem('bit_session_token');
 let gpaChartInstance = null;
