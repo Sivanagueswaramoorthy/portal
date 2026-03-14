@@ -4,9 +4,7 @@ let globalToken = localStorage.getItem('bit_session_token');
 let gpaChartInstance = null;
 let allRewardsData = [];
 
-// Track picture for use in polling loop
 let studentProfilePicture = "";
-// 🛑 Track applied companies globally so the UI can disable "Apply" buttons
 window.studentAppliedApps = [];
 
 if (!globalToken) window.location.href = 'index.html';
@@ -17,9 +15,6 @@ function toggleSidebar() { const sidebar = document.getElementById('sidebar'); c
 function switchTab(tabId, element) { document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active')); if(element) element.classList.add('active'); document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active')); document.getElementById('view-' + tabId).classList.add('active'); if(window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('show'); } }
 function signOut() { localStorage.removeItem('bit_session_token'); window.location.href = 'index.html'; }
 
-// -----------------------------------------------------------------------------
-// Core Initialization & Auto-Refresh Polling Logic
-// -----------------------------------------------------------------------------
 window.onload = async () => {
     const initialReq = await fetch(`${BASE_URL}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
     const initialData = await initialReq.json();
@@ -114,6 +109,9 @@ function populateGlobalPlacement(gStats, gDrives) {
     if (gDrives && gDrives.length > 0) { drvBody.innerHTML = gDrives.map(d => `<tr><td style="font-weight: 700; color: var(--text-main);">${d.company}</td><td>${d.role}</td><td style="font-family: monospace;">${d.appeared}</td><td><span class="badge badge-success">${d.selected}</span></td><td style="font-weight: 700; color: var(--primary);">${d.ctc}</td></tr>`).join(''); } else { drvBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:var(--text-muted);">No campus drives recorded.</td></tr>`; }
 }
 
+// -----------------------------------------------------------------------------
+// 🛑 UPDATED UI: PROFESSIONAL TABLE DESIGN FOR APPLICATIONS
+// -----------------------------------------------------------------------------
 function populatePersonalPlacement(pProfile, pApps) {
     pProfile = pProfile || {}; const prf = pProfile;
     document.getElementById('val-p-role').innerText = prf.offer_role || '--'; document.getElementById('val-p-comp').innerText = prf.offer_company || '--'; document.getElementById('val-p-ctc').innerText = prf.offer_ctc || '--'; document.getElementById('val-p-status').innerText = prf.status || 'Unplaced'; document.getElementById('val-p-assess').innerText = prf.assessments || '0'; document.getElementById('val-p-int').innerText = prf.interviews || '0'; document.getElementById('val-p-off').innerText = prf.offers || '0';
@@ -131,28 +129,46 @@ function populatePersonalPlacement(pProfile, pApps) {
             let bClass = 'badge-primary';
             if(a.status.toLowerCase().includes('select') || a.status.toLowerCase().includes('offer') || a.status.toLowerCase().includes('placed')) bClass = 'badge-success';
             if(a.status.toLowerCase().includes('clear') || a.status.toLowerCase().includes('reject')) bClass = 'badge-danger';
-            if(a.status.toLowerCase().includes('pend') || a.status.toLowerCase().includes('wait')) bClass = 'badge-warning';
+            if(a.status.toLowerCase().includes('pend') || a.status.toLowerCase().includes('wait') || a.status.toLowerCase().includes('short')) bClass = 'badge-warning';
             
-            // 🛑 Renders Salary Package & Internship Info if Available
-            const ctcText = (a.salary_package && a.salary_package !== '--') ? `<br><span style="font-size:0.75rem; color:var(--success); font-weight:800;"><i class="fa-solid fa-money-bill-wave"></i> ${a.salary_package}</span>` : '';
-            const internText = (a.internship_period && a.internship_period !== '--') ? `<br><span style="font-size:0.75rem; color:var(--primary); font-weight:600;"><i class="fa-solid fa-clock"></i> ${a.internship_period} Internship</span>` : '';
+            // Modern UI Pills for CTC and Internship
+            const ctcBadge = (a.salary_package && a.salary_package !== '--') 
+                ? `<span style="display: inline-flex; align-items: center; gap: 4px; background: #DCFCE7; color: #166534; padding: 3px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-sack-dollar"></i> ${a.salary_package}</span>` 
+                : '';
+            const internBadge = (a.internship_period && a.internship_period !== '--') 
+                ? `<span style="display: inline-flex; align-items: center; gap: 4px; background: #E0E7FF; color: #3730A3; padding: 3px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-stopwatch"></i> ${a.internship_period}</span>` 
+                : '';
             
-            const letterBtn = (a.call_letter_url && a.call_letter_url.trim() !== '') ? `<a href="${a.call_letter_url}" target="_blank" class="action-btn btn-outline" style="padding: 4px 8px; font-size: 0.7rem; margin-top: 6px; display: inline-flex; border-color: var(--primary); color: var(--primary);"><i class="fa-solid fa-download"></i> Offer Letter</a>` : '';
+            const extraDetails = (ctcBadge || internBadge) ? `<div style="display: flex; gap: 6px; margin-top: 8px;">${ctcBadge}${internBadge}</div>` : '';
+
+            // Clean Offer Letter Button
+            const letterBtn = (a.call_letter_url && a.call_letter_url.trim() !== '') 
+                ? `<a href="${a.call_letter_url}" target="_blank" style="margin-top: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: #4F46E5; text-decoration: none; padding: 6px 12px; background: #EEF2FF; border-radius: 6px; transition: 0.2s; border: 1px solid #C7D2FE;" onmouseover="this.style.background='#E0E7FF'" onmouseout="this.style.background='#EEF2FF'"><i class="fa-solid fa-file-arrow-down"></i> View Offer</a>` 
+                : '';
 
             return `
-            <tr>
-                <td style="font-weight: 700; color: var(--text-main);">${a.company}</td>
-                <td style="color: var(--text-muted); line-height: 1.4;">${a.role} ${ctcText} ${internText}</td>
-                <td>${a.date_applied}</td>
-                <td>
+            <tr style="transition: background 0.2s;" onmouseover="this.style.background='#F8FAFC'" onmouseout="this.style.background='transparent'">
+                <td style="padding: 20px 24px; border-bottom: 1px solid #F1F5F9;">
+                    <div style="font-weight: 800; color: #1E293B; font-size: 1.05rem;">${a.company}</div>
+                </td>
+                <td style="padding: 20px 24px; border-bottom: 1px solid #F1F5F9;">
+                    <div style="font-weight: 600; color: #475569; font-size: 0.9rem;">${a.role}</div>
+                    ${extraDetails}
+                </td>
+                <td style="padding: 20px 24px; border-bottom: 1px solid #F1F5F9; color: #64748B; font-size: 0.85rem; font-weight: 500;">
+                    <i class="fa-regular fa-calendar" style="margin-right: 6px; opacity: 0.7;"></i>${a.date_applied}
+                </td>
+                <td style="padding: 20px 24px; border-bottom: 1px solid #F1F5F9;">
                     <div style="display: flex; flex-direction: column; align-items: flex-start;">
-                        <span class="badge ${bClass}">${a.status}</span>
+                        <span class="badge ${bClass}" style="font-size: 0.75rem; padding: 4px 10px;">${a.status}</span>
                         ${letterBtn}
                     </div>
                 </td>
             </tr>`;
         }).join('');
-    } else { appBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 30px; color:var(--text-muted);">No applications logged.</td></tr>`; }
+    } else { 
+        appBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 40px; color:var(--text-muted); font-weight: 500;">No applications logged.</td></tr>`; 
+    }
 }
 
 async function saveResume() {
@@ -213,7 +229,7 @@ async function fetchStudentAnnouncements() {
 }
 
 // -----------------------------------------------------------------------------
-// STUDENT ACTIVE DRIVES & APPLY LOGIC (WITH EXPIRATION CHECK)
+// STUDENT ACTIVE DRIVES & APPLY LOGIC
 // -----------------------------------------------------------------------------
 async function fetchActiveDrives() {
     const grid = document.getElementById('student-drives-grid'); grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Openings...</div>`;
