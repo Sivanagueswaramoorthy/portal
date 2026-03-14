@@ -427,11 +427,15 @@ function filterRewards() {
     renderRewardsTable(filtered);
 }
 // --- ANNOUNCEMENT LOGIC (STUDENT) ---
+// 🛑 NEW: Student Notice Board Logic
 async function fetchStudentAnnouncements() {
     const feed = document.getElementById('student-ann-feed');
     feed.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Checking for updates...</div>`;
     try {
-        const req = await fetch(`${BASE_URL}/api/announcements/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
+        const req = await fetch(`${BASE_URL}/api/announcements/list`, { 
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ token: globalToken }) 
+        });
         const data = await req.json();
         
         if (data.success) {
@@ -439,11 +443,19 @@ async function fetchStudentAnnouncements() {
                 feed.innerHTML = `<div class="card" style="text-align:center; padding: 40px; color:var(--text-muted);">No new announcements.</div>`;
                 return;
             }
+            
             feed.innerHTML = data.announcements.map(ann => {
-                let icon = ann.type === "Placement Drive" ? "fa-building-user" : "fa-circle-info";
-                let color = ann.type === "Placement Drive" ? "var(--success)" : "var(--primary)";
+                let isPlacement = ann.type === "Placement Drive";
+                let icon = isPlacement ? "fa-building-user" : "fa-building-columns";
+                let color = isPlacement ? "var(--success)" : "var(--primary)";
                 let dateStr = new Date(ann.date_posted).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
                 
+                // Show target badge to student
+                let targetLabel = ann.target_department || 'ALL';
+                let deptBadge = targetLabel === 'ALL' 
+                    ? `<span class="badge" style="background: #E2E8F0; color: #475569; margin-right: 10px;"><i class="fa-solid fa-globe"></i> Global Notice</span>`
+                    : `<span class="badge" style="background: var(--purple-light); color: var(--purple); margin-right: 10px;"><i class="fa-solid fa-bullseye"></i> Specifically for ${targetLabel}</span>`;
+
                 return `
                 <div class="card" style="display: flex; gap: 20px; align-items: flex-start; padding: 24px; border-left: 4px solid ${color};">
                     <div style="background: ${color}20; color: ${color}; width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;"><i class="fa-solid ${icon}"></i></div>
@@ -451,14 +463,15 @@ async function fetchStudentAnnouncements() {
                         <h3 style="margin: 0 0 8px 0; font-size: 1.1rem; color: var(--text-main); font-weight: 800;">${ann.title}</h3>
                         <div style="margin-bottom: 12px;">
                             <span class="badge" style="background: ${color}10; color: ${color}; border: 1px solid ${color}40; margin-right: 10px;">${ann.type}</span>
+                            ${deptBadge}
                             <span style="font-size: 0.8rem; color: var(--text-muted);"><i class="fa-regular fa-clock"></i> ${dateStr}</span>
                         </div>
                         <p style="margin: 0; color: var(--text-muted); line-height: 1.6; font-size: 0.95rem; white-space: pre-wrap;">${ann.content}</p>
                     </div>
                 </div>`;
             }).join('');
-        } else {
-            signOut();
         }
-    } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error. Refresh to try again.</div>`; }
+    } catch(e) { 
+        feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error. Refresh to try again.</div>`; 
+    }
 }
