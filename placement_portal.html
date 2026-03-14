@@ -232,7 +232,18 @@
             </div>
         </div>
     </div>
-
+<div id="add-ann-modal" class="modal-overlay" style="display: none; align-items: center; justify-content: center; z-index: 9999;">
+        <div class="modal-content" style="width: 100%; max-width: 500px;">
+            <div class="flex-between" style="margin-bottom: 20px;">
+                <h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Post Placement Update</h2>
+                <i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="document.getElementById('add-ann-modal').style.display='none'"></i>
+            </div>
+            <input type="text" id="ann-title" class="control-input" style="width: 100%; margin-bottom: 12px;" placeholder="Announcement Title (e.g. Zoho Drive)">
+            <input type="text" id="ann-type" class="control-input" value="Placement Drive" readonly style="width: 100%; margin-bottom: 12px; background: #f1f5f9; color: var(--text-muted); cursor: not-allowed; font-weight: bold;">
+            <textarea id="ann-content" class="control-input" rows="4" style="width: 100%; margin-bottom: 16px; resize: vertical;" placeholder="Type your placement update here..."></textarea>
+            <button class="action-btn btn-primary" style="width: 100%; height: 44px; justify-content: center;" onclick="submitPlacementAnnouncement()">Post to Students</button>
+        </div>
+    </div>
     <div id="toast-container" class="toast-container"></div>
     <script src="placement_portal.js"></script>
 </body>

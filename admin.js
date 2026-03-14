@@ -498,3 +498,50 @@ async function saveCourseRow(id) {
     const updates = [{ field: 'course_name', value: document.getElementById(`edit-crs-n-${id}`).value }, { field: 'marks', value: document.getElementById(`edit-crs-m-${id}`).value }, { field: 'grade', value: document.getElementById(`edit-crs-g-${id}`).value }];
     await Promise.all(updates.map(u => fetch(`${BASE_URL}/api/admin/update-course`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id, field: u.field, value: u.value }) }))); loadStudentData(targetStudentEmail);
 }
+// --- ANNOUNCEMENT LOGIC (ADMIN) ---
+async function fetchAdminAnnouncements() {
+    const feed = document.getElementById('admin-ann-feed');
+    feed.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</div>`;
+    try {
+        const req = await fetch(`${BASE_URL}/api/announcements/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
+        const data = await req.json();
+if (data.success) {
+            // FILTER: Only show College Announcements
+            const adminAnns = data.announcements.filter(a => a.type === 'College Announcement');
+            
+            if(adminAnns.length === 0) {
+                feed.innerHTML = `<div class="card" style="text-align:center; padding: 40px; color:var(--text-muted);">No college announcements posted yet.</div>`;
+                return;
+            }
+            feed.innerHTML = adminAnns.map(ann => {
+                let dateStr = new Date(ann.date_posted).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                return `
+                <div class="card" style="display: flex; gap: 20px; align-items: flex-start; padding: 24px; position: relative;">
+                    <button class="action-icon cancel" style="position: absolute; top: 16px; right: 16px;" onclick="deleteAnnouncement(${ann.id})"><i class="fa-solid fa-trash"></i></button>
+                    <div style="background: var(--primary-light); color: var(--primary); width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;"><i class="fa-solid fa-building-columns"></i></div>
+                    <div style="flex: 1; padding-right: 40px;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 1.1rem; color: var(--text-main); font-weight: 800;">${ann.title}</h3>
+                        <div style="margin-bottom: 12px;"><span class="badge" style="background: var(--primary-light); color: var(--primary); border: 1px solid var(--primary); margin-right: 10px;">${ann.type}</span><span style="font-size: 0.8rem; color: var(--text-muted);"><i class="fa-regular fa-clock"></i> ${dateStr}</span></div>
+                        <p style="margin: 0; color: var(--text-muted); line-height: 1.6; font-size: 0.95rem; white-space: pre-wrap;">${ann.content}</p>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+    } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error</div>`; }
+}
+
+async function submitAnnouncement() {
+    await fetch(`${BASE_URL}/api/admin/add-announcement`, { 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ adminToken: globalToken, title: document.getElementById('ann-title').value, type: document.getElementById('ann-type').value, content: document.getElementById('ann-content').value }) 
+    });
+    closeModal('add-ann-modal'); 
+    document.getElementById('ann-title').value = ''; document.getElementById('ann-content').value = '';
+    fetchAdminAnnouncements();
+}
+
+async function deleteAnnouncement(id) {
+    if(!confirm("Delete this announcement?")) return;
+    await fetch(`${BASE_URL}/api/admin/delete-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) });
+    fetchAdminAnnouncements();
+}

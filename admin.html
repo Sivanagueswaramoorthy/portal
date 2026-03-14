@@ -26,6 +26,7 @@
         <div class="nav-menu">
             <a class="nav-item admin-global active" id="nav-dir" onclick="switchTab('directory', this)"><i class="fa-solid fa-users"></i> Staff Directory</a>
             <a class="nav-item admin-global" id="nav-col-place" onclick="switchTab('college-placement', this)"><i class="fa-solid fa-building-user"></i> College Placement</a>
+            <a class="nav-item admin-global" id="nav-ann" onclick="switchTab('announcements', this); fetchAdminAnnouncements();"><i class="fa-solid fa-bullhorn"></i> Announcements Hub</a>
             
             <a class="nav-item student-nav" id="nav-back" onclick="backToDirectory()" style="color: var(--warning); background: var(--warning-light); font-weight: 800; margin-bottom: 10px; display: none;"><i class="fa-solid fa-arrow-left"></i> Back to Directory</a>
             <a class="nav-item student-nav" id="nav-dash" onclick="switchTab('dashboard', this)" style="display: none;"><i class="fa-solid fa-chart-pie"></i> Dashboard Overview</a>
@@ -133,6 +134,17 @@
                         </table>
                     </div>
                 </div>
+            </div>
+
+            <div id="view-announcements" class="view-section">
+                <div class="flex-between" style="margin-bottom: 24px;">
+                    <div>
+                        <h1 class="page-title">Announcements Hub</h1>
+                        <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.85rem;">Broadcast updates to the Student Portal.</p>
+                    </div>
+                    <button class="action-btn btn-primary" onclick="openModal('add-ann-modal')"><i class="fa-solid fa-plus"></i> New Post</button>
+                </div>
+                <div id="admin-ann-feed" style="display: flex; flex-direction: column; gap: 16px;"></div>
             </div>
 
             <div id="view-dashboard" class="view-section">
@@ -415,6 +427,19 @@
     <div id="add-course-modal" class="modal-overlay"><div class="modal-content"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Add Course Mark</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-course-modal')"></i></div><input type="number" id="crs-sem" class="modal-input" placeholder="Semester"><input type="text" id="crs-name" class="modal-input" placeholder="Subject Name"><div style="display: flex; gap: 12px;"><input type="number" id="crs-mark" class="modal-input" placeholder="Marks"><input type="text" id="crs-grade" class="modal-input" placeholder="Grade"></div><button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitNewCourse()">Save Subject</button></div></div>
     <div id="add-drive-modal" class="modal-overlay"><div class="modal-content"><div class="flex-between" style="margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Add Campus Drive</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-drive-modal')"></i></div><input type="text" id="drv-comp" class="modal-input" placeholder="Company Name"><input type="text" id="drv-role" class="modal-input" placeholder="Role Profile"><div style="display: flex; gap: 12px;"><input type="number" id="drv-app" class="modal-input" placeholder="Appeared"><input type="number" id="drv-sel" class="modal-input" placeholder="Selected"></div><input type="text" id="drv-ctc" class="modal-input" placeholder="Salary Package"><button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitNewDrive()">Save Drive</button></div></div>
     <div id="add-app-modal" class="modal-overlay"><div class="modal-content"><div class="flex-between" style="margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Log Application</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-app-modal')"></i></div><input type="text" id="app-comp" class="modal-input" placeholder="Company Name (e.g. Zoho)"><input type="text" id="app-role" class="modal-input" placeholder="Role Applied For"><div style="display: flex; gap: 12px;"><input type="text" id="app-date" class="modal-input" placeholder="Date"><input type="text" id="app-stat" class="modal-input" placeholder="Status"></div><button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitNewApp()">Log Application</button></div></div>
+
+    <div id="add-ann-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="flex-between" style="margin-bottom: 20px;">
+                <h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Post Announcement</h2>
+                <i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-ann-modal')"></i>
+            </div>
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block;">Announcement Type</label>
+            <input type="text" id="ann-type" class="modal-input" value="College Announcement" readonly style="background: #f1f5f9; color: var(--text-muted); cursor: not-allowed; font-weight: bold;">
+            <textarea id="ann-content" class="modal-input" rows="4" placeholder="Type your message here..."></textarea>
+            <button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitAnnouncement()">Post to Students</button>
+        </div>
+    </div>
 
     <script src="admin.js?v=master_final"></script>
 </body>

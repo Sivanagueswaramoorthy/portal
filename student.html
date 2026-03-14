@@ -26,6 +26,7 @@
         </div>
         <div class="nav-menu">
             <a class="nav-item active" id="nav-dash" onclick="switchTab('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> Dashboard Overview</a>
+            <a class="nav-item" id="nav-announcements" onclick="switchTab('announcements', this); fetchStudentAnnouncements();"><i class="fa-solid fa-bullhorn"></i> Notice Board</a>
             <a class="nav-item" id="nav-act" onclick="switchTab('activities', this)"><i class="fa-solid fa-rocket"></i> PCDP Activities</a>
             <a class="nav-item" id="nav-acad" onclick="switchTab('academics', this)"><i class="fa-solid fa-book-open"></i> Academic Records</a>
             <a class="nav-item" id="nav-col-place" onclick="switchTab('college-placement', this)"><i class="fa-solid fa-building-user"></i> College Placement</a>
@@ -121,6 +122,16 @@
                 </div>
             </div>
 
+            <div id="view-announcements" class="view-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <div>
+                        <h1 class="page-title">Official Notice Board</h1>
+                        <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.85rem;">Important updates from the Administration and Placement Cell.</p>
+                    </div>
+                </div>
+                <div id="student-ann-feed" style="display: flex; flex-direction: column; gap: 16px;"></div>
+            </div>
+
             <div id="view-activities" class="view-section">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
                     <h1 class="page-title">PCDP Dashboard</h1>
@@ -197,106 +208,108 @@
                     </div>
                 </div>
 
-                <div class="card" style="background: linear-gradient(135deg, var(--primary), #3730A3); color: white; border: none; padding: 32px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;">
-                    <div>
-                        <span class="badge" style="background: rgba(255,255,255,0.2); color: white; border: none; margin-bottom: 12px;"><i class="fa-solid fa-star" style="color:#FDE047; margin-right:4px;"></i> PRIMARY OFFER</span>
-                        <div class="flex-center"><h2 id="val-p-role" style="font-size: 1.8rem; font-weight: 800; margin: 0 0 8px 0;">--</h2></div>
-                        <div class="flex-center" style="margin: 0; font-size: 0.95rem; opacity: 0.9;"><i class="fa-solid fa-building"></i> <span id="val-p-comp">--</span></div>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="font-size: 0.8rem; opacity: 0.8; font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">Total CTC Offered</div>
-                        <div class="flex-center"><div style="font-size: 2.2rem; font-weight: 800;"><span id="val-p-ctc">--</span> <span style="font-size: 1.2rem; opacity: 0.8;">LPA</span></div></div>
-                    </div>
-                    <div class="card" style="margin-bottom: 24px; border: 1px solid var(--primary-light); background: #F8FAFC;">
-                    <h3 style="font-size: 1rem; font-weight: 800; margin: 0 0 16px 0; color: var(--primary);"><i class="fa-solid fa-file-pdf"></i> Resume Portfolio Link</h3>
-                    <div class="flex-center" style="flex-wrap: wrap;">
-                        <input type="url" id="resume-link-input" class="control-input" style="flex: 1; min-width: 250px;" placeholder="Paste Google Drive / Portfolio URL here...">
-                        <button class="action-btn btn-primary" onclick="saveResume()"><i class="fa-solid fa-cloud-arrow-up"></i> Save Link</button>
-                        <a id="view-resume-btn" href="#" target="_blank" class="action-btn btn-outline" style="display:none;"><i class="fa-solid fa-eye"></i> View Current</a>
-                    </div>
-                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px;"><i class="fa-solid fa-circle-info"></i> Make sure your Google Drive link permissions are set to "Anyone with the link". HR will see this.</p>
-                </div>
-                </div>
-
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 24px;">
-                    <div class="stat-box" style="grid-column: span 2;">
-                        <div class="stat-title">Placement Status</div>
-                        <div class="stat-val flex-between" style="color: var(--primary);"><span id="val-p-status">--</span></div>
-                    </div>
-                    <div class="stat-box" style="grid-column: span 2;">
-                        <div class="stat-title">Assessments Cleared</div>
-                        <div class="stat-val flex-between"><span id="val-p-assess">0</span></div>
-                    </div>
-                    <div class="stat-box" style="grid-column: span 1;">
-                        <div class="stat-title">Interviews</div>
-                        <div class="stat-val flex-between" style="color: var(--warning);"><span id="val-p-int">0</span></div>
-                    </div>
-                    <div class="stat-box" style="grid-column: span 1;">
-                        <div class="stat-title">Offers</div>
-                        <div class="stat-val flex-between" style="color: var(--success);"><span id="val-p-off">0</span></div>
-                    </div>
-                </div>
-
-                <div class="dash-grid" style="grid-template-columns: 1fr 1fr;">
-                    <div class="card" style="margin: 0;">
-                        <h3 style="font-size: 1rem; font-weight: 800; margin: 0 0 20px 0; color: var(--text-main);"><i class="fa-solid fa-code" style="color:var(--primary); margin-right:6px;"></i> Technical Readiness</h3>
-                        <div style="margin-bottom: 16px;">
-                            <div class="flex-between" style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 600;">
-                                <span>Data Structures & Algorithms</span> 
-                                <div class="flex-center"><span style="color: var(--primary);"><span id="val-t-dsa">0</span>%</span></div>
-                            </div>
-                            <div class="progress-track" style="margin: 0; height: 8px;"><div class="progress-fill" id="bar-t-dsa" style="width: 0%;"></div></div>
-                        </div>
-                        <div style="margin-bottom: 16px;">
-                            <div class="flex-between" style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 600;">
-                                <span>Object Oriented Prog.</span> 
-                                <div class="flex-center"><span style="color: var(--primary);"><span id="val-t-oop">0</span>%</span></div>
-                            </div>
-                            <div class="progress-track" style="margin: 0; height: 8px;"><div class="progress-fill" id="bar-t-oop" style="width: 0%;"></div></div>
-                        </div>
+                <div id="placement-personal" style="display: block;">
+                    <div class="card" style="background: linear-gradient(135deg, var(--primary), #3730A3); color: white; border: none; padding: 32px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;">
                         <div>
-                            <div class="flex-between" style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 600;">
-                                <span>Core CS Subjects (OS, DBMS)</span> 
-                                <div class="flex-center"><span style="color: var(--primary);"><span id="val-t-core">0</span>%</span></div>
-                            </div>
-                            <div class="progress-track" style="margin: 0; height: 8px;"><div class="progress-fill" id="bar-t-core" style="width: 0%;"></div></div>
+                            <span class="badge" style="background: rgba(255,255,255,0.2); color: white; border: none; margin-bottom: 12px;"><i class="fa-solid fa-star" style="color:#FDE047; margin-right:4px;"></i> PRIMARY OFFER</span>
+                            <div class="flex-center"><h2 id="val-p-role" style="font-size: 1.8rem; font-weight: 800; margin: 0 0 8px 0;">--</h2></div>
+                            <div class="flex-center" style="margin: 0; font-size: 0.95rem; opacity: 0.9;"><i class="fa-solid fa-building"></i> <span id="val-p-comp">--</span></div>
                         </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 0.8rem; opacity: 0.8; font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">Total CTC Offered</div>
+                            <div class="flex-center"><div style="font-size: 2.2rem; font-weight: 800;"><span id="val-p-ctc">--</span> <span style="font-size: 1.2rem; opacity: 0.8;">LPA</span></div></div>
+                        </div>
+                        <div class="card" style="margin-bottom: 24px; border: 1px solid var(--primary-light); background: #F8FAFC;">
+                        <h3 style="font-size: 1rem; font-weight: 800; margin: 0 0 16px 0; color: var(--primary);"><i class="fa-solid fa-file-pdf"></i> Resume Portfolio Link</h3>
+                        <div class="flex-center" style="flex-wrap: wrap;">
+                            <input type="url" id="resume-link-input" class="control-input" style="flex: 1; min-width: 250px;" placeholder="Paste Google Drive / Portfolio URL here...">
+                            <button class="action-btn btn-primary" onclick="saveResume()"><i class="fa-solid fa-cloud-arrow-up"></i> Save Link</button>
+                            <a id="view-resume-btn" href="#" target="_blank" class="action-btn btn-outline" style="display:none;"><i class="fa-solid fa-eye"></i> View Current</a>
+                        </div>
+                        <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px;"><i class="fa-solid fa-circle-info"></i> Make sure your Google Drive link permissions are set to "Anyone with the link". HR will see this.</p>
                     </div>
-                    
-                    <div class="card" style="margin: 0;">
-                        <h3 style="font-size: 1rem; font-weight: 800; margin: 0 0 20px 0; color: var(--text-main);"><i class="fa-solid fa-comments" style="color:var(--success); margin-right:6px;"></i> Aptitude & Soft Skills</h3>
-                        <div style="margin-bottom: 16px;">
-                            <div class="flex-between" style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 600;">
-                                <span>Quantitative Aptitude</span> 
-                                <div class="flex-center"><span style="color: var(--success);"><span id="val-a-quant">0</span>%</span></div>
-                            </div>
-                            <div class="progress-track" style="margin: 0; height: 8px;"><div class="progress-fill" id="bar-a-quant" style="width: 0%; background: var(--success);"></div></div>
-                        </div>
-                        <div style="margin-bottom: 16px;">
-                            <div class="flex-between" style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 600;">
-                                <span>Logical Reasoning</span> 
-                                <div class="flex-center"><span style="color: var(--success);"><span id="val-a-log">0</span>%</span></div>
-                            </div>
-                            <div class="progress-track" style="margin: 0; height: 8px;"><div class="progress-fill" id="bar-a-log" style="width: 0%; background: var(--success);"></div></div>
-                        </div>
-                        <div>
-                            <div class="flex-between" style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 600;">
-                                <span>Communication / HR</span> 
-                                <div class="flex-center"><span style="color: var(--warning);"><span id="val-a-hr">0</span>%</span></div>
-                            </div>
-                            <div class="progress-track" style="margin: 0; height: 8px;"><div class="progress-fill" id="bar-a-hr" style="width: 0%; background: var(--warning);"></div></div>
-                        </div>
                     </div>
-                </div>
 
-                <div class="table-wrapper">
-                    <div class="flex-between" style="padding: 16px 24px; border-bottom: 1px solid var(--border); background: #F8FAFC;">
-                        <h3 style="font-size: 0.95rem; font-weight: 800; margin: 0; color: var(--text-main);">My Application Track Record</h3>
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 24px;">
+                        <div class="stat-box" style="grid-column: span 2;">
+                            <div class="stat-title">Placement Status</div>
+                            <div class="stat-val flex-between" style="color: var(--primary);"><span id="val-p-status">--</span></div>
+                        </div>
+                        <div class="stat-box" style="grid-column: span 2;">
+                            <div class="stat-title">Assessments Cleared</div>
+                            <div class="stat-val flex-between"><span id="val-p-assess">0</span></div>
+                        </div>
+                        <div class="stat-box" style="grid-column: span 1;">
+                            <div class="stat-title">Interviews</div>
+                            <div class="stat-val flex-between" style="color: var(--warning);"><span id="val-p-int">0</span></div>
+                        </div>
+                        <div class="stat-box" style="grid-column: span 1;">
+                            <div class="stat-title">Offers</div>
+                            <div class="stat-val flex-between" style="color: var(--success);"><span id="val-p-off">0</span></div>
+                        </div>
                     </div>
-                    <table class="modern-table">
-                        <thead><tr><th>Company Name</th><th>Role Profile</th><th>Date Applied</th><th>Status / Result</th></tr></thead>
-                        <tbody id="student-apps-tbody"></tbody>
-                    </table>
+
+                    <div class="dash-grid" style="grid-template-columns: 1fr 1fr;">
+                        <div class="card" style="margin: 0;">
+                            <h3 style="font-size: 1rem; font-weight: 800; margin: 0 0 20px 0; color: var(--text-main);"><i class="fa-solid fa-code" style="color:var(--primary); margin-right:6px;"></i> Technical Readiness</h3>
+                            <div style="margin-bottom: 16px;">
+                                <div class="flex-between" style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 600;">
+                                    <span>Data Structures & Algorithms</span> 
+                                    <div class="flex-center"><span style="color: var(--primary);"><span id="val-t-dsa">0</span>%</span></div>
+                                </div>
+                                <div class="progress-track" style="margin: 0; height: 8px;"><div class="progress-fill" id="bar-t-dsa" style="width: 0%;"></div></div>
+                            </div>
+                            <div style="margin-bottom: 16px;">
+                                <div class="flex-between" style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 600;">
+                                    <span>Object Oriented Prog.</span> 
+                                    <div class="flex-center"><span style="color: var(--primary);"><span id="val-t-oop">0</span>%</span></div>
+                                </div>
+                                <div class="progress-track" style="margin: 0; height: 8px;"><div class="progress-fill" id="bar-t-oop" style="width: 0%;"></div></div>
+                            </div>
+                            <div>
+                                <div class="flex-between" style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 600;">
+                                    <span>Core CS Subjects (OS, DBMS)</span> 
+                                    <div class="flex-center"><span style="color: var(--primary);"><span id="val-t-core">0</span>%</span></div>
+                                </div>
+                                <div class="progress-track" style="margin: 0; height: 8px;"><div class="progress-fill" id="bar-t-core" style="width: 0%;"></div></div>
+                            </div>
+                        </div>
+                        
+                        <div class="card" style="margin: 0;">
+                            <h3 style="font-size: 1rem; font-weight: 800; margin: 0 0 20px 0; color: var(--text-main);"><i class="fa-solid fa-comments" style="color:var(--success); margin-right:6px;"></i> Aptitude & Soft Skills</h3>
+                            <div style="margin-bottom: 16px;">
+                                <div class="flex-between" style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 600;">
+                                    <span>Quantitative Aptitude</span> 
+                                    <div class="flex-center"><span style="color: var(--success);"><span id="val-a-quant">0</span>%</span></div>
+                                </div>
+                                <div class="progress-track" style="margin: 0; height: 8px;"><div class="progress-fill" id="bar-a-quant" style="width: 0%; background: var(--success);"></div></div>
+                            </div>
+                            <div style="margin-bottom: 16px;">
+                                <div class="flex-between" style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 600;">
+                                    <span>Logical Reasoning</span> 
+                                    <div class="flex-center"><span style="color: var(--success);"><span id="val-a-log">0</span>%</span></div>
+                                </div>
+                                <div class="progress-track" style="margin: 0; height: 8px;"><div class="progress-fill" id="bar-a-log" style="width: 0%; background: var(--success);"></div></div>
+                            </div>
+                            <div>
+                                <div class="flex-between" style="margin-bottom: 8px; font-size: 0.85rem; font-weight: 600;">
+                                    <span>Communication / HR</span> 
+                                    <div class="flex-center"><span style="color: var(--warning);"><span id="val-a-hr">0</span>%</span></div>
+                                </div>
+                                <div class="progress-track" style="margin: 0; height: 8px;"><div class="progress-fill" id="bar-a-hr" style="width: 0%; background: var(--warning);"></div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <div class="flex-between" style="padding: 16px 24px; border-bottom: 1px solid var(--border); background: #F8FAFC;">
+                            <h3 style="font-size: 0.95rem; font-weight: 800; margin: 0; color: var(--text-main);">My Application Track Record</h3>
+                        </div>
+                        <table class="modern-table">
+                            <thead><tr><th>Company Name</th><th>Role Profile</th><th>Date Applied</th><th>Status / Result</th></tr></thead>
+                            <tbody id="student-apps-tbody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 

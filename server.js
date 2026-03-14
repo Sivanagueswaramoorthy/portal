@@ -62,6 +62,9 @@ const promisePool = dbPool.promise();
         try { await promisePool.query(`ALTER TABLE placement_apps ADD COLUMN call_letter_url LONGTEXT`); } catch(e){}
 
         await promisePool.query(`CREATE TABLE IF NOT EXISTS hr_profile (email VARCHAR(255) PRIMARY KEY, company_name VARCHAR(255), password VARCHAR(255))`);
+        // 🛑 NEW: Announcements Table
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS announcements (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), type VARCHAR(50), content TEXT, date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+        
         console.log("✅ Database Verified: Premium HR App Tracking Enabled.");
     } catch (err) { console.error("❌ DB Init Error:", err.message); }
 })();
@@ -79,17 +82,18 @@ function getDepartmentFromEmail(email) {
             
             const deptMap = {
                 'cs': 'Computer Science Engineering',
-                'cse': 'Computer Science Engineering',
                 'it': 'Information Technology',
-                'ec': 'Electronics and Communication',
-                'ece': 'Electronics and Communication',
-                'ee': 'Electrical and Electronics',
-                'eee': 'Electrical and Electronics',
+                'ec': 'Electronics and Communication Engineering',
+                'ee': 'Electrical and Electronics Engineering',
                 'me': 'Mechanical Engineering',
-                'mech': 'Mechanical Engineering',
                 'ce': 'Civil Engineering',
-                'ad': 'AI and Data Science',
-                'cb': 'Computer Science and Business Systems'
+                'ad': 'Artificial Intelligence and Data Science',
+                'cb': 'Computer Science and Business Systems',
+                'al': 'Artificial Intelligence and Machine Learning',
+                'mz': 'Mechatronics Engineering',
+                'ei': 'Electronics and Instrumentation Engineering',
+                'tx': 'Textile Technology',
+                'ft': 'Food Technology'
             };
 
             if (deptMap[branchCode]) {
@@ -306,6 +310,31 @@ app.post('/api/admin/update-course', async (req, res) => { try { await verifyAdm
 app.post('/api/admin/delete-course', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("DELETE FROM student_courses WHERE id = ?", [req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
 app.post('/api/admin/pcdp-master-list', async (req, res) => { try { const [courses] = await promisePool.query("SELECT * FROM pcdp_master_courses ORDER BY course_name ASC"); res.json({ success: true, courses: courses }); } catch (e) { res.json({ success: false }); } });
 app.post('/api/admin/assign-pcdp', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const [master] = await promisePool.query("SELECT * FROM pcdp_master_courses WHERE id = ?", [req.body.masterCourseId]); await promisePool.query("INSERT INTO student_skills (student_email, skill_name, description, total_levels, completed_levels, category, image_url) VALUES (?, ?, ?, ?, 0, ?, ?)", [req.body.targetEmail, master[0].course_name, master[0].description, master[0].total_levels, master[0].category, master[0].image_url]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+// ================= ANNOUNCEMENT APIS =================
+app.post('/api/announcements/list', async (req, res) => {
+    try {
+        if (req.body.token !== 'custom_admin_token_pc123') {
+            await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
+        }
+        const [rows] = await promisePool.query("SELECT * FROM announcements ORDER BY date_posted DESC");
+        res.json({ success: true, announcements: rows });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
 
+app.post('/api/admin/add-announcement', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query("INSERT INTO announcements (title, type, content) VALUES (?, ?, ?)", [req.body.title, req.body.type, req.body.content]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/delete-announcement', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query("DELETE FROM announcements WHERE id = ?", [req.body.id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 BACKEND READY ON PORT ${PORT}`));

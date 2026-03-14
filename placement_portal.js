@@ -260,30 +260,53 @@ function populateDetailModal(prf, apps) {
     }
 }
 
-// --- ANNOUNCEMENTS LOGIC ---
-function loadAnnouncements() {
+/// --- ANNOUNCEMENTS LOGIC ---
+async function loadAnnouncements() {
     const feed = document.getElementById('announcement-feed');
-    feed.innerHTML = mockAnnouncements.map(ann => {
-        let icon = "fa-bullhorn";
-        let color = "var(--primary)";
-        if(ann.type === "Drive") { icon = "fa-building-user"; color = "var(--success)"; }
-        if(ann.type === "Assessment") { icon = "fa-laptop-code"; color = "var(--warning)"; }
+    feed.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</div>`;
+    try {
+        const req = await fetch(`${BASE_URL}/api/announcements/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
+        const data = await req.json();
+        if (data.success) {
+            // FILTER: Only show Placement Announcements
+            const placeAnns = data.announcements.filter(a => a.type === 'Placement Drive');
+            if(placeAnns.length === 0) { feed.innerHTML = `<div class="card" style="text-align:center; padding: 40px; color:var(--text-muted);">No placement announcements posted yet.</div>`; return; }
+            
+            feed.innerHTML = placeAnns.map(ann => {
+                let dateStr = new Date(ann.date_posted).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                return `
+                <div class="card" style="display: flex; gap: 20px; align-items: flex-start; padding: 24px; position: relative;">
+                    <button class="action-icon cancel" style="position: absolute; top: 16px; right: 16px;" onclick="deleteAnnouncement(${ann.id})"><i class="fa-solid fa-trash"></i></button>
+                    <div style="background: var(--success-light); color: var(--success); width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;"><i class="fa-solid fa-briefcase"></i></div>
+                    <div style="flex: 1; padding-right: 40px;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 1.1rem; color: var(--text-main); font-weight: 800;">${ann.title}</h3>
+                        <div style="margin-bottom: 12px;"><span class="badge badge-success" style="margin-right: 10px;">${ann.type}</span><span style="font-size: 0.8rem; color: var(--text-muted);"><i class="fa-regular fa-clock"></i> ${dateStr}</span></div>
+                        <p style="margin: 0; color: var(--text-muted); line-height: 1.6; font-size: 0.95rem; white-space: pre-wrap;">${ann.content}</p>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+    } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error</div>`; }
+}
 
-        return `
-        <div class="card" style="display: flex; gap: 20px; align-items: flex-start; padding: 24px;">
-            <div style="background: ${color}20; color: ${color}; width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;">
-                <i class="fa-solid ${icon}"></i>
-            </div>
-            <div style="flex: 1;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main); font-weight: 800;">${ann.title}</h3>
-                    <span style="font-size: 0.8rem; color: var(--text-muted);"><i class="fa-regular fa-clock"></i> ${ann.date}</span>
-                </div>
-                <span class="badge" style="background: ${color}10; color: ${color}; border: 1px solid ${color}40; margin-bottom: 12px;">${ann.type}</span>
-                <p style="margin: 0; color: var(--text-muted); line-height: 1.6; font-size: 0.95rem;">${ann.content}</p>
-            </div>
-        </div>`;
-    }).join('');
+async function submitPlacementAnnouncement() {
+    const title = document.getElementById('ann-title').value;
+    const content = document.getElementById('ann-content').value;
+    if(!title || !content) return alert("Title and Content are required!");
+    
+    await fetch(`${BASE_URL}/api/admin/add-announcement`, { 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ adminToken: globalToken, title: title, type: 'Placement Drive', content: content }) 
+    });
+    document.getElementById('add-ann-modal').style.display = 'none';
+    document.getElementById('ann-title').value = ''; document.getElementById('ann-content').value = '';
+    loadAnnouncements();
+}
+
+async function deleteAnnouncement(id) {
+    if(!confirm("Delete this announcement?")) return;
+    await fetch(`${BASE_URL}/api/admin/delete-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) });
+    loadAnnouncements();
 }
 
 // --- UTILS ---
