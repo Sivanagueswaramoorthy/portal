@@ -4,6 +4,7 @@ let globalToken = localStorage.getItem('bit_session_token');
 let allStudentsList = [];
 let targetStudentEmail = ""; 
 let originalValues = {}; 
+window.currentDriveApplicants = []; // Stores applicants for the filter dropdown
 
 if (!globalToken) window.location.href = 'index.html';
 
@@ -101,7 +102,6 @@ async function openStudentDetail(email) {
     updateSidebarNav();
     switchTab('performance', document.getElementById('nav-performance'));
 
-    // Temporary loading state text
     document.getElementById('val-p-role').innerText = "Loading...";
 
     try {
@@ -144,7 +144,6 @@ function populatePerformance(prf, apps) {
     } else { appBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:var(--text-muted);">No applications logged.</td></tr>`; }
 }
 
-// Inline editing functions ported from admin.js
 function openPlacementProfileEdit(field, spanId, width) {
     const span = document.getElementById(spanId); originalValues[spanId] = span.innerText.trim();
     span.parentElement.innerHTML = `<div class="flex-center" style="width: 100%;"><input type="text" id="in-${spanId}" class="inline-input" style="width: ${width}; color: var(--text-main);" value="${originalValues[spanId]}"><i class="fa-solid fa-check action-icon save" style="width:28px; height:28px;" onclick="savePlacementProfileEdit('${field}', '${spanId}', '${width}')"></i><i class="fa-solid fa-xmark action-icon cancel" style="width:28px; height:28px;" onclick="cancelPlacementProfileEdit('${spanId}', '${field}', '${width}')"></i></div>`;
@@ -189,16 +188,33 @@ async function loadActiveDrives() {
         const data = await req.json();
         if (data.success) {
             if(data.drives.length === 0) { feed.innerHTML = `<div class="card" style="text-align:center; padding: 40px; color:var(--text-muted);">No active drives posted yet.</div>`; return; }
-            feed.innerHTML = data.drives.map(d => `
-                <div class="card" style="padding: 24px; border-left: 4px solid var(--primary);">
+            
+            feed.innerHTML = data.drives.map(d => {
+                // 🛑 CHECK EXPIRATION
+                let isExpired = false;
+                let displayDate = d.deadline;
+                if(d.deadline && d.deadline.includes('-')) {
+                    const deadDate = new Date(d.deadline);
+                    displayDate = deadDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                    deadDate.setHours(23, 59, 59, 999);
+                    if(deadDate < new Date()) isExpired = true;
+                }
+
+                const expiredBadge = isExpired ? `<span class="badge badge-danger" style="margin-left: 8px;">Expired</span>` : '';
+                const targetBadge = d.target_year !== 'ALL' ? `<span class="badge" style="background:var(--purple-light); color:var(--purple); margin-left: 8px;"><i class="fa-solid fa-bullseye"></i> Batch '${d.target_year}</span>` : '';
+
+                return `
+                <div class="card" style="padding: 24px; border-left: 4px solid var(--primary); opacity: ${isExpired ? '0.7' : '1'};">
                     <div class="flex-between">
                         <div>
                             <h3 style="margin: 0 0 8px 0; font-size: 1.2rem; color: var(--text-main); font-weight: 800;">${d.company_name}</h3>
                             <span class="badge badge-primary">${d.role}</span>
+                            ${targetBadge}
+                            ${expiredBadge}
                         </div>
                         <div style="text-align: right;">
                             <div style="font-weight: 800; color: var(--success); font-size: 1.1rem;">${d.ctc}</div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Deadline: ${d.deadline}</div>
+                            <div style="font-size: 0.8rem; color: ${isExpired ? 'var(--danger)' : 'var(--text-muted)'}; margin-top: 4px;">Deadline: ${displayDate}</div>
                         </div>
                     </div>
                     <p style="font-size: 0.9rem; color: var(--text-muted); margin: 16px 0; line-height: 1.5; white-space: pre-wrap;">${d.description}</p>
@@ -209,18 +225,34 @@ async function loadActiveDrives() {
                             <button class="action-icon cancel" onclick="deleteActiveDrive(${d.id})"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         }
     } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error</div>`; }
 }
 
 async function submitActiveDrive() {
-    const comp = document.getElementById('ad-comp').value; const role = document.getElementById('ad-role').value; const ctc = document.getElementById('ad-ctc').value; const elig = document.getElementById('ad-elig').value; const desc = document.getElementById('ad-desc').value; const dead = document.getElementById('ad-dead').value;
-    if(!comp || !role) return alert("Company and Role are required!");
+    const comp = document.getElementById('ad-comp').value; 
+    const role = document.getElementById('ad-role').value; 
+    const ctc = document.getElementById('ad-ctc').value; 
+    const elig = document.getElementById('ad-elig').value; 
+    const desc = document.getElementById('ad-desc').value; 
+    const dead = document.getElementById('ad-dead').value; 
+    const targetYr = document.getElementById('ad-year').value;
+
+    if(!comp || !role || !dead) return alert("Company, Role, and Deadline are required!");
+    
     document.querySelector('#add-active-drive-modal .btn-primary').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Posting...';
-    try { await fetch(`${BASE_URL}/api/admin/add-active-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, company_name: comp, role: role, ctc: ctc, eligibility: elig, description: desc, deadline: dead }) }); } catch(e) { alert("Error posting drive."); }
-    document.getElementById('add-active-drive-modal').style.display = 'none'; document.querySelector('#add-active-drive-modal .btn-primary').innerHTML = 'Post Drive to Students'; loadActiveDrives();
+    try { 
+        await fetch(`${BASE_URL}/api/admin/add-active-drive`, { 
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ adminToken: globalToken, company_name: comp, role: role, ctc: ctc, eligibility: elig, description: desc, deadline: dead, target_year: targetYr }) 
+        }); 
+    } catch(e) { alert("Error posting drive."); }
+    
+    document.getElementById('add-active-drive-modal').style.display = 'none'; 
+    document.querySelector('#add-active-drive-modal .btn-primary').innerHTML = 'Post Drive to Students'; 
+    loadActiveDrives();
 }
 
 async function deleteActiveDrive(id) {
@@ -228,30 +260,56 @@ async function deleteActiveDrive(id) {
     await fetch(`${BASE_URL}/api/admin/delete-active-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); loadActiveDrives();
 }
 
-// 🛑 REMOVED RESUME AND APP STATUS COLUMNS HERE
+// 🛑 APPLICANT MODAL LOGIC WITH FILTERING
 async function viewDriveApplicants(company, role) {
     document.getElementById('app-modal-title').innerText = `Applicants: ${company} - ${role}`;
     document.getElementById('view-applicants-modal').style.display = 'flex';
-    document.getElementById('applicants-tbody').innerHTML = `<tr><td colspan="3" style="text-align: center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading applicants...</td></tr>`;
+    document.getElementById('applicants-tbody').innerHTML = `<tr><td colspan="3" style="text-align: center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>`;
     
     try {
         const req = await fetch(`${BASE_URL}/api/admin/drive-applicants`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, company: company, role: role }) });
         const data = await req.json();
         
-        if(data.success && data.applicants.length > 0) {
-            document.getElementById('applicants-tbody').innerHTML = data.applicants.map(a => {
-                return `
-                <tr>
-                    <td style="font-weight:600; color: var(--text-main);"><div style="font-size:0.95rem;">${a.full_name}</div><div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${a.student_email} | ${a.roll_no||'--'}</div></td>
-                    <td><span class="badge badge-primary">${a.department || '--'}</span></td>
-                    <td style="color:var(--text-muted); font-size:0.85rem;">${a.date_applied}</td>
-                </tr>`;
-            }).join('');
+        if(data.success) {
+            window.currentDriveApplicants = data.applicants; // Store for filtering
+            
+            // Populate the Department Filter Dropdown dynamically
+            const filterDropdown = document.getElementById('app-dept-filter');
+            const depts = [...new Set(data.applicants.map(a => a.department).filter(d => d && d !== 'Not Assigned'))];
+            filterDropdown.innerHTML = '<option value="ALL">All Departments</option>';
+            depts.forEach(d => { filterDropdown.innerHTML += `<option value="${d}">${d}</option>`; });
+            
+            renderApplicantsTable();
         } else {
-            document.getElementById('applicants-tbody').innerHTML = `<tr><td colspan="3" style="text-align: center; padding: 40px; color: var(--text-muted);">No students have applied yet.</td></tr>`;
+            document.getElementById('applicants-tbody').innerHTML = `<tr><td colspan="3" style="text-align: center; padding: 40px; color: var(--text-muted);">Failed to load applicants.</td></tr>`;
         }
     } catch(e) { document.getElementById('applicants-tbody').innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--danger);">Error loading.</td></tr>`; }
 }
+
+function renderApplicantsTable() {
+    const tbody = document.getElementById('applicants-tbody');
+    const selectedDept = document.getElementById('app-dept-filter').value;
+    
+    // Filter logic
+    const filteredApps = selectedDept === 'ALL' 
+        ? window.currentDriveApplicants 
+        : window.currentDriveApplicants.filter(a => a.department === selectedDept);
+
+    if(!filteredApps || filteredApps.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; padding: 40px; color: var(--text-muted);">No applicants found for this department.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = filteredApps.map(a => {
+        return `
+        <tr>
+            <td style="font-weight:600; color: var(--text-main);"><div style="font-size:0.95rem;">${a.full_name}</div><div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${a.student_email} | ${a.roll_no||'--'}</div></td>
+            <td><span class="badge badge-primary" style="background:#EEF2FF; color:#4F46E5;">${a.department || '--'}</span></td>
+            <td style="color:var(--text-muted); font-size:0.85rem; font-weight: 600;">${a.date_applied}</td>
+        </tr>`;
+    }).join('');
+}
+
 
 // --- ANNOUNCEMENTS LOGIC ---
 async function loadAnnouncements() {

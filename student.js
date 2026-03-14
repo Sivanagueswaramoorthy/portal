@@ -481,6 +481,9 @@ async function fetchStudentAnnouncements() {
 // -----------------------------------------------------------------------------
 // 🛑 NEW: STUDENT ACTIVE DRIVES & APPLY LOGIC
 // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// 🛑 STUDENT ACTIVE DRIVES & APPLY LOGIC (WITH EXPIRATION CHECK)
+// -----------------------------------------------------------------------------
 async function fetchActiveDrives() {
     const grid = document.getElementById('student-drives-grid');
     grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Openings...</div>`;
@@ -499,15 +502,31 @@ async function fetchActiveDrives() {
             }
             
             grid.innerHTML = data.drives.map(d => {
-                // Check if student has already applied
+                // 1. Check expiration
+                let isExpired = false;
+                let displayDate = d.deadline;
+                if(d.deadline && d.deadline.includes('-')) {
+                    const deadDate = new Date(d.deadline);
+                    displayDate = deadDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                    deadDate.setHours(23, 59, 59, 999);
+                    if(deadDate < new Date()) isExpired = true; // Deadline passed
+                }
+
+                // 2. Check if already applied
                 const hasApplied = window.studentAppliedApps.some(a => a.company === d.company_name && a.role === d.role);
                 
-                const btnHtml = hasApplied 
-                    ? `<button class="action-btn" style="background: #E2E8F0; color: #64748b; cursor: not-allowed; width:100%; justify-content:center;" disabled><i class="fa-solid fa-check"></i> Already Applied</button>`
-                    : `<button class="action-btn btn-primary" style="width:100%; justify-content:center;" onclick="applyForDrive('${d.company_name}', '${d.role}')"><i class="fa-solid fa-paper-plane"></i> Apply Now</button>`;
+                // 3. Build Button
+                let btnHtml = '';
+                if(hasApplied) {
+                    btnHtml = `<button class="action-btn" style="background: #E2E8F0; color: #64748b; cursor: not-allowed; width:100%; justify-content:center;" disabled><i class="fa-solid fa-check"></i> Already Applied</button>`;
+                } else if(isExpired) {
+                    btnHtml = `<button class="action-btn" style="background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; cursor: not-allowed; width:100%; justify-content:center;" disabled><i class="fa-solid fa-ban"></i> Deadline Passed</button>`;
+                } else {
+                    btnHtml = `<button class="action-btn btn-primary" style="width:100%; justify-content:center;" onclick="applyForDrive('${d.company_name}', '${d.role}')"><i class="fa-solid fa-paper-plane"></i> Apply Now</button>`;
+                }
 
                 return `
-                <div class="card" style="padding: 24px; border-top: 4px solid var(--primary); display: flex; flex-direction: column;">
+                <div class="card" style="padding: 24px; border-top: 4px solid var(--primary); display: flex; flex-direction: column; opacity: ${isExpired && !hasApplied ? '0.7' : '1'};">
                     <div class="flex-between" style="align-items: flex-start; margin-bottom: 16px;">
                         <div>
                             <h3 style="margin: 0 0 6px 0; font-size: 1.15rem; color: var(--text-main); font-weight: 800;">${d.company_name}</h3>
@@ -523,8 +542,8 @@ async function fetchActiveDrives() {
                     <div style="font-size: 0.75rem; color: var(--text-main); font-weight: 600; margin-bottom: 8px;">
                         <i class="fa-solid fa-graduation-cap" style="color: var(--primary);"></i> Eligibility: ${d.eligibility}
                     </div>
-                    <div style="font-size: 0.75rem; color: var(--danger); font-weight: 600; margin-bottom: 16px;">
-                        <i class="fa-solid fa-clock"></i> Deadline: ${d.deadline}
+                    <div style="font-size: 0.75rem; color: ${isExpired ? 'var(--danger)' : 'var(--text-muted)'}; font-weight: 600; margin-bottom: 16px;">
+                        <i class="fa-solid fa-clock"></i> Deadline: ${displayDate}
                     </div>
                     
                     ${btnHtml}
@@ -535,7 +554,7 @@ async function fetchActiveDrives() {
 }
 
 async function applyForDrive(company, role) {
-    if(!confirm(`Are you sure you want to apply for the ${role} position at ${company}?\n\nBy clicking OK, your profile and resume will be sent to the Placement Coordinator.`)) return;
+    if(!confirm(`Are you sure you want to apply for the ${role} position at ${company}?\n\nBy clicking OK, your profile and resume will be securely sent to the Placement Coordinator.`)) return;
     
     try {
         const req = await fetch(`${BASE_URL}/api/student/apply-drive`, {
@@ -546,7 +565,7 @@ async function applyForDrive(company, role) {
         
         if(res.success) {
             alert("✅ Successfully applied! You can track your status in 'My Placement Hub'.");
-            window.location.reload(); // Refresh to update their applied status globally
+            window.location.reload(); 
         } else {
             alert(res.message || "Failed to apply. Make sure your session hasn't expired.");
         }
