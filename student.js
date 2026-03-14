@@ -110,11 +110,25 @@ function populateGlobalPlacement(gStats, gDrives) {
 }
 
 // -----------------------------------------------------------------------------
-// 🛑 UPDATED UI: PROFESSIONAL TABLE DESIGN FOR APPLICATIONS
+// 🛑 AUTO-OFFER CALCULATION & PRIMARY OFFER LOGIC
 // -----------------------------------------------------------------------------
 function populatePersonalPlacement(pProfile, pApps) {
     pProfile = pProfile || {}; const prf = pProfile;
-    document.getElementById('val-p-role').innerText = prf.offer_role || '--'; document.getElementById('val-p-comp').innerText = prf.offer_company || '--'; document.getElementById('val-p-ctc').innerText = prf.offer_ctc || '--'; document.getElementById('val-p-status').innerText = prf.status || 'Unplaced'; document.getElementById('val-p-assess').innerText = prf.assessments || '0'; document.getElementById('val-p-int').innerText = prf.interviews || '0'; document.getElementById('val-p-off').innerText = prf.offers || '0';
+    
+    // Auto-calculate total offers based on status
+    let calculatedOffers = 0;
+    if (pApps) {
+        calculatedOffers = pApps.filter(a => a.status.toLowerCase().includes('select') || a.status.toLowerCase().includes('plac')).length;
+    }
+    const displayOffers = calculatedOffers > 0 ? calculatedOffers : (prf.offers || '0');
+
+    document.getElementById('val-p-role').innerText = prf.offer_role || '--'; 
+    document.getElementById('val-p-comp').innerText = prf.offer_company || '--'; 
+    document.getElementById('val-p-ctc').innerText = prf.offer_ctc || '--'; 
+    document.getElementById('val-p-status').innerText = prf.status || 'Unplaced'; 
+    document.getElementById('val-p-assess').innerText = prf.assessments || '0'; 
+    document.getElementById('val-p-int').innerText = prf.interviews || '0'; 
+    document.getElementById('val-p-off').innerText = displayOffers; // Updated Offer Count
     
     document.getElementById('val-t-dsa').innerText = prf.tech_dsa || '0'; document.getElementById('bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; document.getElementById('val-t-oop').innerText = prf.tech_oop || '0'; document.getElementById('bar-t-oop').style.width = `${prf.tech_oop || 0}%`; document.getElementById('val-t-core').innerText = prf.tech_core || '0'; document.getElementById('bar-t-core').style.width = `${prf.tech_core || 0}%`; document.getElementById('val-a-quant').innerText = prf.apt_quant || '0'; document.getElementById('bar-a-quant').style.width = `${prf.apt_quant || 0}%`; document.getElementById('val-a-log').innerText = prf.apt_logical || '0'; document.getElementById('bar-a-log').style.width = `${prf.apt_logical || 0}%`; document.getElementById('val-a-hr').innerText = prf.apt_hr || '0'; document.getElementById('bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
 
@@ -127,24 +141,31 @@ function populatePersonalPlacement(pProfile, pApps) {
     if (pApps && pApps.length > 0) {
         appBody.innerHTML = pApps.map(a => {
             let bClass = 'badge-primary';
-            if(a.status.toLowerCase().includes('select') || a.status.toLowerCase().includes('offer') || a.status.toLowerCase().includes('placed')) bClass = 'badge-success';
-            if(a.status.toLowerCase().includes('clear') || a.status.toLowerCase().includes('reject')) bClass = 'badge-danger';
-            if(a.status.toLowerCase().includes('pend') || a.status.toLowerCase().includes('wait') || a.status.toLowerCase().includes('short')) bClass = 'badge-warning';
-            
-            // Modern UI Pills for CTC and Internship
-            const ctcBadge = (a.salary_package && a.salary_package !== '--') 
-                ? `<span style="display: inline-flex; align-items: center; gap: 4px; background: #DCFCE7; color: #166534; padding: 3px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-sack-dollar"></i> ${a.salary_package}</span>` 
-                : '';
-            const internBadge = (a.internship_period && a.internship_period !== '--') 
-                ? `<span style="display: inline-flex; align-items: center; gap: 4px; background: #E0E7FF; color: #3730A3; padding: 3px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-stopwatch"></i> ${a.internship_period}</span>` 
-                : '';
-            
-            const extraDetails = (ctcBadge || internBadge) ? `<div style="display: flex; gap: 6px; margin-top: 8px;">${ctcBadge}${internBadge}</div>` : '';
+            let s = a.status.toLowerCase();
+            let isSelected = false;
 
-            // Clean Offer Letter Button
-            const letterBtn = (a.call_letter_url && a.call_letter_url.trim() !== '') 
-                ? `<a href="${a.call_letter_url}" target="_blank" style="margin-top: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: #4F46E5; text-decoration: none; padding: 6px 12px; background: #EEF2FF; border-radius: 6px; transition: 0.2s; border: 1px solid #C7D2FE;" onmouseover="this.style.background='#E0E7FF'" onmouseout="this.style.background='#EEF2FF'"><i class="fa-solid fa-file-arrow-down"></i> View Offer</a>` 
-                : '';
+            if(s.includes('select') || s.includes('offer') || s.includes('placed')) {
+                bClass = 'badge-success';
+                isSelected = true;
+            }
+            if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger';
+            if(s.includes('pend') || s.includes('wait') || s.includes('short')) bClass = 'badge-warning';
+            
+            const ctcBadge = (a.salary_package && a.salary_package !== '--') ? `<span style="display: inline-flex; align-items: center; gap: 4px; background: #DCFCE7; color: #166534; padding: 3px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-sack-dollar"></i> ${a.salary_package}</span>` : '';
+            const internBadge = (a.internship_period && a.internship_period !== '--') ? `<span style="display: inline-flex; align-items: center; gap: 4px; background: #E0E7FF; color: #3730A3; padding: 3px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-stopwatch"></i> ${a.internship_period}</span>` : '';
+            const extraDetails = (ctcBadge || internBadge) ? `<div style="display: flex; gap: 6px; margin-top: 8px;">${ctcBadge}${internBadge}</div>` : '';
+            const letterBtn = (a.call_letter_url && a.call_letter_url.trim() !== '') ? `<a href="${a.call_letter_url}" target="_blank" style="margin-top: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: #4F46E5; text-decoration: none; padding: 6px 12px; background: #EEF2FF; border-radius: 6px; transition: 0.2s; border: 1px solid #C7D2FE;" onmouseover="this.style.background='#E0E7FF'" onmouseout="this.style.background='#EEF2FF'"><i class="fa-solid fa-file-arrow-down"></i> View Offer</a>` : '';
+
+            // Set Primary Action Button Logic
+            let actionHtml = `<span style="color:var(--text-muted); font-size:0.75rem;">--</span>`;
+            if(isSelected) {
+                if(prf.offer_company === a.company && prf.offer_role === a.role) {
+                    actionHtml = `<span class="badge" style="background: #FEF08A; color: #854D0E; border: 1px solid #FDE047;"><i class="fa-solid fa-star"></i> Primary Offer</span>`;
+                } else {
+                    const passCtc = a.salary_package && a.salary_package !== '--' ? a.salary_package : '--';
+                    actionHtml = `<button class="action-btn btn-outline" style="font-size: 0.75rem; padding: 6px 10px; border-color: #EAB308; color: #CA8A04;" onclick="setPrimaryOffer('${a.company}', '${a.role}', '${passCtc}')"><i class="fa-solid fa-star"></i> Set Primary</button>`;
+                }
+            }
 
             return `
             <tr style="transition: background 0.2s;" onmouseover="this.style.background='#F8FAFC'" onmouseout="this.style.background='transparent'">
@@ -164,11 +185,30 @@ function populatePersonalPlacement(pProfile, pApps) {
                         ${letterBtn}
                     </div>
                 </td>
+                <td style="padding: 20px 24px; border-bottom: 1px solid #F1F5F9;">
+                    ${actionHtml}
+                </td>
             </tr>`;
         }).join('');
     } else { 
-        appBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 40px; color:var(--text-muted); font-weight: 500;">No applications logged.</td></tr>`; 
+        appBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 40px; color:var(--text-muted); font-weight: 500;">No applications logged.</td></tr>`; 
     }
+}
+
+async function setPrimaryOffer(company, role, ctc) {
+    if(!confirm(`Set ${company} as your Primary Offer?\n\nThis will instantly feature this offer at the top of your Placement Profile.`)) return;
+    try {
+        const req = await fetch(`${BASE_URL}/api/student/set-primary`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: globalToken, company: company, role: role, ctc: ctc })
+        });
+        const res = await req.json();
+        if(res.success) {
+            backgroundRefreshLoop(); // Ajax auto refresh the board!
+        } else {
+            alert("Session expired. Please log in again.");
+        }
+    } catch(e) { alert("Network Error."); }
 }
 
 async function saveResume() {

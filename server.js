@@ -1,492 +1,202 @@
-const BASE_URL = 'https://portal-6crm.onrender.com';
+const express = require('express');
+const cors = require('cors');
+const { OAuth2Client } = require('google-auth-library');
+const mysql = require('mysql2');
+const jwt = require('jsonwebtoken'); 
 
-let globalToken = localStorage.getItem('bit_session_token'); 
-let allStudentsList = [];
-let targetStudentEmail = ""; 
-let originalValues = {}; 
-window.currentDriveApplicants = [];
-window.allGlobalPlacements = []; 
+const app = express();
+app.use(cors()); 
+app.use(express.json());
 
-if (!globalToken) window.location.href = 'index.html';
+const CLIENT_ID = "159246343111-o9bv4lgk1hmmvdkef0qnq0ih9qefjhmj.apps.googleusercontent.com";
+const googleClient = new OAuth2Client(CLIENT_ID);
+const HR_SECRET_KEY = "bitsathy_super_secret_hr_key"; 
 
-window.onload = async () => {
+const dbPool = mysql.createPool({
+    host: 'mysql-32a5e69e-sivanagu7771-74ba.d.aivencloud.com',
+    port: 17949, 
+    user: 'avnadmin', 
+    password: 'AVNS_x5GIyjOoanVqXlKMi0w', 
+    database: 'defaultdb', 
+    waitForConnections: true,
+    connectionLimit: 10,
+    ssl: { rejectUnauthorized: false } 
+});
+const promisePool = dbPool.promise();
+
+(async function initializeDatabase() {
     try {
-        const req = await fetch(`${BASE_URL}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
-        const data = await req.json();
-        if (!data.success || !data.isAdmin) { localStorage.removeItem('bit_session_token'); window.location.href = 'index.html'; return; }
-        document.getElementById('headerName').innerText = data.profile.full_name;
-        document.getElementById('headerEmail').innerText = data.profile.email;
-        document.getElementById('headerImage').src = data.profile.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.profile.full_name)}&background=4F46E5&color=fff`;
-
-        populateGlobalPlacement(data.globalStats, data.globalDrives);
-        fetchDirectory();
-        loadAnnouncements();
-    } catch (e) { window.location.href = 'index.html'; }
-};
-
-function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebar-overlay').classList.toggle('show'); }
-function switchTab(tabId, element) { document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active')); if(element) element.classList.add('active'); document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active')); document.getElementById('view-' + tabId).classList.add('active'); if(window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('show'); } }
-function signOut() { localStorage.removeItem('bit_session_token'); window.location.href = 'index.html'; }
-
-// --- 1. STUDENT DIRECTORY (NO RELOAD) ---
-async function fetchDirectory() {
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken }) });
-        const data = await req.json();
-        if (data.success) {
-            allStudentsList = data.students;
-            const deptSelect = document.getElementById('deptFilter');
-            const deptEditSelect = document.getElementById('deptEditFilter');
-            const depts = [...new Set(allStudentsList.map(s => s.department).filter(d => d))];
-            
-            deptSelect.innerHTML = '<option value="ALL">All Departments</option>';
-            deptEditSelect.innerHTML = '<option value="ALL">All Departments</option>';
-            
-            depts.forEach(d => { 
-                deptSelect.innerHTML += `<option value="${d}">${d}</option>`; 
-                deptEditSelect.innerHTML += `<option value="${d}">${d}</option>`;
-            });
-            
-            renderTable(allStudentsList);
-            renderEditTable(allStudentsList);
-        }
-    } catch(e) { document.getElementById('student-list-tbody').innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger);">Server Error. Please refresh.</td></tr>`; }
-}
-
-function renderTable(students) {
-    const tbody = document.getElementById('student-list-tbody');
-    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
-    tbody.innerHTML = students.map(s => {
-        const currentStatus = s.status || 'Unplaced';
-        let statusClass = 'badge-primary';
-        if(currentStatus === 'Placed') statusClass = 'badge-success';
-        if(currentStatus === 'Ongoing') statusClass = 'badge-warning';
-        if(currentStatus === 'Rejected') statusClass = 'badge-danger';
-
-        return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main); cursor: pointer;" onclick="openReadOnlyDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div><div>${s.full_name}</div><div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">${s.email} | ${s.roll_no || '--'}</div></div></div></td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td><span class="badge ${statusClass}">${currentStatus}</span></td><td><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem;" onclick="openReadOnlyDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')">View Skills <i class="fa-solid fa-eye" style="margin-left: 6px;"></i></button></td></tr>`;
-    }).join('');
-}
-
-function filterStudents() {
-    const search = document.getElementById('searchStudent').value.toLowerCase(); const dept = document.getElementById('deptFilter').value;
-    const filtered = allStudentsList.filter(s => { const matchesSearch = (s.full_name && s.full_name.toLowerCase().includes(search)) || (s.email && s.email.toLowerCase().includes(search)) || (s.roll_no && s.roll_no.toLowerCase().includes(search)); const matchesDept = dept === "ALL" || s.department === dept; return matchesSearch && matchesDept; });
-    renderTable(filtered);
-}
-
-// --- READ ONLY MODAL ---
-async function openReadOnlyDetail(email, name, roll_no, department) {
-    document.getElementById('student-detail-modal').style.display = 'flex'; 
-    document.getElementById('ro-modal-content-body').style.display = 'none'; 
-    document.getElementById('ro-modal-loading').style.display = 'block'; 
-    document.getElementById('ro-detail-name').innerText = name; 
-    document.getElementById('ro-detail-sub').innerText = `${roll_no || 'No Roll No'} | ${department || 'No Dept'}`; 
-    document.getElementById('ro-detail-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff`;
-
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) });
-        const data = await req.json();
-        if (data.success) { 
-            populateReadOnlyModal(data.placeProfile || {}); 
-            document.getElementById('ro-modal-loading').style.display = 'none'; 
-            document.getElementById('ro-modal-content-body').style.display = 'block'; 
-        } else { alert("Failed to fetch placement data."); document.getElementById('student-detail-modal').style.display = 'none'; }
-    } catch(e) { alert("Network error."); document.getElementById('student-detail-modal').style.display = 'none'; }
-}
-
-function populateReadOnlyModal(prf) {
-    document.getElementById('ro-t-dsa').innerText = prf.tech_dsa || '0'; document.getElementById('ro-bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
-    document.getElementById('ro-t-oop').innerText = prf.tech_oop || '0'; document.getElementById('ro-bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
-    document.getElementById('ro-t-core').innerText = prf.tech_core || '0'; document.getElementById('ro-bar-t-core').style.width = `${prf.tech_core || 0}%`; 
-    document.getElementById('ro-a-quant').innerText = prf.apt_quant || '0'; document.getElementById('ro-bar-a-quant').style.width = `${prf.apt_quant || 0}%`; 
-    document.getElementById('ro-a-log').innerText = prf.apt_logical || '0'; document.getElementById('ro-bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
-    document.getElementById('ro-a-hr').innerText = prf.apt_hr || '0'; document.getElementById('ro-bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
-}
-
-
-// --- 2. COLLEGE PLACEMENT STATS (NO RELOAD) ---
-async function refreshGlobalPlacementData() {
-    try {
-        const req = await fetch(`${BASE_URL}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
-        const data = await req.json();
-        if (data.success) {
-            populateGlobalPlacement(data.globalStats, data.globalDrives);
-        }
-    } catch(e) { console.error("Error refreshing global stats."); }
-}
-
-function populateGlobalPlacement(gStats, gDrives) {
-    gStats = gStats || {};
-    
-    document.getElementById('wrap-g-total').innerHTML = `<span id="val-g-total">${gStats.total_placed || '0'}</span><i class="fa-solid fa-pen admin-table-edit" onclick="openGlobalStatEdit('total_placed', 'val-g-total', '90px')"></i>`;
-    document.getElementById('wrap-g-ongoing').innerHTML = `<span id="val-g-ongoing">${gStats.ongoing_drives || '0'}</span><i class="fa-solid fa-pen admin-table-edit" onclick="openGlobalStatEdit('ongoing_drives', 'val-g-ongoing', '90px')"></i>`;
-    document.getElementById('wrap-g-highest').innerHTML = `<div><span id="val-g-highest">${gStats.highest_ctc || '0'}</span> <span style="font-size: 0.8rem; color: var(--text-muted);">LPA</span></div><i class="fa-solid fa-pen admin-table-edit" onclick="openGlobalStatEdit('highest_ctc', 'val-g-highest', '90px')"></i>`;
-    document.getElementById('wrap-g-avg').innerHTML = `<div><span id="val-g-avg">${gStats.avg_ctc || '0'}</span> <span style="font-size: 0.8rem; color: var(--text-muted);">LPA</span></div><i class="fa-solid fa-pen admin-table-edit" onclick="openGlobalStatEdit('avg_ctc', 'val-g-avg', '90px')"></i>`;
-    
-    const drvBody = document.getElementById('global-drives-tbody');
-    if (gDrives && gDrives.length > 0) {
-        drvBody.innerHTML = gDrives.map(d => `<tr id="row-drv-${d.id}">
-            <td style="font-weight: 700; color: var(--text-main);">${d.company}</td>
-            <td>${d.role}</td>
-            <td style="font-family: monospace;">${d.appeared}</td>
-            <td><span class="badge badge-success">${d.selected}</span></td>
-            <td style="font-weight: 700; color: var(--primary);">${d.ctc}</td>
-            <td style="text-align:right; white-space:nowrap;"><i class="fa-solid fa-pen admin-table-edit" onclick="editDriveRow(${d.id})"></i><i class="fa-solid fa-trash admin-table-del" onclick="deleteGlobalDrive(${d.id})"></i></td>
-        </tr>`).join('');
-    } else { drvBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:var(--text-muted);">No campus drives recorded.</td></tr>`; }
-}
-
-function cancelGlobalStatEdit() { refreshGlobalPlacementData(); }
-
-function openGlobalStatEdit(field, spanId, width) {
-    const span = document.getElementById(spanId); originalValues[spanId] = span.innerText.trim();
-    const wrapId = spanId.replace('val-', 'wrap-');
-    document.getElementById(wrapId).innerHTML = `<div class="flex-center"><input type="text" id="in-${spanId}" class="inline-input" style="width: ${width}; padding: 4px;" value="${originalValues[spanId]}"><i class="fa-solid fa-check action-icon save" style="width:28px; height:28px;" onclick="saveGlobalStat('${field}', '${spanId}', '${width}')"></i><i class="fa-solid fa-xmark action-icon cancel" style="width:28px; height:28px;" onclick="cancelGlobalStatEdit()"></i></div>`;
-}
-
-// 🛑 Strict check on response for ALL DB Updates
-async function saveGlobalStat(field, spanId, width) {
-    const val = document.getElementById(`in-${spanId}`).value; 
-    const wrapId = spanId.replace('val-', 'wrap-');
-    document.getElementById(wrapId).innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    try { 
-        const req = await fetch(`${BASE_URL}/api/admin/update-global-stat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, field: field, value: val }) }); 
-        const res = await req.json();
-        if(!res.success) alert("Database Error: Could not save stat.");
-    } catch(e) {}
-    refreshGlobalPlacementData(); 
-}
-
-function editDriveRow(id) {
-    const tr = document.getElementById(`row-drv-${id}`); const comp = tr.children[0].innerText; const role = tr.children[1].innerText; const app = tr.children[2].innerText; const sel = tr.children[3].innerText; const ctc = tr.children[4].innerText;
-    tr.innerHTML = `<td><input type="text" id="e-drv-c-${id}" class="inline-input" style="width: 100%;" value="${comp}"></td><td><input type="text" id="e-drv-r-${id}" class="inline-input" style="width: 100%;" value="${role}"></td><td><input type="number" id="e-drv-a-${id}" class="inline-input" style="width: 60px;" value="${app}"></td><td><input type="number" id="e-drv-s-${id}" class="inline-input" style="width: 60px;" value="${sel}"></td><td><input type="text" id="e-drv-ctc-${id}" class="inline-input" style="width: 80px;" value="${ctc}"></td><td style="text-align:right; white-space: nowrap;"><i class="fa-solid fa-check action-icon save" onclick="saveDriveRow(${id})"></i><i class="fa-solid fa-xmark action-icon cancel" onclick="refreshGlobalPlacementData()"></i></td>`;
-}
-
-// 🛑 Sequential loop to prevent Aiven MySQL Connection Overload
-async function saveDriveRow(id) {
-    const tr = document.getElementById(`row-drv-${id}`); tr.lastElementChild.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    const updates = [{ field: 'company', value: document.getElementById(`e-drv-c-${id}`).value }, { field: 'role', value: document.getElementById(`e-drv-r-${id}`).value }, { field: 'appeared', value: document.getElementById(`e-drv-a-${id}`).value }, { field: 'selected', value: document.getElementById(`e-drv-s-${id}`).value }, { field: 'ctc', value: document.getElementById(`e-drv-ctc-${id}`).value }];
-    for (let u of updates) {
-        await fetch(`${BASE_URL}/api/admin/update-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id, field: u.field, value: u.value }) });
-    }
-    refreshGlobalPlacementData(); 
-}
-
-async function deleteGlobalDrive(id) { 
-    if(!confirm("Delete this completed drive record?")) return; 
-    await fetch(`${BASE_URL}/api/admin/delete-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); 
-    refreshGlobalPlacementData(); 
-}
-
-async function submitGlobalDrive() {
-    const btn = document.querySelector('#add-global-drive-modal .btn-primary'); const ogText = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/add-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, company: document.getElementById('g-drv-comp').value, role: document.getElementById('g-drv-role').value, appeared: document.getElementById('g-drv-app').value, selected: document.getElementById('g-drv-sel').value, ctc: document.getElementById('g-drv-ctc').value }) });
-        const res = await req.json();
-        if(!res.success) alert("Database Error: Failed to save completed drive.");
-    } catch(e) {}
-    
-    document.getElementById('add-global-drive-modal').style.display='none'; btn.innerHTML = ogText;
-    document.getElementById('g-drv-comp').value = ''; document.getElementById('g-drv-role').value = ''; document.getElementById('g-drv-app').value = ''; document.getElementById('g-drv-sel').value = ''; document.getElementById('g-drv-ctc').value = '';
-    refreshGlobalPlacementData(); 
-}
-
-
-// --- 3. STUDENT PLACEMENTS (ALL APPS) BOARD (NO RELOAD) ---
-async function loadAllPlacements() {
-    const tbody = document.getElementById('all-placements-tbody');
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading all applications...</td></tr>`;
-    
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/all-applications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken }) });
-        const data = await req.json();
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS student_profile (email VARCHAR(255) PRIMARY KEY, full_name VARCHAR(255), roll_no VARCHAR(50), department VARCHAR(100))`);
+        try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN cgpa VARCHAR(10) DEFAULT '0'`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN sgpa VARCHAR(10) DEFAULT '0'`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN attendance VARCHAR(10) DEFAULT '0'`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN reward_points VARCHAR(10) DEFAULT '0'`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN arrears VARCHAR(10) DEFAULT '0'`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN leaves VARCHAR(10) DEFAULT '0'`); } catch(e){}
         
-        if (data.success) {
-            window.allGlobalPlacements = data.applications;
-            const filterDropdown = document.getElementById('placementCompanyFilter');
-            const companies = [...new Set(data.applications.map(a => a.company).filter(c => c))];
-            filterDropdown.innerHTML = '<option value="ALL">All Companies</option>';
-            companies.forEach(c => { filterDropdown.innerHTML += `<option value="${c}">${c}</option>`; });
-            renderAllPlacementsTable();
-        }
-    } catch(e) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--danger);">Error loading placements.</td></tr>`; }
-}
-
-function renderAllPlacementsTable() {
-    const tbody = document.getElementById('all-placements-tbody');
-    const selectedComp = document.getElementById('placementCompanyFilter').value;
-    const filteredApps = selectedComp === 'ALL' ? window.allGlobalPlacements : window.allGlobalPlacements.filter(a => a.company === selectedComp);
-    if(filteredApps.length === 0) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--text-muted);">No applications found.</td></tr>`; return; }
-
-    tbody.innerHTML = filteredApps.map(a => {
-        return `
-        <tr>
-            <td style="font-weight:600; color: var(--text-main);"><div style="font-size:0.95rem;">${a.full_name}</div><div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${a.student_email}</div></td>
-            <td><span class="badge badge-primary" style="background:#EEF2FF; color:#4F46E5;">${a.department || '--'}</span></td>
-            <td><div style="font-weight:700; color:var(--text-main);">${a.company}</div><div style="font-size:0.8rem; color:var(--text-muted);">${a.role}</div></td>
-            <td>
-                <select onchange="handlePlacementStatusChange(${a.app_id}, this)" class="control-input" style="padding: 6px; font-size: 0.8rem; width: 140px; border-color: var(--border); font-weight: 600; color: var(--text-main);">
-                    <option value="Applied" ${a.status === 'Applied' ? 'selected' : ''}>Applied (Pending)</option>
-                    <option value="Shortlisted" ${a.status === 'Shortlisted' ? 'selected' : ''}>Shortlisted</option>
-                    <option value="Interview" ${a.status === 'Interview' ? 'selected' : ''}>In Interview</option>
-                    <option value="Selected" ${a.status === 'Selected' ? 'selected' : ''}>Selected / Placed</option>
-                    <option value="Rejected" ${a.status === 'Rejected' ? 'selected' : ''}>Rejected</option>
-                </select>
-            </td>
-        </tr>`;
-    }).join('');
-}
-
-function handlePlacementStatusChange(appId, selectElement) {
-    const newStatus = selectElement.value;
-    if(newStatus === 'Placed' || newStatus === 'Selected') {
-        document.getElementById('placed-app-id').value = appId;
-        document.getElementById('placed-status-val').value = newStatus;
-        document.getElementById('mark-placed-modal').style.display = 'flex';
-    } else {
-        updateApplicationStatus(appId, newStatus);
-    }
-}
-
-async function updateApplicationStatus(appId, newStatus) {
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/update-app-status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, app_id: appId, status: newStatus }) });
-        const res = await req.json();
-        if(res.success) { showToast("Application status updated!"); loadAllPlacements(); }
-        else { alert("Database Error: Failed to update status."); loadAllPlacements(); }
-    } catch(e) { alert("Network error."); loadAllPlacements(); }
-}
-
-async function submitPlacedDetails() {
-    const appId = document.getElementById('placed-app-id').value;
-    const status = document.getElementById('placed-status-val').value;
-    const pack = document.getElementById('placed-package').value || '--';
-    const intern = document.getElementById('placed-internship').value || '--';
-    const link = document.getElementById('placed-offer-link').value || '';
-
-    const btn = document.querySelector('#mark-placed-modal .btn-success');
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
-
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/mark-placed`, { 
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ adminToken: globalToken, app_id: appId, status: status, package: pack, internship: intern, offer_link: link }) 
-        });
-        const res = await req.json();
-        if(res.success) showToast("Placement Record Saved Successfully!");
-        else alert("Database Error: Failed to save details.");
-    } catch(e) { alert("Error saving placement details."); }
-
-    document.getElementById('mark-placed-modal').style.display = 'none';
-    btn.innerHTML = 'Save Placement Record';
-    loadAllPlacements(); 
-}
-
-// --- 4. STUDENT LOGIN & EDITING GATEWAY ---
-function loginAsStudent() {
-    const loginId = document.getElementById('edit-login-id').value.trim().toLowerCase();
-    const password = document.getElementById('edit-login-pass').value.trim();
-    
-    if(loginId === "1234" && password === "ed@123") {
-        document.getElementById('nav-student-login').style.display = 'none';
-        const editNav = document.getElementById('nav-edit-list');
-        editNav.style.display = 'flex';
-        switchTab('edit-list', editNav);
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS pcdp_master_courses (id INT AUTO_INCREMENT PRIMARY KEY, course_name VARCHAR(255), description TEXT, total_levels INT DEFAULT 1, category VARCHAR(100), image_url TEXT)`);
+        try { await promisePool.query(`ALTER TABLE pcdp_master_courses ADD COLUMN total_levels INT DEFAULT 1`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE pcdp_master_courses ADD COLUMN category VARCHAR(100)`); } catch(e){}
         
-        document.getElementById('edit-login-id').value = '';
-        document.getElementById('edit-login-pass').value = '';
-    } else { alert("Invalid Login ID or Password! Access Denied."); }
-}
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS student_courses (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), semester INT, course_name VARCHAR(255), marks VARCHAR(50), grade VARCHAR(10))`);
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS student_skills (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), skill_name VARCHAR(255), total_levels INT, completed_levels INT, category VARCHAR(100), image_url TEXT)`);
+        try { await promisePool.query(`ALTER TABLE student_skills ADD COLUMN image_url TEXT`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE student_skills ADD COLUMN description TEXT`); } catch(e){}
 
-function lockEditor() {
-    document.getElementById('nav-student-login').style.display = 'flex';
-    document.getElementById('nav-edit-list').style.display = 'none';
-    switchTab('student-login', document.getElementById('nav-student-login'));
-}
-
-function renderEditTable(students) {
-    const tbody = document.getElementById('edit-student-list-tbody');
-    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
-    tbody.innerHTML = students.map(s => {
-        return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem;" onclick="openEditableStudentDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')">Edit Skills <i class="fa-solid fa-pen" style="margin-left: 6px;"></i></button></td></tr>`;
-    }).join('');
-}
-
-function filterEditStudents() {
-    const search = document.getElementById('searchEditStudent').value.toLowerCase(); const dept = document.getElementById('deptEditFilter').value;
-    const filtered = allStudentsList.filter(s => { const matchesSearch = (s.full_name && s.full_name.toLowerCase().includes(search)) || (s.email && s.email.toLowerCase().includes(search)); const matchesDept = dept === "ALL" || s.department === dept; return matchesSearch && matchesDept; });
-    renderEditTable(filtered);
-}
-
-// 🛑 NEW: STRICT EDIT PROFILE DB CHECKS
-async function openEditableStudentDetail(email, name, roll_no, department) {
-    targetStudentEmail = email;
-    document.getElementById('edit-student-modal').style.display = 'flex';
-    document.getElementById('edit-modal-content-body').style.display = 'none';
-    document.getElementById('edit-modal-loading').style.display = 'block';
-
-    if (name) {
-        document.getElementById('edit-detail-name').innerText = name;
-        document.getElementById('edit-detail-sub').innerText = `${roll_no || 'No Roll No'} | ${department || 'No Dept'}`;
-        document.getElementById('edit-detail-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff`;
-    }
-
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) });
-        const data = await req.json();
-        if (data.success) { 
-            populatePerformance(data.placeProfile || {}, data.placeApps || []); 
-            document.getElementById('edit-modal-loading').style.display = 'none';
-            document.getElementById('edit-modal-content-body').style.display = 'block';
-        } else { alert("Failed to fetch placement data."); document.getElementById('edit-student-modal').style.display = 'none'; }
-    } catch(e) { alert("Network error."); document.getElementById('edit-student-modal').style.display = 'none'; }
-}
-
-function populatePerformance(prf, apps) {
-    document.getElementById('val-p-role').innerText = prf.offer_role || '--'; document.getElementById('val-p-comp').innerText = prf.offer_company || '--'; document.getElementById('val-p-ctc').innerText = prf.offer_ctc || '--'; document.getElementById('val-p-status').innerText = prf.status || 'Unplaced'; document.getElementById('val-p-assess').innerText = prf.assessments || '0'; document.getElementById('val-p-int').innerText = prf.interviews || '0'; document.getElementById('val-p-off').innerText = prf.offers || '0';
-    document.getElementById('val-t-dsa').innerText = prf.tech_dsa || '0'; document.getElementById('bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; document.getElementById('val-t-oop').innerText = prf.tech_oop || '0'; document.getElementById('bar-t-oop').style.width = `${prf.tech_oop || 0}%`; document.getElementById('val-t-core').innerText = prf.tech_core || '0'; document.getElementById('bar-t-core').style.width = `${prf.tech_core || 0}%`; document.getElementById('val-a-quant').innerText = prf.apt_quant || '0'; document.getElementById('bar-a-quant').style.width = `${prf.apt_quant || 0}%`; document.getElementById('val-a-log').innerText = prf.apt_logical || '0'; document.getElementById('bar-a-log').style.width = `${prf.apt_logical || 0}%`; document.getElementById('val-a-hr').innerText = prf.apt_hr || '0'; document.getElementById('bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
-
-    const appBody = document.getElementById('edit-student-apps-tbody');
-    if (apps && apps.length > 0) {
-        appBody.innerHTML = apps.map(a => { 
-            let bClass = 'badge-primary'; let s = a.status.toLowerCase(); 
-            if(s.includes('select') || s.includes('offer') || s.includes('placed')) bClass = 'badge-success'; 
-            if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
-            if(s.includes('pend') || s.includes('wait')) bClass = 'badge-warning'; 
-            return `<tr id="row-app-${a.id}"><td style="font-weight: 700; color: var(--text-main);">${a.company}</td><td style="color: var(--text-muted);">${a.role}</td><td>${a.date_applied}</td><td><span class="badge ${bClass}">${a.status}</span></td><td style="text-align:right; padding-right: 24px; white-space:nowrap;"><i class="fa-solid fa-pen admin-table-edit" onclick="editAppRow(${a.id})"></i><i class="fa-solid fa-trash admin-table-del" onclick="deleteApp(${a.id})"></i></td></tr>`; 
-        }).join('');
-    } else { appBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:var(--text-muted);">No applications logged.</td></tr>`; }
-}
-
-function openPlacementProfileEdit(field, spanId, width) {
-    const span = document.getElementById(spanId); originalValues[spanId] = span.innerText.trim();
-    span.parentElement.innerHTML = `<div class="flex-center" style="width: 100%;"><input type="text" id="in-${spanId}" class="inline-input" style="width: ${width}; color: var(--text-main);" value="${originalValues[spanId]}"><i class="fa-solid fa-check action-icon save" style="width:28px; height:28px;" onclick="savePlacementProfileEdit('${field}', '${spanId}', '${width}')"></i><i class="fa-solid fa-xmark action-icon cancel" style="width:28px; height:28px;" onclick="cancelPlacementProfileEdit('${spanId}', '${field}', '${width}')"></i></div>`;
-}
-function cancelPlacementProfileEdit(spanId, field, width) {
-    const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement;
-    wrapper.innerHTML = `<span id="${spanId}">${originalValues[spanId]}</span><i class="fa-solid fa-pen admin-table-edit" onclick="openPlacementProfileEdit('${field}', '${spanId}', '${width}')"></i>`;
-}
-
-// 🛑 STRICT DATABASE CHECK
-async function savePlacementProfileEdit(field, spanId, width) {
-    const val = document.getElementById(`in-${spanId}`).value; 
-    const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement;
-    wrapper.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/update-placement-profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, field: field, value: val }) });
-        const res = await req.json();
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS pcdp_courses (id INT AUTO_INCREMENT PRIMARY KEY, course_name VARCHAR(255) UNIQUE, total_levels INT DEFAULT 1, category VARCHAR(100), image_url TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)`);
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS student_sem_gpa (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255) NOT NULL, semester INT NOT NULL, gpa VARCHAR(10), UNIQUE KEY unique_sem (student_email, semester))`);
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_global (id INT PRIMARY KEY, total_placed VARCHAR(50), ongoing_drives VARCHAR(50), highest_ctc VARCHAR(50), avg_ctc VARCHAR(50))`);
+        await promisePool.query(`INSERT IGNORE INTO placement_global (id, total_placed, ongoing_drives, highest_ctc, avg_ctc) VALUES (1, '0', '0', '0', '0')`);
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_drives (id INT AUTO_INCREMENT PRIMARY KEY, company VARCHAR(255), role VARCHAR(255), appeared VARCHAR(50), selected VARCHAR(50), ctc VARCHAR(50))`);
         
-        if(res.success) {
-            wrapper.innerHTML = `<span id="${spanId}">${val}</span><i class="fa-solid fa-pen admin-table-edit" onclick="openPlacementProfileEdit('${field}', '${spanId}', '${width}')"></i>`;
-            const barId = spanId.replace('val-', 'bar-');
-            const bar = document.getElementById(barId);
-            if(bar) bar.style.width = `${val}%`;
-        } else {
-            alert("Database Error: Failed to save changes.");
-            cancelPlacementProfileEdit(spanId, field, width);
-        }
-    } catch(e) { cancelPlacementProfileEdit(spanId, field, width); }
-}
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_student_profile (student_email VARCHAR(255) PRIMARY KEY, offer_role VARCHAR(255) DEFAULT '--', offer_company VARCHAR(255) DEFAULT '--', offer_ctc VARCHAR(50) DEFAULT '--', status VARCHAR(50) DEFAULT 'Unplaced', assessments VARCHAR(50) DEFAULT '0', interviews VARCHAR(50) DEFAULT '0', offers VARCHAR(50) DEFAULT '0', tech_dsa VARCHAR(50) DEFAULT '0', tech_oop VARCHAR(50) DEFAULT '0', tech_core VARCHAR(50) DEFAULT '0', apt_quant VARCHAR(50) DEFAULT '0', apt_logical VARCHAR(50) DEFAULT '0', apt_hr VARCHAR(50) DEFAULT '0', resume_url LONGTEXT)`);
+        try { await promisePool.query(`ALTER TABLE placement_student_profile ADD COLUMN resume_url LONGTEXT`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE placement_student_profile MODIFY COLUMN resume_url LONGTEXT`); } catch(e){}
 
-function editAppRow(id) {
-    const tr = document.getElementById(`row-app-${id}`); const comp = tr.children[0].innerText; const role = tr.children[1].innerText; const date = tr.children[2].innerText; const stat = tr.children[3].innerText;
-    tr.innerHTML = `<td><input type="text" id="e-app-c-${id}" class="inline-input" style="width: 100%;" value="${comp}"></td><td><input type="text" id="e-app-r-${id}" class="inline-input" style="width: 100%;" value="${role}"></td><td><input type="text" id="e-app-d-${id}" class="inline-input" style="width: 100px;" value="${date}"></td><td><input type="text" id="e-app-s-${id}" class="inline-input" style="width: 120px;" value="${stat}"></td><td style="text-align:right; white-space: nowrap;"><i class="fa-solid fa-check action-icon save" onclick="saveAppRow(${id})"></i><i class="fa-solid fa-xmark action-icon cancel" onclick="openEditableStudentDetail(targetStudentEmail)"></i></td>`;
-}
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_apps (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), company VARCHAR(255), role VARCHAR(255), date_applied VARCHAR(50), status VARCHAR(50))`);
+        try { await promisePool.query(`ALTER TABLE placement_apps ADD COLUMN meeting_time VARCHAR(100) DEFAULT '--'`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE placement_apps ADD COLUMN venue VARCHAR(255) DEFAULT '--'`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE placement_apps ADD COLUMN salary_package VARCHAR(50) DEFAULT '--'`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE placement_apps ADD COLUMN call_letter_url LONGTEXT`); } catch(e){}
+        try { await promisePool.query(`ALTER TABLE placement_apps ADD COLUMN internship_period VARCHAR(100) DEFAULT '--'`); } catch(e){}
 
-// 🛑 Sequential loop to prevent DB connection drop
-async function saveAppRow(id) {
-    const tr = document.getElementById(`row-app-${id}`); tr.lastElementChild.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    const updates = [{ field: 'company', value: document.getElementById(`e-app-c-${id}`).value }, { field: 'role', value: document.getElementById(`e-app-r-${id}`).value }, { field: 'date_applied', value: document.getElementById(`e-app-d-${id}`).value }, { field: 'status', value: document.getElementById(`e-app-s-${id}`).value }];
-    for (let u of updates) {
-        await fetch(`${BASE_URL}/api/admin/update-app`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id, field: u.field, value: u.value }) });
-    }
-    openEditableStudentDetail(targetStudentEmail);
-}
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS hr_profile (email VARCHAR(255) PRIMARY KEY, company_name VARCHAR(255), password VARCHAR(255))`);
+        
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS announcements (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), type VARCHAR(50), content TEXT, date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+        try { await promisePool.query(`ALTER TABLE announcements ADD COLUMN target_department VARCHAR(100) DEFAULT 'ALL'`); } catch(e){}
+        
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS active_drives (id INT AUTO_INCREMENT PRIMARY KEY, company_name VARCHAR(255), role VARCHAR(255), ctc VARCHAR(100), eligibility VARCHAR(255), description TEXT, deadline VARCHAR(100), target_year VARCHAR(50) DEFAULT 'ALL', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-async function deleteApp(id) { 
-    if(!confirm("Delete application?")) return; 
-    await fetch(`${BASE_URL}/api/admin/delete-app`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); 
-    openEditableStudentDetail(targetStudentEmail); 
-}
+        console.log("✅ Database Verified: Set Primary Offer Feature Enabled.");
+    } catch (err) { console.error("❌ DB Init Error:", err.message); }
+})();
 
-async function submitNewApp() {
+function getDepartmentFromEmail(email) {
+    let department = 'Not Assigned';
     try {
-        const req = await fetch(`${BASE_URL}/api/admin/add-app`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, company: document.getElementById('app-comp').value, role: document.getElementById('app-role').value, date_applied: document.getElementById('app-date').value, status: document.getElementById('app-stat').value }) });
-        const res = await req.json();
-        if(!res.success) alert("DB Error: Could not log application.");
-    } catch(e) {}
-    document.getElementById('add-app-modal').style.display = 'none'; openEditableStudentDetail(targetStudentEmail); 
-}
-
-// --- 5. ACTIVE DRIVES LOGIC (NO RELOAD) ---
-async function loadActiveDrives() {
-    const feed = document.getElementById('active-drives-feed');
-    feed.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Drives...</div>`;
-    try {
-        const req = await fetch(`${BASE_URL}/api/drives/active-list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
-        const data = await req.json();
-        if (data.success) {
-            if(data.drives.length === 0) { feed.innerHTML = `<div class="card" style="text-align:center; padding: 40px; color:var(--text-muted);">No active drives posted yet.</div>`; return; }
-            
-            feed.innerHTML = data.drives.map(d => {
-                let isExpired = false; let displayDate = d.deadline;
-                if(d.deadline && d.deadline.includes('-')) {
-                    const deadDate = new Date(d.deadline); displayDate = deadDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); deadDate.setHours(23, 59, 59, 999); if(deadDate < new Date()) isExpired = true;
-                }
-                const expiredBadge = isExpired ? `<span class="badge badge-danger" style="margin-left: 8px;">Expired</span>` : '';
-                const targetBadge = d.target_year !== 'ALL' ? `<span class="badge" style="background:var(--purple-light); color:var(--purple); margin-left: 8px;"><i class="fa-solid fa-bullseye"></i> Batch '${d.target_year}</span>` : '';
-
-                return `<div class="card" style="padding: 24px; border-left: 4px solid var(--primary); opacity: ${isExpired ? '0.7' : '1'};"><div class="flex-between"><div><h3 style="margin: 0 0 8px 0; font-size: 1.2rem; color: var(--text-main); font-weight: 800;">${d.company_name}</h3><span class="badge badge-primary">${d.role}</span>${targetBadge}${expiredBadge}</div><div style="text-align: right;"><div style="font-weight: 800; color: var(--success); font-size: 1.1rem;">${d.ctc}</div><div style="font-size: 0.8rem; color: ${isExpired ? 'var(--danger)' : 'var(--text-muted)'}; margin-top: 4px;">Deadline: ${displayDate}</div></div></div><p style="font-size: 0.9rem; color: var(--text-muted); margin: 16px 0; line-height: 1.5; white-space: pre-wrap;">${d.description}</p><div class="flex-between" style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 16px;"><span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);"><i class="fa-solid fa-graduation-cap"></i> Eligibility: ${d.eligibility}</span><div><button class="action-btn btn-outline" style="font-size: 0.8rem; margin-right: 8px;" onclick="switchTab('all-placements', document.getElementById('nav-all-placements')); loadAllPlacements();">View Apps in Placements Tab</button><button class="action-icon cancel" onclick="deleteActiveDrive(${d.id})"><i class="fa-solid fa-trash"></i></button></div></div></div>`;
-            }).join('');
+        const localPart = email.split('@')[0]; const parts = localPart.split('.'); 
+        if (parts.length > 1) {
+            const codePart = parts[parts.length - 1]; const branchCode = codePart.replace(/[0-9]/g, '').toLowerCase();
+            const deptMap = { 'cs': 'Computer Science Engineering', 'it': 'Information Technology', 'ec': 'Electronics and Communication Engineering', 'ee': 'Electrical and Electronics Engineering', 'me': 'Mechanical Engineering', 'ce': 'Civil Engineering', 'ad': 'Artificial Intelligence and Data Science', 'cb': 'Computer Science and Business Systems', 'al': 'Artificial Intelligence and Machine Learning', 'mz': 'Mechatronics Engineering', 'ei': 'Electronics and Instrumentation Engineering', 'tx': 'Textile Technology', 'ft': 'Food Technology' };
+            if (deptMap[branchCode]) { department = deptMap[branchCode]; }
         }
-    } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error</div>`; }
+    } catch (e) {} return department;
 }
 
-async function submitActiveDrive() {
-    const comp = document.getElementById('ad-comp').value; const role = document.getElementById('ad-role').value; const ctc = document.getElementById('ad-ctc').value; const elig = document.getElementById('ad-elig').value; const desc = document.getElementById('ad-desc').value; const dead = document.getElementById('ad-dead').value; const targetYr = document.getElementById('ad-year').value;
-    if(!comp || !role || !dead) return alert("Company, Role, and Deadline are required!");
-    document.querySelector('#add-active-drive-modal .btn-primary').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Posting...';
-    try { 
-        const req = await fetch(`${BASE_URL}/api/admin/add-active-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, company_name: comp, role: role, ctc: ctc, eligibility: elig, description: desc, deadline: dead, target_year: targetYr }) }); 
-        const res = await req.json();
-        if(!res.success) alert("Database Error: Failed to post drive.");
-    } catch(e) { alert("Error posting drive."); }
-    document.getElementById('add-active-drive-modal').style.display = 'none'; document.querySelector('#add-active-drive-modal .btn-primary').innerHTML = 'Post Drive to Students'; 
-    loadActiveDrives(); 
-}
-
-async function deleteActiveDrive(id) {
-    if(!confirm("Delete this active drive? Students will no longer see it.")) return;
-    await fetch(`${BASE_URL}/api/admin/delete-active-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); 
-    loadActiveDrives(); 
-}
-
-// --- 6. ANNOUNCEMENTS LOGIC (NO RELOAD) ---
-async function loadAnnouncements() {
-    const feed = document.getElementById('announcement-feed'); feed.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</div>`;
+app.post('/api/hr/login', async (req, res) => {
     try {
-        const req = await fetch(`${BASE_URL}/api/announcements/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) }); const data = await req.json();
-        if (data.success) {
-            const placeAnns = data.announcements.filter(a => a.type === 'Placement Drive');
-            if(placeAnns.length === 0) { feed.innerHTML = `<div class="card" style="text-align:center; padding: 40px; color:var(--text-muted);">No placement announcements posted yet.</div>`; return; }
-            feed.innerHTML = placeAnns.map(ann => {
-                let dateStr = new Date(ann.date_posted).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-                let targetLabel = ann.target_department || 'ALL'; let deptBadge = targetLabel === 'ALL' ? `<span class="badge" style="background: #E2E8F0; color: #475569; margin-right: 10px;"><i class="fa-solid fa-globe"></i> Global Notice</span>` : `<span class="badge" style="background: var(--purple-light); color: var(--purple); margin-right: 10px;"><i class="fa-solid fa-bullseye"></i> ${targetLabel}</span>`;
-                return `<div class="card" style="display: flex; gap: 20px; align-items: flex-start; padding: 24px; position: relative;"><button class="action-icon cancel" style="position: absolute; top: 16px; right: 16px;" onclick="deleteAnnouncement(${ann.id})"><i class="fa-solid fa-trash"></i></button><div style="background: var(--success-light); color: var(--success); width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;"><i class="fa-solid fa-briefcase"></i></div><div style="flex: 1; padding-right: 40px;"><h3 style="margin: 0 0 8px 0; font-size: 1.1rem; color: var(--text-main); font-weight: 800;">${ann.title}</h3><div style="margin-bottom: 12px;"><span class="badge badge-success" style="margin-right: 10px;">${ann.type}</span>${deptBadge}<span style="font-size: 0.8rem; color: var(--text-muted);"><i class="fa-regular fa-clock"></i> ${dateStr}</span></div><p style="margin: 0; color: var(--text-muted); line-height: 1.6; font-size: 0.95rem; white-space: pre-wrap;">${ann.content}</p></div></div>`;
-            }).join('');
+        const { email, password } = req.body;
+        if (email === 'admin@gmail.com' && password === 'pc123') return res.json({ success: true, token: 'custom_admin_token_pc123', redirect: 'placement_portal.html' });
+        const [hr] = await promisePool.query("SELECT * FROM hr_profile WHERE LOWER(email) = LOWER(?) AND password = ?", [email, password]);
+        if (hr.length > 0) {
+            const token = jwt.sign({ email: hr[0].email, company: hr[0].company_name }, HR_SECRET_KEY, { expiresIn: '2h' });
+            res.json({ success: true, token: token, company: hr[0].company_name, redirect: 'hr.html' });
+        } else { res.json({ success: false, message: "Invalid HR Email or Password." }); }
+    } catch (e) { res.json({ success: false, message: "Database Error." }); }
+});
+
+app.post('/api/auth', async (req, res) => {
+    try {
+        if (req.body.token === 'custom_admin_token_pc123') {
+            const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
+            const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
+            return res.json({ success: true, isAdmin: true, profile: { full_name: 'Placement Coordinator', email: 'admin@gmail.com' }, globalStats: globalStats ? globalStats[0] : null, globalDrives });
         }
-    } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error</div>`; }
+        const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
+        const payload = ticket.getPayload(); const email = payload.email.toLowerCase();
+        if (email === 'sivanagu7771@gmail.com') {
+            const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
+            const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
+            return res.json({ success: true, isAdmin: true, profile: { full_name: payload.name, email: email, picture: payload.picture }, globalStats: globalStats[0], globalDrives });
+        }
+        if (!email.endsWith('@bitsathy.ac.in')) return res.json({ success: false, message: "Access Denied." });
+        
+        let [profile] = await promisePool.query("SELECT * FROM student_profile WHERE email = ?", [email]);
+        if (profile.length === 0) {
+            const autoDepartment = getDepartmentFromEmail(email);
+            await promisePool.query("INSERT INTO student_profile (email, full_name, department, reward_points) VALUES (?, ?, ?, '0')", [email, payload.name, autoDepartment]);
+            [profile] = await promisePool.query("SELECT * FROM student_profile WHERE email = ?", [email]);
+        }
+        const [courses] = await promisePool.query("SELECT * FROM student_courses WHERE student_email = ? ORDER BY semester ASC", [email]);
+        const [skills] = await promisePool.query("SELECT * FROM student_skills WHERE student_email = ?", [email]);
+        const [semGpas] = await promisePool.query("SELECT semester, gpa FROM student_sem_gpa WHERE student_email = ?", [email]);
+        const [placeProfile] = await promisePool.query("SELECT * FROM placement_student_profile WHERE student_email = ?", [email]);
+        const [placeApps] = await promisePool.query("SELECT * FROM placement_apps WHERE student_email = ? ORDER BY id DESC", [email]);
+        const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
+        const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
+        res.json({ success: true, isAdmin: false, profile: profile[0], courses, skills, semGpas, globalStats: globalStats[0], globalDrives, placeProfile: placeProfile[0], placeApps, picture: payload.picture });
+    } catch (error) { res.json({ success: false, message: `Login Error: ${error.message}` }); }
+});
+
+app.post('/api/student/update-resume', async (req, res) => { try { const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); const email = ticket.getPayload().email.toLowerCase(); await promisePool.query(`INSERT INTO placement_student_profile (student_email, resume_url) VALUES (?, ?) ON DUPLICATE KEY UPDATE resume_url = ?`, [email, req.body.resume_url, req.body.resume_url]); res.json({ success: true }); } catch(e) { res.json({ success: false, message: "Session Expired" }); } });
+app.post('/api/student/all-rewards', async (req, res) => { try { await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); let [rows] = await promisePool.query("SELECT full_name, roll_no, department, reward_points FROM student_profile"); res.json({ success: true, students: rows || [] }); } catch (e) { res.json({ success: false, message: "Session expired." }); } });
+
+// 🛑 NEW: STUDENT SETS PRIMARY OFFER API
+app.post('/api/student/set-primary', async (req, res) => {
+    try {
+        const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
+        const email = ticket.getPayload().email.toLowerCase();
+        
+        await promisePool.query(
+            `INSERT INTO placement_student_profile (student_email, offer_company, offer_role, offer_ctc, status) 
+             VALUES (?, ?, ?, ?, 'Placed') 
+             ON DUPLICATE KEY UPDATE offer_company = ?, offer_role = ?, offer_ctc = ?, status = 'Placed'`, 
+            [email, req.body.company, req.body.role, req.body.ctc, req.body.company, req.body.role, req.body.ctc]
+        );
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false, message: "Session Expired" }); }
+});
+
+async function verifyAdmin(token) {
+    if (token === 'custom_admin_token_pc123') return true; 
+    const ticket = await googleClient.verifyIdToken({ idToken: token, audience: CLIENT_ID });
+    if (ticket.getPayload().email.toLowerCase() !== 'sivanagu7771@gmail.com') throw new Error("Unauthorized"); return true;
 }
-async function submitPlacementAnnouncement() {
-    const titleInput = document.getElementById('ann-title'); const contentInput = document.getElementById('ann-content'); const deptInput = document.getElementById('ann-target-dept');
-    if(!titleInput || !contentInput) return;
-    const title = titleInput.value.trim(); const content = contentInput.value.trim(); const targetDept = deptInput ? deptInput.value : 'ALL';
-    if(!title || !content) return alert("Please enter both an Announcement Title and Content.");
-    const btn = document.querySelector('#add-ann-modal .btn-primary'); const originalBtnText = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Posting...';
-    try { 
-        const req = await fetch(`${BASE_URL}/api/admin/add-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, title: title, type: 'Placement Drive', content: content, target_department: targetDept }) }); 
-        const res = await req.json();
-        if(!res.success) alert("DB Error: Failed to post announcement.");
-    } catch(e) {} finally { document.getElementById('add-ann-modal').style.display = 'none'; titleInput.value = ''; contentInput.value = ''; if(deptInput) deptInput.value = 'ALL'; btn.innerHTML = originalBtnText; loadAnnouncements(); }
-}
-async function deleteAnnouncement(id) { if(!confirm("Delete this announcement?")) return; await fetch(`${BASE_URL}/api/admin/delete-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); loadAnnouncements(); }
-function showToast(msg) { const container = document.getElementById('toast-container'); const toast = document.createElement('div'); toast.className = 'toast-msg'; toast.innerHTML = `<i class="fa-solid fa-circle-info" style="color:var(--primary);"></i> <span>${msg}</span>`; container.appendChild(toast); setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(20px)'; setTimeout(() => toast.remove(), 300); }, 3000); }
+
+app.post('/api/admin/list', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const [rows] = await promisePool.query(`SELECT sp.email, sp.full_name, sp.roll_no, sp.department, psp.offer_company, psp.status, psp.resume_url FROM student_profile sp LEFT JOIN placement_student_profile psp ON LOWER(sp.email) = LOWER(psp.student_email) ORDER BY sp.full_name ASC`); res.json({ success: true, students: rows }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/student-data', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const email = req.body.targetEmail; const [profile] = await promisePool.query("SELECT * FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]); const [courses] = await promisePool.query("SELECT * FROM student_courses WHERE student_email = ? ORDER BY semester ASC", [email]); const [skills] = await promisePool.query("SELECT * FROM student_skills WHERE student_email = ?", [email]); const [semGpas] = await promisePool.query("SELECT semester, gpa FROM student_sem_gpa WHERE student_email = ?", [email]); const [placeProfile] = await promisePool.query("SELECT * FROM placement_student_profile WHERE student_email = ?", [email]); const [placeApps] = await promisePool.query("SELECT * FROM placement_apps WHERE student_email = ? ORDER BY id DESC", [email]); res.json({ success: true, profile: profile[0], courses, skills, semGpas, placeProfile: placeProfile[0], placeApps }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/add-app', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("INSERT INTO placement_apps (student_email, company, role, date_applied, status) VALUES (?, ?, ?, ?, ?)", [req.body.targetEmail.toLowerCase(), req.body.company, req.body.role, req.body.date_applied, req.body.status]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/update-app', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`UPDATE placement_apps SET ${req.body.field} = ? WHERE id = ?`, [req.body.value, req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/delete-app', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("DELETE FROM placement_apps WHERE id = ?", [req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/update-field', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`UPDATE student_profile SET ${req.body.field} = ? WHERE LOWER(email) = LOWER(?)`, [req.body.value, req.body.targetEmail]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/update-placement-profile', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`INSERT IGNORE INTO placement_student_profile (student_email) VALUES (?)`, [req.body.targetEmail.toLowerCase()]); await promisePool.query(`UPDATE placement_student_profile SET ${req.body.field} = ? WHERE student_email = ?`, [req.body.value, req.body.targetEmail.toLowerCase()]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/update-global-stat', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`UPDATE placement_global SET ${req.body.field} = ? WHERE id = 1`, [req.body.value]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/add-drive', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("INSERT INTO placement_drives (company, role, appeared, selected, ctc) VALUES (?, ?, ?, ?, ?)", [req.body.company, req.body.role, req.body.appeared, req.body.selected, req.body.ctc]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/update-drive', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`UPDATE placement_drives SET ${req.body.field} = ? WHERE id = ?`, [req.body.value, req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/delete-drive', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("DELETE FROM placement_drives WHERE id = ?", [req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+
+app.post('/api/announcements/list', async (req, res) => {
+    try {
+        if (req.body.token === 'custom_admin_token_pc123') { const [rows] = await promisePool.query("SELECT * FROM announcements ORDER BY date_posted DESC"); return res.json({ success: true, announcements: rows }); }
+        const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); const email = ticket.getPayload().email.toLowerCase();
+        if (email === 'sivanagu7771@gmail.com') { const [rows] = await promisePool.query("SELECT * FROM announcements ORDER BY date_posted DESC"); return res.json({ success: true, announcements: rows }); }
+        const [profile] = await promisePool.query("SELECT department FROM student_profile WHERE email = ?", [email]); const studentDept = (profile.length > 0) ? profile[0].department : 'Not Assigned';
+        const [rows] = await promisePool.query("SELECT * FROM announcements WHERE target_department = 'ALL' OR target_department = ? ORDER BY date_posted DESC", [studentDept]);
+        res.json({ success: true, announcements: rows });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/add-announcement', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("INSERT INTO announcements (title, type, content, target_department) VALUES (?, ?, ?, ?)", [req.body.title, req.body.type, req.body.content, req.body.target_department || 'ALL']); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/delete-announcement', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("DELETE FROM announcements WHERE id = ?", [req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+
+app.post('/api/drives/active-list', async (req, res) => {
+    try {
+        if (req.body.token === 'custom_admin_token_pc123') { const [rows] = await promisePool.query("SELECT * FROM active_drives ORDER BY id DESC"); return res.json({ success: true, drives: rows }); }
+        const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); const email = ticket.getPayload().email.toLowerCase();
+        if(email === 'sivanagu7771@gmail.com') { const [rows] = await promisePool.query("SELECT * FROM active_drives ORDER BY id DESC"); return res.json({ success: true, drives: rows }); }
+        const localPart = email.split('@')[0]; const yearMatch = localPart.match(/\d+$/); const studentYear = yearMatch ? yearMatch[0] : 'NONE';
+        const [rows] = await promisePool.query("SELECT * FROM active_drives WHERE target_year = 'ALL' OR target_year = ? ORDER BY id DESC", [studentYear]);
+        res.json({ success: true, drives: rows });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/add-active-drive', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const ctcVal = req.body.ctc && req.body.ctc.trim() !== '' ? req.body.ctc : 'Not Disclosed'; const targetYear = req.body.target_year || 'ALL'; await promisePool.query("INSERT INTO active_drives (company_name, role, ctc, eligibility, description, deadline, target_year) VALUES (?, ?, ?, ?, ?, ?, ?)", [req.body.company_name, req.body.role, ctcVal, req.body.eligibility, req.body.description, req.body.deadline, targetYear]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/delete-active-drive', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("DELETE FROM active_drives WHERE id = ?", [req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/student/apply-drive', async (req, res) => { try { const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); const email = ticket.getPayload().email.toLowerCase(); const [existing] = await promisePool.query("SELECT id FROM placement_apps WHERE student_email=? AND company=? AND role=?", [email, req.body.company, req.body.role]); if(existing.length > 0) return res.json({ success: false, message: "You have already applied for this role!" }); const dateStr = new Date().toLocaleDateString('en-GB'); await promisePool.query("INSERT INTO placement_apps (student_email, company, role, date_applied, status) VALUES (?, ?, ?, ?, 'Applied')", [email, req.body.company, req.body.role, dateStr]); res.json({ success: true }); } catch(e) { res.json({ success: false, message: "Session expired" }); } });
+app.post('/api/admin/update-app-status', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`UPDATE placement_apps SET status = ? WHERE id = ?`, [req.body.status, req.body.app_id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/all-applications', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const [rows] = await promisePool.query(`SELECT pa.id as app_id, pa.student_email, pa.company, pa.role, pa.status, pa.date_applied, sp.full_name, sp.department FROM placement_apps pa JOIN student_profile sp ON pa.student_email = sp.email ORDER BY pa.id DESC`); res.json({ success: true, applications: rows }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/mark-placed', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`UPDATE placement_apps SET status = ?, salary_package = ?, internship_period = ?, call_letter_url = ? WHERE id = ?`, [req.body.status, req.body.package, req.body.internship, req.body.offer_link, req.body.app_id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/drive-applicants', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const [rows] = await promisePool.query(`SELECT pa.id as app_id, pa.student_email, pa.status, pa.date_applied, sp.full_name, sp.department, sp.roll_no, psp.resume_url FROM placement_apps pa JOIN student_profile sp ON pa.student_email = sp.email LEFT JOIN placement_student_profile psp ON pa.student_email = psp.student_email WHERE pa.company = ? AND pa.role = ? ORDER BY pa.id DESC`, [req.body.company, req.body.role]); res.json({ success: true, applicants: rows }); } catch (e) { res.json({ success: false }); } });
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`🚀 BACKEND READY ON PORT ${PORT}`));
