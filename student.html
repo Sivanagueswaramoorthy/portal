@@ -29,7 +29,8 @@
             <a class="nav-item" id="nav-announcements" onclick="switchTab('announcements', this); fetchStudentAnnouncements();"><i class="fa-solid fa-bullhorn"></i> Notice Board</a>
             <a class="nav-item" id="nav-act" onclick="switchTab('activities', this)"><i class="fa-solid fa-rocket"></i> PCDP Activities</a>
             <a class="nav-item" id="nav-acad" onclick="switchTab('academics', this)"><i class="fa-solid fa-book-open"></i> Academic Records</a>
-            <a class="nav-item" id="nav-col-place" onclick="switchTab('college-placement', this)"><i class="fa-solid fa-building-user"></i> College Placement</a>
+<a class="nav-item" id="nav-col-place" onclick="switchTab('college-placement', this)"><i class="fa-solid fa-building-user"></i> College Placement</a>
+            <a class="nav-item" id="nav-apply-companies" onclick="switchTab('apply-companies', this); fetchActiveDrives();"><i class="fa-solid fa-paper-plane"></i> Job Openings</a>
             <a class="nav-item" id="nav-place" onclick="switchTab('placement', this)"><i class="fa-solid fa-briefcase"></i> My Placement Hub</a>
             <a class="nav-item" id="nav-rewards" onclick="switchTab('rewards', this); fetchAllRewards();"><i class="fa-solid fa-gift"></i> Reward Points Board</a>
         </div>
@@ -198,6 +199,16 @@
                         <tbody id="global-drives-tbody"></tbody>
                     </table>
                 </div>
+            </div>
+            <div id="view-apply-companies" class="view-section">
+                <div class="flex-between" style="margin-bottom: 24px; align-items: center;">
+                    <div>
+                        <h1 class="page-title">Current Job Openings</h1>
+                        <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.85rem;">Browse and apply for active campus drives.</p>
+                    </div>
+                </div>
+                <div id="student-drives-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;">
+                    </div>
             </div>
 
             <div id="view-placement" class="view-section">

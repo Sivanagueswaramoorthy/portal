@@ -6,6 +6,8 @@ let allRewardsData = [];
 
 // Track picture for use in polling loop
 let studentProfilePicture = "";
+// 🛑 Track applied companies globally so the UI can disable "Apply" buttons
+window.studentAppliedApps = [];
 
 if (!globalToken) window.location.href = 'index.html';
 
@@ -76,8 +78,7 @@ window.onload = async () => {
     // Initial Render
     renderDataViews(initialData);
 
-    // --- Start Auto-Refresh Polling Loop ---
-    // Every 5 seconds, check for progress updates in the background
+    // Start Auto-Refresh Polling Loop
     setInterval(backgroundRefreshLoop, 5000);
 };
 
@@ -309,6 +310,10 @@ function populatePersonalPlacement(pProfile, pApps) {
     }
 
     const appBody = document.getElementById('student-apps-tbody');
+    
+    // 🛑 SAVE GLOBAL APPS SO JOB OPENINGS TAB CAN DISABLE BUTTONS
+    window.studentAppliedApps = pApps || [];
+
     if (pApps && pApps.length > 0) {
         appBody.innerHTML = pApps.map(a => {
             let bClass = 'badge-primary';
@@ -316,13 +321,8 @@ function populatePersonalPlacement(pProfile, pApps) {
             if(a.status.toLowerCase().includes('clear') || a.status.toLowerCase().includes('reject')) bClass = 'badge-danger';
             if(a.status.toLowerCase().includes('pend') || a.status.toLowerCase().includes('wait')) bClass = 'badge-warning';
             
-            // Format CTC text if provided
             const ctcText = (a.ctc_offered && a.ctc_offered !== '--') ? `<br><span style="font-size:0.75rem; color:var(--success); font-weight:800;"><i class="fa-solid fa-money-bill-wave"></i> ${a.ctc_offered}</span>` : '';
-            
-            // Generate Download Button if HR provided a link
-            const letterBtn = (a.offer_link && a.offer_link.trim() !== '') 
-                ? `<a href="${a.offer_link}" target="_blank" class="action-btn btn-outline" style="padding: 4px 8px; font-size: 0.7rem; margin-top: 6px; display: inline-flex; border-color: var(--primary); color: var(--primary);"><i class="fa-solid fa-download"></i> Call Letter</a>` 
-                : '';
+            const letterBtn = (a.offer_link && a.offer_link.trim() !== '') ? `<a href="${a.offer_link}" target="_blank" class="action-btn btn-outline" style="padding: 4px 8px; font-size: 0.7rem; margin-top: 6px; display: inline-flex; border-color: var(--primary); color: var(--primary);"><i class="fa-solid fa-download"></i> Call Letter</a>` : '';
 
             return `
             <tr>
@@ -369,6 +369,10 @@ async function saveResume() {
     }
     document.getElementById('resume-link-input').disabled = false;
 }
+
+// -----------------------------------------------------------------------------
+// Leaderboard & Announcements
+// -----------------------------------------------------------------------------
 
 async function fetchAllRewards() {
     const tbody = document.getElementById('all-rewards-tbody');
@@ -426,8 +430,7 @@ function filterRewards() {
     );
     renderRewardsTable(filtered);
 }
-// --- ANNOUNCEMENT LOGIC (STUDENT) ---
-// 🛑 NEW: Student Notice Board Logic
+
 async function fetchStudentAnnouncements() {
     const feed = document.getElementById('student-ann-feed');
     feed.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Checking for updates...</div>`;
@@ -450,7 +453,6 @@ async function fetchStudentAnnouncements() {
                 let color = isPlacement ? "var(--success)" : "var(--primary)";
                 let dateStr = new Date(ann.date_posted).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
                 
-                // Show target badge to student
                 let targetLabel = ann.target_department || 'ALL';
                 let deptBadge = targetLabel === 'ALL' 
                     ? `<span class="badge" style="background: #E2E8F0; color: #475569; margin-right: 10px;"><i class="fa-solid fa-globe"></i> Global Notice</span>`
@@ -474,4 +476,79 @@ async function fetchStudentAnnouncements() {
     } catch(e) { 
         feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error. Refresh to try again.</div>`; 
     }
+}
+
+// -----------------------------------------------------------------------------
+// 🛑 NEW: STUDENT ACTIVE DRIVES & APPLY LOGIC
+// -----------------------------------------------------------------------------
+async function fetchActiveDrives() {
+    const grid = document.getElementById('student-drives-grid');
+    grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Openings...</div>`;
+    
+    try {
+        const req = await fetch(`${BASE_URL}/api/drives/active-list`, { 
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ token: globalToken }) 
+        });
+        const data = await req.json();
+        
+        if (data.success) {
+            if(data.drives.length === 0) {
+                grid.innerHTML = `<div class="card" style="grid-column: 1/-1; text-align:center; padding: 40px; color:var(--text-muted);">No active job openings right now.</div>`;
+                return;
+            }
+            
+            grid.innerHTML = data.drives.map(d => {
+                // Check if student has already applied
+                const hasApplied = window.studentAppliedApps.some(a => a.company === d.company_name && a.role === d.role);
+                
+                const btnHtml = hasApplied 
+                    ? `<button class="action-btn" style="background: #E2E8F0; color: #64748b; cursor: not-allowed; width:100%; justify-content:center;" disabled><i class="fa-solid fa-check"></i> Already Applied</button>`
+                    : `<button class="action-btn btn-primary" style="width:100%; justify-content:center;" onclick="applyForDrive('${d.company_name}', '${d.role}')"><i class="fa-solid fa-paper-plane"></i> Apply Now</button>`;
+
+                return `
+                <div class="card" style="padding: 24px; border-top: 4px solid var(--primary); display: flex; flex-direction: column;">
+                    <div class="flex-between" style="align-items: flex-start; margin-bottom: 16px;">
+                        <div>
+                            <h3 style="margin: 0 0 6px 0; font-size: 1.15rem; color: var(--text-main); font-weight: 800;">${d.company_name}</h3>
+                            <span class="badge badge-primary">${d.role}</span>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-weight: 800; color: var(--success); font-size: 1.1rem;">${d.ctc}</div>
+                        </div>
+                    </div>
+                    
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0 0 16px 0; line-height: 1.5; white-space: pre-wrap; flex: 1;">${d.description}</p>
+                    
+                    <div style="font-size: 0.75rem; color: var(--text-main); font-weight: 600; margin-bottom: 8px;">
+                        <i class="fa-solid fa-graduation-cap" style="color: var(--primary);"></i> Eligibility: ${d.eligibility}
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--danger); font-weight: 600; margin-bottom: 16px;">
+                        <i class="fa-solid fa-clock"></i> Deadline: ${d.deadline}
+                    </div>
+                    
+                    ${btnHtml}
+                </div>`;
+            }).join('');
+        }
+    } catch(e) { grid.innerHTML = `<div class="card" style="grid-column: 1/-1; color:var(--danger); text-align:center;">Network Error.</div>`; }
+}
+
+async function applyForDrive(company, role) {
+    if(!confirm(`Are you sure you want to apply for the ${role} position at ${company}?\n\nBy clicking OK, your profile and resume will be sent to the Placement Coordinator.`)) return;
+    
+    try {
+        const req = await fetch(`${BASE_URL}/api/student/apply-drive`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ token: globalToken, company: company, role: role })
+        });
+        const res = await req.json();
+        
+        if(res.success) {
+            alert("✅ Successfully applied! You can track your status in 'My Placement Hub'.");
+            window.location.reload(); // Refresh to update their applied status globally
+        } else {
+            alert(res.message || "Failed to apply. Make sure your session hasn't expired.");
+        }
+    } catch(e) { alert("Network Error. Ensure Backend is deployed."); }
 }
