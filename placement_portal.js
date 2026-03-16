@@ -12,7 +12,10 @@ window.allGlobalPlacements = [];
 window.globalDrivesList = [];
 
 // 🛑 ANTI-BREAK ESCAPER
-const esc = (str) => (str || '--').toString().replace(/'/g, "\\'").replace(/"/g, '&quot;');
+const esc = (str) => {
+    if (!str) return '--';
+    return String(str).replace(/'/g, "&#39;").replace(/"/g, '&quot;');
+};
 
 window.onload = async () => {
     try {
@@ -30,8 +33,9 @@ window.onload = async () => {
         
         const data = await req.json();
         
-        if (!data.success || !data.isAdmin) { 
-            alert(`Authentication Failed: ${data.message || 'Not authorized'}`);
+        // 🛑 Strict check to ensure ONLY placement@gmail.com enters here
+        if (!data.success || !data.isPlacementAdmin) { 
+            alert(`Access Denied: This portal is restricted to Placement Administrators only.`);
             localStorage.removeItem('bit_session_token'); 
             window.location.href = 'index.html'; 
             return; 
@@ -591,113 +595,6 @@ async function submitPlacedDetails() {
     try { await fetch(`${BASE_URL}/api/admin/mark-placed`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, app_id: appId, status: status, package: pack, internship: intern, offer_link: link }) }); } catch(e) { }
     document.getElementById('mark-placed-modal').style.display = 'none'; btn.innerHTML = 'Save Placement Record'; loadAllPlacements(); 
 }
-
-// 🛑 ACTIVE JOB DRIVES & COMPANY MANAGEMENT
-async function loadActiveDrives() {
-    const feed = document.getElementById('active-drives-feed');
-    if(!feed) return;
-    feed.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Drives...</div>`;
-    try {
-        const req = await fetch(`${BASE_URL}/api/drives/active-list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
-        const data = await req.json();
-        if (data.success) {
-            window.globalDrivesList = data.drives;
-            if(document.getElementById('dash-active-drives')) document.getElementById('dash-active-drives').innerText = data.drives.length;
-            
-            // Render the Company Management Table using the drives
-            if(typeof renderCompaniesTable === 'function') renderCompaniesTable(data.drives);
-
-            if(data.drives.length === 0) { feed.innerHTML = `<div class="card" style="text-align:center; padding: 40px; color:var(--text-muted);">No active drives posted yet.</div>`; return; }
-
-            feed.innerHTML = data.drives.map(d => {
-                let isExpired = false; let displayDate = d.deadline;
-                if(d.deadline && d.deadline.includes('-')) {
-                    const deadDate = new Date(d.deadline); displayDate = deadDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); deadDate.setHours(23, 59, 59, 999); if(deadDate < new Date()) isExpired = true;
-                }
-                const expiredBadge = isExpired ? `<span class="badge badge-danger" style="margin-left: 8px;">Expired</span>` : '';
-                const ctcBadge = d.ctc && d.ctc !== 'Not Disclosed' ? `<span style="font-weight: 800; color: var(--success); font-size: 1.1rem;">${d.ctc}</span>` : `<span style="font-weight: 800; color: var(--success); font-size: 1.1rem;">Not Disclosed</span>`;
-
-                return `
-                <div class="drive-card" style="opacity: ${isExpired ? '0.7' : '1'};">
-                    <div class="flex-between" style="align-items: flex-start;">
-                        <div>
-                            <h3 style="margin: 0 0 8px 0; font-size: 1.2rem; color: var(--text-main); font-weight: 800;">${esc(d.company_name)}</h3>
-                            <span class="badge badge-primary" style="background:#EEF2FF; color:#4F46E5;">${esc(d.role)}</span>
-                            ${expiredBadge}
-                            <div style="margin-top: 12px; font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase;">Batch '${d.target_year !== 'ALL' ? d.target_year : 'ALL'}</div>
-                        </div>
-                        <div style="text-align: right;">
-                            ${ctcBadge}
-                            <div style="font-size: 0.8rem; color: ${isExpired ? 'var(--danger)' : 'var(--text-muted)'}; margin-top: 4px;">Deadline: ${displayDate}</div>
-                        </div>
-                    </div>
-
-                    <div class="flex-between" style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 20px;">
-                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);"><i class="fa-solid fa-graduation-cap"></i> Eligibility: ${esc(d.eligibility)}</span>
-                        <div style="display: flex; gap: 8px;">
-                            <button class="action-btn btn-outline" style="font-size: 0.8rem; padding: 6px 12px;" onclick="viewDriveApplicants('${esc(d.company_name)}', '${esc(d.role)}')">View Apps</button>
-                            <button class="action-icon cancel" style="padding: 6px; border: 1px solid var(--danger); border-radius: 6px;" onclick="deleteActiveDrive(${d.id})"><i class="fa-solid fa-trash" style="font-size: 0.9rem;"></i></button>
-                        </div>
-                    </div>
-                </div>`;
-            }).join('');
-        }
-    } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error loading drives</div>`; }
-}
-
-async function submitActiveDrive() {
-    const comp = document.getElementById('ad-comp').value.trim();
-    const role = document.getElementById('ad-role').value.trim();
-    const ctc = document.getElementById('ad-ctc').value.trim();
-    const elig = document.getElementById('ad-elig').value.trim();
-    const desc = document.getElementById('ad-desc').value.trim();
-    const dead = document.getElementById('ad-dead').value;
-    const targetYr = document.getElementById('ad-year').value;
-
-    if(!comp || !role || !dead) return alert("Company, Role, and Deadline are required!");
-
-    const btn = document.querySelector('#add-active-drive-modal .btn-primary');
-    const ogText = btn.innerHTML;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Posting...';
-
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/add-active-drive`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ adminToken: globalToken, company_name: comp, role: role, ctc: ctc, eligibility: elig, description: desc, deadline: dead, target_year: targetYr })
-        });
-        const res = await req.json();
-        if(res.success) {
-            document.getElementById('add-active-drive-modal').style.display = 'none';
-            document.getElementById('ad-comp').value = ''; document.getElementById('ad-role').value = ''; document.getElementById('ad-ctc').value = ''; document.getElementById('ad-elig').value = ''; document.getElementById('ad-desc').value = ''; document.getElementById('ad-dead').value = '';
-            loadActiveDrives();
-        } else { alert("Failed to post drive: " + res.message); }
-    } catch(e) { alert("Network Error"); }
-    btn.innerHTML = ogText;
-}
-
-async function deleteActiveDrive(id) {
-    if(!confirm("⚠️ Delete this active drive?\n\nThis will instantly remove the drive from the portal AND delete all student applications associated with it!")) return;
-    try {
-        await fetch(`${BASE_URL}/api/admin/delete-active-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) });
-        loadActiveDrives(); loadAllPlacements();
-    } catch(e) { alert("Failed to delete drive"); }
-}
-
-function renderCompaniesTable(drives) {
-    const tbody = document.getElementById('companies-list-tbody');
-    if(!tbody) return;
-    if(!drives || drives.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No companies found.</td></tr>`; return; }
-
-    tbody.innerHTML = drives.map(d => {
-        let isExpired = false;
-        if(d.deadline && d.deadline.includes('-')) { const deadDate = new Date(d.deadline); deadDate.setHours(23, 59, 59, 999); if(deadDate < new Date()) isExpired = true; }
-        const stat = isExpired ? `<span class="badge badge-warning">Closed</span>` : `<span class="badge badge-success">Active</span>`;
-
-        return `<tr><td style="font-weight: 800; color: var(--text-main);">${esc(d.company_name)}</td><td style="color: var(--text-muted);">${esc(d.role)}</td><td style="font-weight: 700; color: var(--success);">${esc(d.ctc)}</td><td>Remote / Campus</td><td>${stat}</td></tr>`;
-    }).join('');
-}
-
 
 // 🛑 MODAL APPLICANTS LIST 
 async function viewDriveApplicants(company, role) {

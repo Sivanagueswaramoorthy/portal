@@ -27,9 +27,9 @@ window.onload = async () => {
         
         if (!data.success) { localStorage.removeItem('bit_session_token'); window.location.href = 'index.html'; return; }
         
-        // 🛑 FIXED ADMIN REDIRECT
-        if (data.isAdmin) { window.location.href = 'placement_portal.html'; return; }
-        if (data.isHR) { window.location.href = 'hr.html'; return; }
+        // 🛑 NEW ROUTER LOGIC FOR ROLES
+        if (data.isPlacementAdmin) { window.location.href = 'placement_portal.html'; return; }
+        if (data.isStaffAdmin) { window.location.href = 'admin.html'; return; }
         
         let loggedInName = data.profile.full_name; 
         let loggedInEmail = data.profile.email; 
