@@ -11,13 +11,23 @@ window.currentDriveApplicants = [];
 window.allGlobalPlacements = []; 
 window.globalDrivesList = [];
 
-// Helper to prevent HTML button breaks
+// 🛑 ANTI-BREAK ESCAPER
 const esc = (str) => (str || '--').toString().replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
 window.onload = async () => {
     try {
-        const req = await fetch(`${BASE_URL}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
-        if (!req.ok) throw new Error("HTTP Error " + req.status);
+        const req = await fetch(`${BASE_URL}/api/auth`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ token: globalToken }) 
+        });
+        
+        if (!req.ok) {
+            console.warn("Backend is starting up. Reloading...");
+            setTimeout(() => window.location.reload(), 3000);
+            return;
+        }
+        
         const data = await req.json();
         
         if (!data.success || !data.isAdmin) { 
@@ -27,12 +37,11 @@ window.onload = async () => {
             return; 
         }
 
-        // Safe DOM Updates
         if(document.getElementById('headerName')) document.getElementById('headerName').innerText = data.profile.full_name || 'Admin';
         if(document.getElementById('headerEmail')) document.getElementById('headerEmail').innerText = data.profile.email || '';
         if(document.getElementById('headerImage')) document.getElementById('headerImage').src = data.profile.picture || `https://ui-avatars.com/api/?name=Admin&background=4F46E5&color=fff`;
 
-        // Load Data Silently
+        // Safe Execution wrappers
         try { populateGlobalPlacement(data.globalStats, data.globalDrives); } catch(e){}
         try { await fetchDirectory(); } catch(e){}
         try { loadAnnouncements(); } catch(e){}
@@ -40,8 +49,7 @@ window.onload = async () => {
         try { loadActiveDrives(); } catch(e){}
 
     } catch (e) { 
-        console.error("Dashboard Load Error:", e);
-        alert("Warning: Could not connect to the backend. Please refresh the page.");
+        console.error("Dashboard Load Warning: Backend sleeping.", e);
     }
 };
 
@@ -58,6 +66,7 @@ function switchTab(tabId, element) {
 
     document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active')); 
     if(element) element.classList.add('active'); 
+    
     document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active')); 
     
     const targetView = document.getElementById('view-' + tabId);
@@ -71,6 +80,7 @@ function switchTab(tabId, element) {
     };
     if(titles[tabId] && document.getElementById('top-title-bar')) document.getElementById('top-title-bar').innerText = titles[tabId];
 
+    // Safely trigger data refreshes
     try {
         if (tabId === 'dashboard') updateDashboardOverview();
         if (tabId === 'students' || tabId === 'edit-list' || tabId === 'analysis-list') fetchDirectory();
@@ -110,6 +120,9 @@ function updateDashboardOverview() {
 
 // --- 1. STUDENT MANAGEMENT DB ---
 async function fetchDirectory() {
+    const listBody = document.getElementById('student-list-tbody');
+    if(listBody) listBody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>`;
+    
     try {
         const req = await fetch(`${BASE_URL}/api/admin/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken }) });
         const data = await req.json();
@@ -143,14 +156,18 @@ async function fetchDirectory() {
             if(document.getElementById('analysis-list-tbody')) renderAnalysisTable(allStudentsList);
             if(document.getElementById('edit-student-list-tbody')) renderEditTable(allStudentsList);
             updateDashboardOverview();
+        } else {
+            if(listBody) listBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger);">Backend Error: ${data.message || 'Token Issue'}</td></tr>`;
         }
-    } catch(e) {}
+    } catch(e) { 
+        if(listBody) listBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger);">Network Error. Backend offline.</td></tr>`;
+    }
 }
 
 function renderTable(students) {
     const tbody = document.getElementById('student-list-tbody');
     if(!tbody) return;
-    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
+    if(!students || students.length === 0) { tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
     tbody.innerHTML = students.map(s => {
         const resumeLink = (s.resume_url && s.resume_url !== '--' && s.resume_url.trim() !== '') ? `<a href="${s.resume_url}" target="_blank" class="action-btn btn-outline" style="padding: 4px 8px; font-size: 0.75rem; border-color: var(--primary); color: var(--primary); text-decoration: none;"><i class="fa-solid fa-file-pdf"></i> View</a>` : `<span style="font-size: 0.75rem; color: var(--text-muted); background: #f1f5f9; padding: 4px 8px; border-radius: 4px;">Not Uploaded</span>`;
         const cgpa = s.cgpa ? parseFloat(s.cgpa).toFixed(2) : '--';
@@ -192,26 +209,26 @@ async function deleteStudent(email, name) {
             alert(`✅ ${name} has been deleted.`);
             fetchDirectory(); 
             loadAllPlacements(); 
-        } else { alert("❌ Failed to delete student."); }
+        } else { alert("❌ Failed to delete student: " + (res.message || "Server error.")); }
     } catch(e) { alert("Network error while trying to delete."); }
 }
 
 // 🛑 READ-ONLY QUICK VIEW MODAL
 async function openReadOnlyDetail(email, name, roll_no, department) {
-    document.getElementById('student-detail-modal').style.display = 'flex'; 
-    document.getElementById('ro-modal-content-body').style.display = 'none'; 
-    document.getElementById('ro-modal-loading').style.display = 'block'; 
-    document.getElementById('ro-detail-name').innerText = name; 
-    document.getElementById('ro-detail-sub').innerText = `${roll_no || 'No Roll No'} | ${department || 'No Dept'}`; 
-    document.getElementById('ro-detail-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff`;
+    if(document.getElementById('student-detail-modal')) document.getElementById('student-detail-modal').style.display = 'flex'; 
+    if(document.getElementById('ro-modal-content-body')) document.getElementById('ro-modal-content-body').style.display = 'none'; 
+    if(document.getElementById('ro-modal-loading')) document.getElementById('ro-modal-loading').style.display = 'block'; 
+    if(document.getElementById('ro-detail-name')) document.getElementById('ro-detail-name').innerText = name; 
+    if(document.getElementById('ro-detail-sub')) document.getElementById('ro-detail-sub').innerText = `${roll_no || 'No Roll No'} | ${department || 'No Dept'}`; 
+    if(document.getElementById('ro-detail-img')) document.getElementById('ro-detail-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff`;
 
     try {
         const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) });
         const data = await req.json();
         if (data.success) { 
             populateReadOnlyModal(data.placeProfile || {}, data.placeApps || []); 
-            document.getElementById('ro-modal-loading').style.display = 'none'; 
-            document.getElementById('ro-modal-content-body').style.display = 'block'; 
+            if(document.getElementById('ro-modal-loading')) document.getElementById('ro-modal-loading').style.display = 'none'; 
+            if(document.getElementById('ro-modal-content-body')) document.getElementById('ro-modal-content-body').style.display = 'block'; 
         } else { alert("Failed to fetch placement data."); document.getElementById('student-detail-modal').style.display = 'none'; }
     } catch(e) { alert("Network error."); document.getElementById('student-detail-modal').style.display = 'none'; }
 }
@@ -261,7 +278,7 @@ function populateReadOnlyModal(prf, apps) {
 function renderAnalysisTable(students) {
     const tbody = document.getElementById('analysis-list-tbody');
     if(!tbody) return;
-    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students match filter.</td></tr>`; return; }
+    if(!students || students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students match filter.</td></tr>`; return; }
     tbody.innerHTML = students.map(s => {
         const yMatch = (s.email||'').split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
         return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: var(--primary);">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color: #4F46E5; color: #4F46E5;" onclick="openAnalysisDetail('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')">Full Analysis <i class="fa-solid fa-arrow-right" style="margin-left: 6px;"></i></button></td></tr>`;
@@ -287,19 +304,19 @@ function filterAnalysisStudents() {
 // 🛑 FULL PAGE ANALYSIS DASHBOARD
 async function openAnalysisDetail(email, name, roll_no, department) {
     switchTab('analysis-detail', document.getElementById('nav-analysis-list'));
-    document.getElementById('ana-modal-content-body').style.display = 'none'; 
-    document.getElementById('ana-modal-loading').style.display = 'block'; 
-    document.getElementById('ana-detail-name').innerText = name; 
-    document.getElementById('ana-detail-sub').innerText = `${roll_no || 'No Roll No'} | ${department || 'No Dept'}`; 
-    document.getElementById('ana-detail-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff`;
+    if(document.getElementById('ana-modal-content-body')) document.getElementById('ana-modal-content-body').style.display = 'none'; 
+    if(document.getElementById('ana-modal-loading')) document.getElementById('ana-modal-loading').style.display = 'block'; 
+    if(document.getElementById('ana-detail-name')) document.getElementById('ana-detail-name').innerText = name; 
+    if(document.getElementById('ana-detail-sub')) document.getElementById('ana-detail-sub').innerText = `${roll_no || 'No Roll No'} | ${department || 'No Dept'}`; 
+    if(document.getElementById('ana-detail-img')) document.getElementById('ana-detail-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff`;
 
     try {
         const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) });
         const data = await req.json();
         if (data.success) { 
             populateAnalysisModal(data.placeProfile || {}, data.placeApps || []); 
-            document.getElementById('ana-modal-loading').style.display = 'none'; 
-            document.getElementById('ana-modal-content-body').style.display = 'block'; 
+            if(document.getElementById('ana-modal-loading')) document.getElementById('ana-modal-loading').style.display = 'none'; 
+            if(document.getElementById('ana-modal-content-body')) document.getElementById('ana-modal-content-body').style.display = 'block'; 
         } else { alert("Failed to fetch placement data."); switchTab('analysis-list', document.getElementById('nav-analysis-list')); }
     } catch(e) { alert("Network error."); switchTab('analysis-list', document.getElementById('nav-analysis-list')); }
 }
@@ -346,7 +363,7 @@ function loginAsStudent() {
     const password = document.getElementById('edit-login-pass').value.trim();
     
     if(loginId === "1234" && password === "1234") {
-        document.getElementById('nav-student-login').style.display = 'none';
+        if(document.getElementById('nav-student-login')) document.getElementById('nav-student-login').style.display = 'none';
         
         const editNav = document.getElementById('nav-edit-list');
         const detailNav = document.getElementById('nav-edit-detail');
@@ -369,7 +386,7 @@ function lockEditor() {
 function renderEditTable(students) {
     const tbody = document.getElementById('edit-student-list-tbody');
     if(!tbody) return;
-    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
+    if(!students || students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
     tbody.innerHTML = students.map(s => {
         const yMatch = (s.email||'').split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
         return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: #B91C1C;">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color:#B91C1C; color:#B91C1C;" onclick="openEditableStudentDetail('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')">Edit Skills <i class="fa-solid fa-pen" style="margin-left: 6px;"></i></button></td></tr>`;
@@ -472,7 +489,6 @@ async function savePlacementProfileEdit(field, spanId, width) {
     } catch(e) { cancelPlacementProfileEdit(spanId, field, width); }
 }
 
-
 // --- COLLEGE PLACEMENT STATS ---
 async function refreshGlobalPlacementData() {
     try {
@@ -497,28 +513,34 @@ function populateGlobalPlacement(gStats, gDrives) {
         drvBody.innerHTML = gDrives.map(d => `<tr id="row-drv-${d.id}"><td style="font-weight: 700; color: var(--text-main);">${d.company}</td><td>${d.role}</td><td style="font-family: monospace;">${d.appeared}</td><td><span class="badge badge-success">${d.selected}</span></td><td style="font-weight: 700; color: var(--primary);">${d.ctc}</td><td style="text-align:right; white-space:nowrap;"><i class="fa-solid fa-pen admin-table-edit" onclick="editDriveRow(${d.id})"></i><i class="fa-solid fa-trash admin-table-del" onclick="deleteGlobalDrive(${d.id})"></i></td></tr>`).join('');
     } else { drvBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:var(--text-muted);">No campus drives recorded.</td></tr>`; }
 }
+
 function cancelGlobalStatEdit() { refreshGlobalPlacementData(); }
 function openGlobalStatEdit(field, spanId, width) {
     const span = document.getElementById(spanId); originalValues[spanId] = span.innerText.trim(); const wrapId = spanId.replace('val-', 'wrap-');
     document.getElementById(wrapId).innerHTML = `<div class="flex-center"><input type="text" id="in-${spanId}" class="inline-input" style="width: ${width}; padding: 4px;" value="${originalValues[spanId]}"><i class="fa-solid fa-check action-icon save" style="width:28px; height:28px;" onclick="saveGlobalStat('${field}', '${spanId}', '${width}')"></i><i class="fa-solid fa-xmark action-icon cancel" style="width:28px; height:28px;" onclick="cancelGlobalStatEdit()"></i></div>`;
 }
+
 async function saveGlobalStat(field, spanId, width) {
     const val = document.getElementById(`in-${spanId}`).value; const wrapId = spanId.replace('val-', 'wrap-');
     document.getElementById(wrapId).innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
     try { await fetch(`${BASE_URL}/api/admin/update-global-stat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, field: field, value: val }) }); } catch(e) {}
     refreshGlobalPlacementData(); 
 }
+
 function editDriveRow(id) {
     const tr = document.getElementById(`row-drv-${id}`); const comp = tr.children[0].innerText; const role = tr.children[1].innerText; const app = tr.children[2].innerText; const sel = tr.children[3].innerText; const ctc = tr.children[4].innerText;
     tr.innerHTML = `<td><input type="text" id="e-drv-c-${id}" class="inline-input" style="width: 100%;" value="${comp}"></td><td><input type="text" id="e-drv-r-${id}" class="inline-input" style="width: 100%;" value="${role}"></td><td><input type="number" id="e-drv-a-${id}" class="inline-input" style="width: 60px;" value="${app}"></td><td><input type="number" id="e-drv-s-${id}" class="inline-input" style="width: 60px;" value="${sel}"></td><td><input type="text" id="e-drv-ctc-${id}" class="inline-input" style="width: 80px;" value="${ctc}"></td><td style="text-align:right; white-space: nowrap;"><i class="fa-solid fa-check action-icon save" onclick="saveDriveRow(${id})"></i><i class="fa-solid fa-xmark action-icon cancel" onclick="refreshGlobalPlacementData()"></i></td>`;
 }
+
 async function saveDriveRow(id) {
     const tr = document.getElementById(`row-drv-${id}`); tr.lastElementChild.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
     const updates = [{ field: 'company', value: document.getElementById(`e-drv-c-${id}`).value }, { field: 'role', value: document.getElementById(`e-drv-r-${id}`).value }, { field: 'appeared', value: document.getElementById(`e-drv-a-${id}`).value }, { field: 'selected', value: document.getElementById(`e-drv-s-${id}`).value }, { field: 'ctc', value: document.getElementById(`e-drv-ctc-${id}`).value }];
     for (let u of updates) { await fetch(`${BASE_URL}/api/admin/update-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id, field: u.field, value: u.value }) }); }
     refreshGlobalPlacementData(); 
 }
+
 async function deleteGlobalDrive(id) { if(!confirm("Delete this completed drive record?")) return; await fetch(`${BASE_URL}/api/admin/delete-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); refreshGlobalPlacementData(); }
+
 async function submitGlobalDrive() {
     const btn = document.querySelector('#add-global-drive-modal .btn-primary'); const ogText = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
     try { await fetch(`${BASE_URL}/api/admin/add-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, company: document.getElementById('g-drv-comp').value, role: document.getElementById('g-drv-role').value, appeared: document.getElementById('g-drv-app').value, selected: document.getElementById('g-drv-sel').value, ctc: document.getElementById('g-drv-ctc').value }) }); } catch(e) {}
@@ -545,9 +567,12 @@ async function loadAllPlacements() {
             }
             renderAllPlacementsTable();
             updateDashboardOverview();
+        } else {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Failed to load placements.</td></tr>`;
         }
-    } catch(e) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error loading placements.</td></tr>`; }
+    } catch(e) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Network Error.</td></tr>`; }
 }
+
 function renderAllPlacementsTable() {
     const tbody = document.getElementById('all-placements-tbody');
     if(!tbody) return;
@@ -559,13 +584,16 @@ function renderAllPlacementsTable() {
         return `<tr><td style="font-weight:600; color: var(--text-main);"><div style="font-size:0.95rem;">${a.full_name}</div><div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${a.student_email}</div></td><td><span class="badge badge-primary" style="background:#EEF2FF; color:#4F46E5;">${a.department || '--'}</span></td><td><div style="font-weight:700; color:var(--text-main);">${a.company}</div><div style="font-size:0.8rem; color:var(--text-muted);">${a.role}</div></td><td style="font-size:0.85rem;">${a.date_applied}</td><td><select onchange="handlePlacementStatusChange(${a.app_id}, this)" class="control-input" style="padding: 6px; font-size: 0.8rem; width: 140px; border-color: var(--border); font-weight: 600; color: var(--text-main);"><option value="Applied" ${a.status === 'Applied' ? 'selected' : ''}>Applied (Pending)</option><option value="Shortlisted" ${a.status === 'Shortlisted' ? 'selected' : ''}>Shortlisted</option><option value="Interview" ${a.status === 'Interview' ? 'selected' : ''}>In Interview</option><option value="Selected" ${a.status === 'Selected' ? 'selected' : ''}>Selected / Placed</option><option value="Rejected" ${a.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select></td></tr>`;
     }).join('');
 }
+
 function handlePlacementStatusChange(appId, selectElement) {
     const newStatus = selectElement.value;
     if(newStatus === 'Placed' || newStatus === 'Selected') { document.getElementById('placed-app-id').value = appId; document.getElementById('placed-status-val').value = newStatus; document.getElementById('mark-placed-modal').style.display = 'flex'; } else { updateApplicationStatus(appId, newStatus); }
 }
+
 async function updateApplicationStatus(appId, newStatus) {
     try { await fetch(`${BASE_URL}/api/admin/update-app-status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, app_id: appId, status: newStatus }) }); loadAllPlacements(); } catch(e) { }
 }
+
 async function submitPlacedDetails() {
     const appId = document.getElementById('placed-app-id').value; const status = document.getElementById('placed-status-val').value; const pack = document.getElementById('placed-package').value || '--'; const intern = document.getElementById('placed-internship').value || '--'; const link = document.getElementById('placed-offer-link').value || '';
     const btn = document.querySelector('#mark-placed-modal .btn-success'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
@@ -625,6 +653,7 @@ async function loadAnnouncements() {
         }
     } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error</div>`; }
 }
+
 async function submitPlacementAnnouncement() {
     const titleInput = document.getElementById('ann-title'); const contentInput = document.getElementById('ann-content'); const deptInput = document.getElementById('ann-target-dept'); const typeInput = document.getElementById('ann-type');
     if(!titleInput || !contentInput) return;
@@ -634,4 +663,9 @@ async function submitPlacementAnnouncement() {
     try { await fetch(`${BASE_URL}/api/admin/add-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, title: title, type: type, content: content, target_department: targetDept }) }); } catch(e) {} 
     document.getElementById('add-ann-modal').style.display = 'none'; titleInput.value = ''; contentInput.value = ''; if(deptInput) deptInput.value = 'ALL'; btn.innerHTML = originalBtnText; loadAnnouncements(); 
 }
-async function deleteAnnouncement(id) { if(!confirm("Delete this announcement?")) return; await fetch(`${BASE_URL}/api/admin/delete-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); loadAnnouncements(); }
+
+async function deleteAnnouncement(id) { 
+    if(!confirm("Delete this announcement?")) return; 
+    await fetch(`${BASE_URL}/api/admin/delete-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); 
+    loadAnnouncements(); 
+}
