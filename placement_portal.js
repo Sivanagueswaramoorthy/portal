@@ -11,24 +11,13 @@ window.currentDriveApplicants = [];
 window.allGlobalPlacements = []; 
 window.globalDrivesList = [];
 
-// 🛑 ANTI-BREAK ESCAPER (Fixes apostrophes in names breaking HTML buttons)
+// Helper to prevent HTML button breaks
 const esc = (str) => (str || '--').toString().replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
 window.onload = async () => {
-    // Beautiful Loading Screen while Render Wakes Up
-    document.body.insertAdjacentHTML('beforeend', `
-        <div id="global-loader" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.95);color:white;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;transition:opacity 0.3s;">
-            <i class="fa-solid fa-server fa-bounce fa-3x" style="color:#4F46E5;margin-bottom:20px;"></i>
-            <h2 style="margin:0;font-weight:800;letter-spacing:1px;">Connecting to Secure Server...</h2>
-            <p style="color:#94A3B8;margin-top:10px;font-size:0.9rem;">If the server was asleep, this may take up to 50 seconds.</p>
-        </div>
-    `);
-
     try {
         const req = await fetch(`${BASE_URL}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
-        
-        if (!req.ok) throw new Error("Server responded with HTTP " + req.status);
-        
+        if (!req.ok) throw new Error("HTTP Error " + req.status);
         const data = await req.json();
         
         if (!data.success || !data.isAdmin) { 
@@ -38,28 +27,21 @@ window.onload = async () => {
             return; 
         }
 
-        if(document.getElementById('headerName')) document.getElementById('headerName').innerText = data.profile.full_name;
-        if(document.getElementById('headerEmail')) document.getElementById('headerEmail').innerText = data.profile.email;
-        if(document.getElementById('headerImage')) document.getElementById('headerImage').src = data.profile.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.profile.full_name)}&background=4F46E5&color=fff`;
+        // Safe DOM Updates
+        if(document.getElementById('headerName')) document.getElementById('headerName').innerText = data.profile.full_name || 'Admin';
+        if(document.getElementById('headerEmail')) document.getElementById('headerEmail').innerText = data.profile.email || '';
+        if(document.getElementById('headerImage')) document.getElementById('headerImage').src = data.profile.picture || `https://ui-avatars.com/api/?name=Admin&background=4F46E5&color=fff`;
 
-        populateGlobalPlacement(data.globalStats, data.globalDrives);
-        await fetchDirectory();
-        loadAnnouncements();
-        loadAllPlacements(); 
-        loadActiveDrives();
-        
-        // Remove Loading Screen on Success
-        document.getElementById('global-loader').style.opacity = '0';
-        setTimeout(() => document.getElementById('global-loader').remove(), 300);
+        // Load Data Silently
+        try { populateGlobalPlacement(data.globalStats, data.globalDrives); } catch(e){}
+        try { await fetchDirectory(); } catch(e){}
+        try { loadAnnouncements(); } catch(e){}
+        try { loadAllPlacements(); } catch(e){}
+        try { loadActiveDrives(); } catch(e){}
 
     } catch (e) { 
-        console.error("Critical Auth Network Error:", e);
-        document.getElementById('global-loader').innerHTML = `
-            <i class="fa-solid fa-triangle-exclamation fa-3x" style="color:#EF4444;margin-bottom:20px;"></i>
-            <h2 style="margin:0;font-weight:800;">Server Connection Failed</h2>
-            <p style="color:#94A3B8;margin-top:10px;text-align:center;font-size:0.9rem;">The backend server (Render) is currently unreachable or booting up.<br>Please wait a moment and try again.</p>
-            <button onclick="window.location.reload()" style="margin-top:20px;padding:12px 24px;background:#4F46E5;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;box-shadow:0 4px 6px rgba(79,70,229,0.3);">Refresh Connection</button>
-        `;
+        console.error("Dashboard Load Error:", e);
+        alert("Warning: Could not connect to the backend. Please refresh the page.");
     }
 };
 
@@ -67,16 +49,15 @@ function toggleSidebar() { document.getElementById('sidebar').classList.toggle('
 
 function switchTab(tabId, element) { 
     if (tabId !== 'edit-list' && tabId !== 'edit-detail' && tabId !== 'student-login') {
-        document.getElementById('nav-student-login').style.display = 'flex';
-        document.getElementById('nav-edit-list').style.display = 'none';
-        document.getElementById('nav-edit-detail').style.display = 'none';
+        if(document.getElementById('nav-student-login')) document.getElementById('nav-student-login').style.display = 'flex';
+        if(document.getElementById('nav-edit-list')) document.getElementById('nav-edit-list').style.display = 'none';
+        if(document.getElementById('nav-edit-detail')) document.getElementById('nav-edit-detail').style.display = 'none';
         if(document.getElementById('edit-login-id')) document.getElementById('edit-login-id').value = '';
         if(document.getElementById('edit-login-pass')) document.getElementById('edit-login-pass').value = '';
     }
 
     document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active')); 
     if(element) element.classList.add('active'); 
-    
     document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active')); 
     
     const targetView = document.getElementById('view-' + tabId);
@@ -90,12 +71,14 @@ function switchTab(tabId, element) {
     };
     if(titles[tabId] && document.getElementById('top-title-bar')) document.getElementById('top-title-bar').innerText = titles[tabId];
 
-    if (tabId === 'dashboard') updateDashboardOverview();
-    if (tabId === 'students' || tabId === 'edit-list' || tabId === 'analysis-list') fetchDirectory();
-    if (tabId === 'companies' || tabId === 'drives') loadActiveDrives();
-    if (tabId === 'applications') loadAllPlacements();
-    if (tabId === 'statistics') refreshGlobalPlacementData();
-    if (tabId === 'announcements') loadAnnouncements();
+    try {
+        if (tabId === 'dashboard') updateDashboardOverview();
+        if (tabId === 'students' || tabId === 'edit-list' || tabId === 'analysis-list') fetchDirectory();
+        if (tabId === 'companies' || tabId === 'drives') loadActiveDrives();
+        if (tabId === 'applications') loadAllPlacements();
+        if (tabId === 'statistics') refreshGlobalPlacementData();
+        if (tabId === 'announcements') loadAnnouncements();
+    } catch(e) {}
 
     if(window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('show'); } 
 }
@@ -141,7 +124,7 @@ async function fetchDirectory() {
             
             let allYears = new Set();
             allStudentsList.forEach(s => {
-                const yMatch = s.email.split('@')[0].match(/\d{2}$/);
+                const yMatch = (s.email || '').split('@')[0].match(/\d{2}$/);
                 if(yMatch) allYears.add(yMatch[0]);
             });
             const years = [...allYears].sort();
@@ -153,19 +136,15 @@ async function fetchDirectory() {
             if(deptEditSelect) deptEditSelect.innerHTML = deptOpts;
             if(deptAnalysisSelect) deptAnalysisSelect.innerHTML = deptOpts;
             
-            const yearEditFilter = document.getElementById('yearEditFilter');
-            const yearAnalysisFilter = document.getElementById('yearAnalysisFilter');
-            if(yearEditFilter) yearEditFilter.innerHTML = yearOpts;
-            if(yearAnalysisFilter) yearAnalysisFilter.innerHTML = yearOpts;
+            if(document.getElementById('yearEditFilter')) document.getElementById('yearEditFilter').innerHTML = yearOpts;
+            if(document.getElementById('yearAnalysisFilter')) document.getElementById('yearAnalysisFilter').innerHTML = yearOpts;
             
             renderTable(allStudentsList);
             if(document.getElementById('analysis-list-tbody')) renderAnalysisTable(allStudentsList);
             if(document.getElementById('edit-student-list-tbody')) renderEditTable(allStudentsList);
             updateDashboardOverview();
-        } else {
-            console.error("Backend Error:", data.message);
         }
-    } catch(e) { console.error("Fetch Directory Error:", e); }
+    } catch(e) {}
 }
 
 function renderTable(students) {
@@ -194,7 +173,7 @@ function renderTable(students) {
 
 function filterStudents() {
     const search = document.getElementById('searchStudent').value.toLowerCase(); const dept = document.getElementById('deptFilter').value;
-    const filtered = allStudentsList.filter(s => { const matchesSearch = (s.full_name && s.full_name.toLowerCase().includes(search)) || (s.email && s.email.toLowerCase().includes(search)) || (s.roll_no && s.roll_no.toLowerCase().includes(search)); const matchesDept = dept === "ALL" || s.department === dept; return matchesSearch && matchesDept; });
+    const filtered = allStudentsList.filter(s => { const matchesSearch = ((s.full_name||'').toLowerCase().includes(search)) || ((s.email||'').toLowerCase().includes(search)) || ((s.roll_no||'').toLowerCase().includes(search)); const matchesDept = dept === "ALL" || s.department === dept; return matchesSearch && matchesDept; });
     renderTable(filtered);
 }
 
@@ -210,10 +189,10 @@ async function deleteStudent(email, name) {
         const res = await req.json();
         
         if(res.success) {
-            alert(`✅ ${name} has been completely deleted from the database.`);
+            alert(`✅ ${name} has been deleted.`);
             fetchDirectory(); 
             loadAllPlacements(); 
-        } else { alert("❌ Failed to delete student: " + (res.message || "Server error.")); }
+        } else { alert("❌ Failed to delete student."); }
     } catch(e) { alert("Network error while trying to delete."); }
 }
 
@@ -238,22 +217,29 @@ async function openReadOnlyDetail(email, name, roll_no, department) {
 }
 
 function populateReadOnlyModal(prf, apps) {
-    document.getElementById('ro-p-role').innerText = prf.offer_role || '--'; 
-    document.getElementById('ro-p-comp').innerText = prf.offer_company || '--'; 
-    document.getElementById('ro-p-ctc').innerText = prf.offer_ctc || '--'; 
-    document.getElementById('ro-p-status').innerText = prf.status || 'Unplaced'; 
-    document.getElementById('ro-p-assess').innerText = prf.assessments || '0'; 
-    document.getElementById('ro-p-int').innerText = prf.interviews || '0'; 
-    document.getElementById('ro-p-off').innerText = prf.offers || '0';
+    if(document.getElementById('ro-p-role')) document.getElementById('ro-p-role').innerText = prf.offer_role || '--'; 
+    if(document.getElementById('ro-p-comp')) document.getElementById('ro-p-comp').innerText = prf.offer_company || '--'; 
+    if(document.getElementById('ro-p-ctc')) document.getElementById('ro-p-ctc').innerText = prf.offer_ctc || '--'; 
+    if(document.getElementById('ro-p-status')) document.getElementById('ro-p-status').innerText = prf.status || 'Unplaced'; 
+    if(document.getElementById('ro-p-assess')) document.getElementById('ro-p-assess').innerText = prf.assessments || '0'; 
+    if(document.getElementById('ro-p-int')) document.getElementById('ro-p-int').innerText = prf.interviews || '0'; 
+    if(document.getElementById('ro-p-off')) document.getElementById('ro-p-off').innerText = prf.offers || '0';
 
-    document.getElementById('ro-t-dsa').innerText = prf.tech_dsa || '0'; document.getElementById('ro-bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
-    document.getElementById('ro-t-oop').innerText = prf.tech_oop || '0'; document.getElementById('ro-bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
-    document.getElementById('ro-t-core').innerText = prf.tech_core || '0'; document.getElementById('ro-bar-t-core').style.width = `${prf.tech_core || 0}%`; 
-    document.getElementById('ro-a-quant').innerText = prf.apt_quant || '0'; document.getElementById('ro-bar-a-quant').style.width = `${prf.apt_quant || 0}%`; 
-    document.getElementById('ro-a-log').innerText = prf.apt_logical || '0'; document.getElementById('ro-bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
-    document.getElementById('ro-a-hr').innerText = prf.apt_hr || '0'; document.getElementById('ro-bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
+    if(document.getElementById('ro-t-dsa')) document.getElementById('ro-t-dsa').innerText = prf.tech_dsa || '0'; 
+    if(document.getElementById('ro-bar-t-dsa')) document.getElementById('ro-bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
+    if(document.getElementById('ro-t-oop')) document.getElementById('ro-t-oop').innerText = prf.tech_oop || '0'; 
+    if(document.getElementById('ro-bar-t-oop')) document.getElementById('ro-bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
+    if(document.getElementById('ro-t-core')) document.getElementById('ro-t-core').innerText = prf.tech_core || '0'; 
+    if(document.getElementById('ro-bar-t-core')) document.getElementById('ro-bar-t-core').style.width = `${prf.tech_core || 0}%`; 
+    if(document.getElementById('ro-a-quant')) document.getElementById('ro-a-quant').innerText = prf.apt_quant || '0'; 
+    if(document.getElementById('ro-bar-a-quant')) document.getElementById('ro-bar-a-quant').style.width = `${prf.apt_quant || 0}%`; 
+    if(document.getElementById('ro-a-log')) document.getElementById('ro-a-log').innerText = prf.apt_logical || '0'; 
+    if(document.getElementById('ro-bar-a-log')) document.getElementById('ro-bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
+    if(document.getElementById('ro-a-hr')) document.getElementById('ro-a-hr').innerText = prf.apt_hr || '0'; 
+    if(document.getElementById('ro-bar-a-hr')) document.getElementById('ro-bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
 
     const appBody = document.getElementById('ro-student-apps-tbody');
+    if(!appBody) return;
     if (apps && apps.length > 0) {
         appBody.innerHTML = apps.map(a => { 
             let bClass = 'badge-primary'; let s = (a.status || '').toLowerCase(); 
@@ -277,7 +263,7 @@ function renderAnalysisTable(students) {
     if(!tbody) return;
     if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students match filter.</td></tr>`; return; }
     tbody.innerHTML = students.map(s => {
-        const yMatch = s.email.split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
+        const yMatch = (s.email||'').split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
         return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: var(--primary);">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color: #4F46E5; color: #4F46E5;" onclick="openAnalysisDetail('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')">Full Analysis <i class="fa-solid fa-arrow-right" style="margin-left: 6px;"></i></button></td></tr>`;
     }).join('');
 }
@@ -288,9 +274,9 @@ function filterAnalysisStudents() {
     const yearFilter = document.getElementById('yearAnalysisFilter').value;
 
     const filtered = allStudentsList.filter(s => { 
-        const matchesSearch = (s.full_name && s.full_name.toLowerCase().includes(search)) || (s.email && s.email.toLowerCase().includes(search)); 
+        const matchesSearch = ((s.full_name||'').toLowerCase().includes(search)) || ((s.email||'').toLowerCase().includes(search)); 
         const matchesDept = dept === "ALL" || s.department === dept; 
-        const yMatch = s.email.split('@')[0].match(/\d{2}$/);
+        const yMatch = (s.email||'').split('@')[0].match(/\d{2}$/);
         const yExtracted = yMatch ? yMatch[0] : '';
         const matchesYear = yearFilter === "ALL" || yExtracted === yearFilter;
         return matchesSearch && matchesDept && matchesYear; 
@@ -319,19 +305,32 @@ async function openAnalysisDetail(email, name, roll_no, department) {
 }
 
 function populateAnalysisModal(prf, apps) {
-    document.getElementById('ana-p-role').innerText = prf.offer_role || '--'; document.getElementById('ana-p-comp').innerText = prf.offer_company || '--'; document.getElementById('ana-p-ctc').innerText = prf.offer_ctc || '--'; 
-    document.getElementById('ana-p-status').innerText = prf.status || 'Unplaced'; document.getElementById('ana-p-assess').innerText = prf.assessments || '0'; document.getElementById('ana-p-int').innerText = prf.interviews || '0'; document.getElementById('ana-p-off').innerText = prf.offers || '0';
-    document.getElementById('ana-t-dsa').innerText = prf.tech_dsa || '0'; document.getElementById('ana-bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
-    document.getElementById('ana-t-oop').innerText = prf.tech_oop || '0'; document.getElementById('ana-bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
-    document.getElementById('ana-t-core').innerText = prf.tech_core || '0'; document.getElementById('ana-bar-t-core').style.width = `${prf.tech_core || 0}%`; 
-    document.getElementById('ana-a-quant').innerText = prf.apt_quant || '0'; document.getElementById('ana-bar-a-quant').style.width = `${prf.apt_quant || 0}%`; 
-    document.getElementById('ana-a-log').innerText = prf.apt_logical || '0'; document.getElementById('ana-bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
-    document.getElementById('ana-a-hr').innerText = prf.apt_hr || '0'; document.getElementById('ana-bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
+    if(document.getElementById('ana-p-role')) document.getElementById('ana-p-role').innerText = prf.offer_role || '--'; 
+    if(document.getElementById('ana-p-comp')) document.getElementById('ana-p-comp').innerText = prf.offer_company || '--'; 
+    if(document.getElementById('ana-p-ctc')) document.getElementById('ana-p-ctc').innerText = prf.offer_ctc || '--'; 
+    if(document.getElementById('ana-p-status')) document.getElementById('ana-p-status').innerText = prf.status || 'Unplaced'; 
+    if(document.getElementById('ana-p-assess')) document.getElementById('ana-p-assess').innerText = prf.assessments || '0'; 
+    if(document.getElementById('ana-p-int')) document.getElementById('ana-p-int').innerText = prf.interviews || '0'; 
+    if(document.getElementById('ana-p-off')) document.getElementById('ana-p-off').innerText = prf.offers || '0';
+
+    if(document.getElementById('ana-t-dsa')) document.getElementById('ana-t-dsa').innerText = prf.tech_dsa || '0'; 
+    if(document.getElementById('ana-bar-t-dsa')) document.getElementById('ana-bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
+    if(document.getElementById('ana-t-oop')) document.getElementById('ana-t-oop').innerText = prf.tech_oop || '0'; 
+    if(document.getElementById('ana-bar-t-oop')) document.getElementById('ana-bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
+    if(document.getElementById('ana-t-core')) document.getElementById('ana-t-core').innerText = prf.tech_core || '0'; 
+    if(document.getElementById('ana-bar-t-core')) document.getElementById('ana-bar-t-core').style.width = `${prf.tech_core || 0}%`; 
+    if(document.getElementById('ana-a-quant')) document.getElementById('ana-a-quant').innerText = prf.apt_quant || '0'; 
+    if(document.getElementById('ana-bar-a-quant')) document.getElementById('ana-bar-a-quant').style.width = `${prf.apt_quant || 0}%`; 
+    if(document.getElementById('ana-a-log')) document.getElementById('ana-a-log').innerText = prf.apt_logical || '0'; 
+    if(document.getElementById('ana-bar-a-log')) document.getElementById('ana-bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
+    if(document.getElementById('ana-a-hr')) document.getElementById('ana-a-hr').innerText = prf.apt_hr || '0'; 
+    if(document.getElementById('ana-bar-a-hr')) document.getElementById('ana-bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
 
     const appBody = document.getElementById('ana-student-apps-tbody');
+    if(!appBody) return;
     if (apps && apps.length > 0) {
         appBody.innerHTML = apps.map(a => { 
-            let bClass = 'badge-primary'; let s = (a.status || '').toLowerCase(); 
+            let bClass = 'badge-primary'; let s = (a.status||'').toLowerCase(); 
             if(s.includes('select') || s.includes('offer') || s.includes('placed')) bClass = 'badge-success'; 
             if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
             if(s.includes('pend') || s.includes('wait') || s.includes('short')) bClass = 'badge-warning'; 
@@ -351,7 +350,7 @@ function loginAsStudent() {
         
         const editNav = document.getElementById('nav-edit-list');
         const detailNav = document.getElementById('nav-edit-detail');
-        editNav.style.display = 'flex';
+        if(editNav) editNav.style.display = 'flex';
 
         switchTab('edit-list', editNav);
         
@@ -361,18 +360,18 @@ function loginAsStudent() {
 }
 
 function lockEditor() {
-    document.getElementById('nav-student-login').style.display = 'flex';
-    document.getElementById('nav-edit-list').style.display = 'none';
-    document.getElementById('nav-edit-detail').style.display = 'none';
+    if(document.getElementById('nav-student-login')) document.getElementById('nav-student-login').style.display = 'flex';
+    if(document.getElementById('nav-edit-list')) document.getElementById('nav-edit-list').style.display = 'none';
+    if(document.getElementById('nav-edit-detail')) document.getElementById('nav-edit-detail').style.display = 'none';
     switchTab('student-login', document.getElementById('nav-student-login'));
 }
 
 function renderEditTable(students) {
     const tbody = document.getElementById('edit-student-list-tbody');
     if(!tbody) return;
-    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
+    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
     tbody.innerHTML = students.map(s => {
-        const yMatch = s.email.split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
+        const yMatch = (s.email||'').split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
         return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: #B91C1C;">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color:#B91C1C; color:#B91C1C;" onclick="openEditableStudentDetail('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')">Edit Skills <i class="fa-solid fa-pen" style="margin-left: 6px;"></i></button></td></tr>`;
     }).join('');
 }
@@ -383,9 +382,9 @@ function filterEditStudents() {
     const yearFilter = document.getElementById('yearEditFilter').value;
 
     const filtered = allStudentsList.filter(s => { 
-        const matchesSearch = (s.full_name && s.full_name.toLowerCase().includes(search)) || (s.email && s.email.toLowerCase().includes(search)); 
+        const matchesSearch = ((s.full_name||'').toLowerCase().includes(search)) || ((s.email||'').toLowerCase().includes(search)); 
         const matchesDept = dept === "ALL" || s.department === dept; 
-        const yMatch = s.email.split('@')[0].match(/\d{2}$/);
+        const yMatch = (s.email||'').split('@')[0].match(/\d{2}$/);
         const yExtracted = yMatch ? yMatch[0] : '';
         const matchesYear = yearFilter === "ALL" || yExtracted === yearFilter;
         return matchesSearch && matchesDept && matchesYear; 
@@ -396,16 +395,16 @@ function filterEditStudents() {
 // 🛑 FULL PAGE EDITABLE PROFILE (SKILLS ONLY)
 async function openEditableStudentDetail(email, name, roll_no, department) {
     targetStudentEmail = email;
-    document.getElementById('nav-edit-detail').style.display = 'flex';
+    if(document.getElementById('nav-edit-detail')) document.getElementById('nav-edit-detail').style.display = 'flex';
     switchTab('edit-detail', document.getElementById('nav-edit-detail'));
     
-    document.getElementById('edit-modal-content-body').style.display = 'none';
-    document.getElementById('edit-modal-loading').style.display = 'block';
+    if(document.getElementById('edit-modal-content-body')) document.getElementById('edit-modal-content-body').style.display = 'none';
+    if(document.getElementById('edit-modal-loading')) document.getElementById('edit-modal-loading').style.display = 'block';
 
     if (name) {
-        document.getElementById('edit-detail-name').innerText = name;
-        document.getElementById('edit-detail-sub').innerText = `${roll_no || 'No Roll No'} | ${department || 'No Dept'}`;
-        document.getElementById('edit-detail-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff`;
+        if(document.getElementById('edit-detail-name')) document.getElementById('edit-detail-name').innerText = name;
+        if(document.getElementById('edit-detail-sub')) document.getElementById('edit-detail-sub').innerText = `${roll_no || 'No Roll No'} | ${department || 'No Dept'}`;
+        if(document.getElementById('edit-detail-img')) document.getElementById('edit-detail-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff`;
     }
 
     try {
@@ -413,26 +412,39 @@ async function openEditableStudentDetail(email, name, roll_no, department) {
         const data = await req.json();
         if (data.success) { 
             populateEditorPerformance(data.placeProfile || {}, data.placeApps || []); 
-            document.getElementById('edit-modal-loading').style.display = 'none';
-            document.getElementById('edit-modal-content-body').style.display = 'block';
+            if(document.getElementById('edit-modal-loading')) document.getElementById('edit-modal-loading').style.display = 'none';
+            if(document.getElementById('edit-modal-content-body')) document.getElementById('edit-modal-content-body').style.display = 'block';
         } else { alert("Failed to fetch placement data."); switchTab('edit-list', document.getElementById('nav-edit-list')); }
     } catch(e) { alert("Network error."); switchTab('edit-list', document.getElementById('nav-edit-list')); }
 }
 
 function populateEditorPerformance(prf, apps) {
-    document.getElementById('val-p-role').innerText = prf.offer_role || '--'; document.getElementById('val-p-comp').innerText = prf.offer_company || '--'; document.getElementById('val-p-ctc').innerText = prf.offer_ctc || '--'; document.getElementById('val-p-status').innerText = prf.status || 'Unplaced'; document.getElementById('val-p-assess').innerText = prf.assessments || '0'; document.getElementById('val-p-int').innerText = prf.interviews || '0'; document.getElementById('val-p-off').innerText = prf.offers || '0';
+    if(document.getElementById('val-p-role')) document.getElementById('val-p-role').innerText = prf.offer_role || '--'; 
+    if(document.getElementById('val-p-comp')) document.getElementById('val-p-comp').innerText = prf.offer_company || '--'; 
+    if(document.getElementById('val-p-ctc')) document.getElementById('val-p-ctc').innerText = prf.offer_ctc || '--'; 
+    if(document.getElementById('val-p-status')) document.getElementById('val-p-status').innerText = prf.status || 'Unplaced'; 
+    if(document.getElementById('val-p-assess')) document.getElementById('val-p-assess').innerText = prf.assessments || '0'; 
+    if(document.getElementById('val-p-int')) document.getElementById('val-p-int').innerText = prf.interviews || '0'; 
+    if(document.getElementById('val-p-off')) document.getElementById('val-p-off').innerText = prf.offers || '0';
     
-    document.getElementById('val-t-dsa').innerText = prf.tech_dsa || '0'; document.getElementById('bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
-    document.getElementById('val-t-oop').innerText = prf.tech_oop || '0'; document.getElementById('bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
-    document.getElementById('val-t-core').innerText = prf.tech_core || '0'; document.getElementById('bar-t-core').style.width = `${prf.tech_core || 0}%`; 
-    document.getElementById('val-a-quant').innerText = prf.apt_quant || '0'; document.getElementById('bar-a-quant').style.width = `${prf.apt_quant || 0}%`; 
-    document.getElementById('val-a-log').innerText = prf.apt_logical || '0'; document.getElementById('bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
-    document.getElementById('val-a-hr').innerText = prf.apt_hr || '0'; document.getElementById('bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
+    if(document.getElementById('val-t-dsa')) document.getElementById('val-t-dsa').innerText = prf.tech_dsa || '0'; 
+    if(document.getElementById('bar-t-dsa')) document.getElementById('bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
+    if(document.getElementById('val-t-oop')) document.getElementById('val-t-oop').innerText = prf.tech_oop || '0'; 
+    if(document.getElementById('bar-t-oop')) document.getElementById('bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
+    if(document.getElementById('val-t-core')) document.getElementById('val-t-core').innerText = prf.tech_core || '0'; 
+    if(document.getElementById('bar-t-core')) document.getElementById('bar-t-core').style.width = `${prf.tech_core || 0}%`; 
+    if(document.getElementById('val-a-quant')) document.getElementById('val-a-quant').innerText = prf.apt_quant || '0'; 
+    if(document.getElementById('bar-a-quant')) document.getElementById('bar-a-quant').style.width = `${prf.apt_quant || 0}%`; 
+    if(document.getElementById('val-a-log')) document.getElementById('val-a-log').innerText = prf.apt_logical || '0'; 
+    if(document.getElementById('bar-a-log')) document.getElementById('bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
+    if(document.getElementById('val-a-hr')) document.getElementById('val-a-hr').innerText = prf.apt_hr || '0'; 
+    if(document.getElementById('bar-a-hr')) document.getElementById('bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
 
     const appBody = document.getElementById('edit-student-apps-tbody');
+    if(!appBody) return;
     if (apps && apps.length > 0) {
         appBody.innerHTML = apps.map(a => { 
-            let bClass = 'badge-primary'; let s = (a.status || '').toLowerCase(); 
+            let bClass = 'badge-primary'; let s = (a.status||'').toLowerCase(); 
             if(s.includes('select') || s.includes('offer') || s.includes('placed')) bClass = 'badge-success'; 
             if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
             if(s.includes('pend') || s.includes('wait') || s.includes('short')) bClass = 'badge-warning'; 
