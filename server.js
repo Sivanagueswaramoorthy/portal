@@ -67,7 +67,7 @@ const promisePool = dbPool.promise();
         
         await promisePool.query(`CREATE TABLE IF NOT EXISTS active_drives (id INT AUTO_INCREMENT PRIMARY KEY, company_name VARCHAR(255), role VARCHAR(255), ctc VARCHAR(100), eligibility VARCHAR(255), description TEXT, deadline VARCHAR(100), target_year VARCHAR(50) DEFAULT 'ALL', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-        console.log("✅ Database Verified: Perfect Sync Enabled.");
+        console.log("✅ Database Verified: Cascading Deletions Enabled.");
     } catch (err) { console.error("❌ DB Init Error:", err.message); }
 })();
 
@@ -188,7 +188,35 @@ app.post('/api/drives/active-list', async (req, res) => {
 });
 
 app.post('/api/admin/add-active-drive', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const ctcVal = req.body.ctc && req.body.ctc.trim() !== '' ? req.body.ctc : 'Not Disclosed'; const targetYear = req.body.target_year || 'ALL'; await promisePool.query("INSERT INTO active_drives (company_name, role, ctc, eligibility, description, deadline, target_year) VALUES (?, ?, ?, ?, ?, ?, ?)", [req.body.company_name, req.body.role, ctcVal, req.body.eligibility, req.body.description, req.body.deadline, targetYear]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
-app.post('/api/admin/delete-active-drive', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("DELETE FROM active_drives WHERE id = ?", [req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+
+// 🛑 FULL DATA SYNCHRONIZATION: CASCADING DRIVE DELETE
+app.post('/api/admin/delete-active-drive', async (req, res) => { 
+    try { 
+        await verifyAdmin(req.body.adminToken); 
+        
+        // 1. Find the Drive's Company and Role before deleting it
+        const [drive] = await promisePool.query("SELECT company_name, role FROM active_drives WHERE id = ?", [req.body.id]);
+        
+        if (drive.length > 0) {
+            const comp = drive[0].company_name;
+            const role = drive[0].role;
+            
+            // 2. Cascade Delete: Erase all student applications tied to this exact drive
+            await promisePool.query("DELETE FROM placement_apps WHERE company = ? AND role = ?", [comp, role]);
+            
+            // 3. Clear Primary Offers: Reset students if they had this specific drive marked as their Primary Offer
+            await promisePool.query(
+                "UPDATE placement_student_profile SET offer_company = '--', offer_role = '--', offer_ctc = '--', status = 'Unplaced' WHERE offer_company = ? AND offer_role = ?", 
+                [comp, role]
+            );
+        }
+
+        // 4. Finally, delete the actual active drive record
+        await promisePool.query("DELETE FROM active_drives WHERE id = ?", [req.body.id]); 
+        
+        res.json({ success: true }); 
+    } catch (e) { res.json({ success: false }); } 
+});
 
 app.post('/api/student/apply-drive', async (req, res) => {
     try {
@@ -207,7 +235,7 @@ app.post('/api/admin/update-app-status', async (req, res) => {
         await verifyAdmin(req.body.adminToken);
         await promisePool.query(`UPDATE placement_apps SET status = ? WHERE id = ?`, [req.body.status, req.body.app_id]);
         res.json({ success: true });
-    } catch (e) { res.json({ success: false }); }
+    } catch (e) { console.error("DB Error Mark Status:", e); res.json({ success: false }); }
 });
 
 app.post('/api/admin/all-applications', async (req, res) => {
@@ -218,16 +246,13 @@ app.post('/api/admin/all-applications', async (req, res) => {
     } catch (e) { res.json({ success: false }); }
 });
 
-// 🛑 UPDATED: DB CASCADING UPDATE
 app.post('/api/admin/mark-placed', async (req, res) => {
     try {
         await verifyAdmin(req.body.adminToken);
         
-        // 1. Update Application status
         await promisePool.query(`UPDATE placement_apps SET status = ?, salary_package = ?, internship_period = ?, call_letter_url = ? WHERE id = ?`, 
             [req.body.status, req.body.package, req.body.internship, req.body.offer_link, req.body.app_id]);
         
-        // 2. Cascade to Global Student Profile
         if(req.body.status === 'Placed' || req.body.status === 'Selected') {
             const [app] = await promisePool.query(`SELECT student_email, company, role FROM placement_apps WHERE id = ?`, [req.body.app_id]);
             if(app.length > 0) {
