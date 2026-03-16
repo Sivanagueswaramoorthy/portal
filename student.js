@@ -49,7 +49,6 @@ async function backgroundRefreshLoop() {
         const req = await fetch(`${BASE_URL}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
         const data = await req.json();
         
-        // Ensure ONLY standard students get background refreshes (Admins are safely ignored)
         if (data.success && !data.isAdmin && !data.isStaffAdmin && !data.isPlacementAdmin && !data.isPcdpAdmin) { 
             renderDataViews(data); 
         } else if (data.success === false) { 
@@ -206,6 +205,20 @@ function populatePersonalPlacement(pProfile, pApps) {
     }
 }
 
+async function saveResume() {
+    const url = document.getElementById('resume-link-input').value.trim();
+    if(!url) return alert("Please enter a valid URL.");
+    try {
+        const req = await fetch(`${BASE_URL}/api/student/update-resume`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken, resume_url: url }) });
+        const res = await req.json();
+        if(res.success) {
+            alert("Resume link saved successfully!");
+            document.getElementById('view-resume-btn').href = url;
+            document.getElementById('view-resume-btn').style.display = 'inline-flex';
+        } else { alert("Failed to save."); }
+    } catch(e) { alert("Network Error."); }
+}
+
 async function setPrimaryOffer(company, role, ctc) {
     if(!confirm(`Set ${company} as your Primary Offer?\n\nBy clicking OK, this will instantly feature this offer at the top of your Placement Profile.`)) return;
     try {
@@ -250,4 +263,76 @@ async function applyForDrive(company, role) {
         const res = await req.json();
         if(res.success) { alert("✅ Successfully applied! You can track your status in 'My Placement Hub'."); window.location.reload(); } else { alert(res.message || "Failed to apply. Make sure your session hasn't expired."); }
     } catch(e) { alert("Network Error. Ensure Backend is deployed."); }
+}
+
+// 🛑 FETCH NOTICES
+async function fetchStudentAnnouncements() {
+    const feed = document.getElementById('student-ann-feed'); 
+    if(!feed) return;
+    feed.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</div>`;
+    try {
+        const req = await fetch(`${BASE_URL}/api/announcements/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) }); 
+        const data = await req.json();
+        if (data.success) {
+            if(data.announcements.length === 0) { feed.innerHTML = `<div class="card" style="text-align:center; padding: 40px; color:var(--text-muted);">No announcements posted yet.</div>`; return; }
+            
+            const esc = (str) => (str || '--').toString().replace(/'/g, "&#39;").replace(/"/g, '&quot;');
+            
+            feed.innerHTML = data.announcements.map(ann => {
+                let dateStr = new Date(ann.date_posted).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                let targetLabel = ann.target_department || 'ALL'; let deptBadge = targetLabel === 'ALL' ? `<span class="badge" style="background: #E2E8F0; color: #475569; margin-right: 10px;"><i class="fa-solid fa-globe"></i> Global</span>` : `<span class="badge" style="background: var(--purple-light); color: var(--purple); margin-right: 10px;"><i class="fa-solid fa-bullseye"></i> ${targetLabel}</span>`;
+                
+                let icon = 'fa-bullhorn'; let color = 'var(--primary)';
+                if(ann.type === 'Placement Drive') { icon = 'fa-briefcase'; color = 'var(--success)'; }
+                else if (ann.type === 'Training Event') { icon = 'fa-chalkboard-user'; color = '#CA8A04'; }
+
+                return `<div class="card" style="display: flex; gap: 20px; align-items: flex-start; padding: 24px; position: relative;"><div style="background: ${color}20; color: ${color}; width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;"><i class="fa-solid ${icon}"></i></div><div style="flex: 1;"><h3 style="margin: 0 0 8px 0; font-size: 1.1rem; color: var(--text-main); font-weight: 800;">${esc(ann.title)}</h3><div style="margin-bottom: 12px;"><span class="badge" style="background:${color}10; color:${color}; border: 1px solid ${color}; margin-right: 10px;">${esc(ann.type)}</span>${deptBadge}<span style="font-size: 0.8rem; color: var(--text-muted);"><i class="fa-regular fa-clock"></i> ${dateStr}</span></div><p style="margin: 0; color: var(--text-muted); line-height: 1.6; font-size: 0.95rem; white-space: pre-wrap;">${esc(ann.content)}</p></div></div>`;
+            }).join('');
+        } else {
+            feed.innerHTML = `<div class="card" style="text-align:center; color: var(--danger);">Failed to load announcements.</div>`;
+        }
+    } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error</div>`; }
+}
+
+// 🛑 FETCH REWARDS
+async function fetchAllRewards() {
+    const tbody = document.getElementById('all-rewards-tbody');
+    if(!tbody) return;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>`;
+    try {
+        const req = await fetch(`${BASE_URL}/api/student/all-rewards`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
+        const data = await req.json();
+        if (data.success) {
+            allRewardsData = data.students.sort((a,b) => parseInt(b.reward_points || 0) - parseInt(a.reward_points || 0));
+            renderRewardsTable(allRewardsData);
+        } else { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Failed to load.</td></tr>`; }
+    } catch(e) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Network Error.</td></tr>`; }
+}
+
+function renderRewardsTable(data) {
+    const tbody = document.getElementById('all-rewards-tbody');
+    if(!tbody) return;
+    if(data.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No rewards data found.</td></tr>`; return; }
+    
+    tbody.innerHTML = data.map((s, index) => {
+        const rank = index + 1;
+        let rankHtml = `<span>${rank}</span>`;
+        if(rank === 1) rankHtml = `<i class="fa-solid fa-trophy" style="color: #EAB308; font-size: 1.2rem;"></i>`;
+        if(rank === 2) rankHtml = `<i class="fa-solid fa-medal" style="color: #94A3B8; font-size: 1.2rem;"></i>`;
+        if(rank === 3) rankHtml = `<i class="fa-solid fa-award" style="color: #B45309; font-size: 1.2rem;"></i>`;
+
+        return `<tr>
+            <td style="font-weight:800; color:var(--text-main); text-align:center;">${rankHtml}</td>
+            <td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td>
+            <td style="font-family: monospace;">${s.roll_no || '--'}</td>
+            <td><span class="badge badge-primary">${s.department || '--'}</span></td>
+            <td style="font-weight: 800; color: #B45309;">${s.reward_points || '0'}</td>
+        </tr>`;
+    }).join('');
+}
+
+function filterRewards() {
+    const search = document.getElementById('rewardSearch').value.toLowerCase();
+    const filtered = allRewardsData.filter(s => (s.full_name && s.full_name.toLowerCase().includes(search)) || (s.roll_no && s.roll_no.toLowerCase().includes(search)));
+    renderRewardsTable(filtered);
 }
