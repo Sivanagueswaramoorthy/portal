@@ -33,9 +33,8 @@ window.onload = async () => {
         
         const data = await req.json();
         
-        // 🛑 Strict check to ensure ONLY placement@gmail.com enters here
-        if (!data.success || !data.isPlacementAdmin) { 
-            alert(`Access Denied: This portal is restricted to Placement Administrators only.`);
+        if (!data.success || (!data.isAdmin && !data.isPlacementAdmin && !data.isStaffAdmin)) { 
+            alert(`Access Denied: This portal is restricted to Administrators only.`);
             localStorage.removeItem('bit_session_token'); 
             window.location.href = 'index.html'; 
             return; 
@@ -44,6 +43,12 @@ window.onload = async () => {
         if(document.getElementById('headerName')) document.getElementById('headerName').innerText = data.profile.full_name || 'Admin';
         if(document.getElementById('headerEmail')) document.getElementById('headerEmail').innerText = data.profile.email || '';
         if(document.getElementById('headerImage')) document.getElementById('headerImage').src = data.profile.picture || `https://ui-avatars.com/api/?name=Admin&background=4F46E5&color=fff`;
+
+        // Inject the EXCEL EXPORT Button into the Statistics Tab
+        const statsHeader = document.querySelector('#view-college-placement .flex-between');
+        if (statsHeader && !document.getElementById('btn-export-excel')) {
+            statsHeader.innerHTML += `<button id="btn-export-excel" class="action-btn btn-success" onclick="openExportModal()" style="padding: 10px 16px; font-size: 0.85rem;"><i class="fa-solid fa-file-excel"></i> Export Student Data (CSV)</button>`;
+        }
 
         // Safe Execution wrappers
         try { populateGlobalPlacement(data.globalStats, data.globalDrives); } catch(e){}
@@ -80,7 +85,7 @@ function switchTab(tabId, element) {
         'dashboard': 'Dashboard Overview', 'students': 'Student Management', 'companies': 'Company Management',
         'drives': 'Job / Internship Drives', 'applications': 'Applications Management', 'statistics': 'Placement Statistics',
         'events': 'Events / Training', 'announcements': 'Notifications / Updates', 'eligibility': 'Eligibility Criteria', 'settings': 'Admin Settings',
-        'analysis-list': 'Student Analysis Dashboard', 'analysis-detail': 'Student Profile Analysis'
+        'analysis-list': 'Student Analysis Dashboard', 'analysis-detail': 'Student Profile Analysis', 'college-placement': 'College Placement Stats'
     };
     if(titles[tabId] && document.getElementById('top-title-bar')) document.getElementById('top-title-bar').innerText = titles[tabId];
 
@@ -89,8 +94,8 @@ function switchTab(tabId, element) {
         if (tabId === 'dashboard') updateDashboardOverview();
         if (tabId === 'students' || tabId === 'edit-list' || tabId === 'analysis-list') fetchDirectory();
         if (tabId === 'companies' || tabId === 'drives') loadActiveDrives();
-        if (tabId === 'applications') loadAllPlacements();
-        if (tabId === 'statistics') refreshGlobalPlacementData();
+        if (tabId === 'applications' || tabId === 'all-placements') loadAllPlacements();
+        if (tabId === 'statistics' || tabId === 'college-placement') refreshGlobalPlacementData();
         if (tabId === 'announcements') loadAnnouncements();
     } catch(e) {}
 
@@ -550,6 +555,127 @@ async function submitGlobalDrive() {
     refreshGlobalPlacementData(); 
 }
 
+// 🛑 ACTIVE JOB DRIVES & COMPANY MANAGEMENT (Fully Restored)
+async function loadActiveDrives() {
+    const feed = document.getElementById('active-drives-feed');
+    if(!feed) return;
+    feed.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Drives...</div>`;
+    try {
+        const req = await fetch(`${BASE_URL}/api/drives/active-list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
+        const data = await req.json();
+        if (data.success) {
+            window.globalDrivesList = data.drives;
+            if(document.getElementById('dash-active-drives')) document.getElementById('dash-active-drives').innerText = data.drives.length;
+            
+            // Populates the Company Management Table
+            renderCompaniesTable(data.drives);
+
+            if(data.drives.length === 0) { feed.innerHTML = `<div class="card" style="text-align:center; padding: 40px; color:var(--text-muted);">No active drives posted yet.</div>`; return; }
+
+            feed.innerHTML = data.drives.map(d => {
+                let isExpired = false; let displayDate = d.deadline;
+                if(d.deadline && d.deadline.includes('-')) {
+                    const deadDate = new Date(d.deadline); displayDate = deadDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); deadDate.setHours(23, 59, 59, 999); if(deadDate < new Date()) isExpired = true;
+                }
+                const expiredBadge = isExpired ? `<span class="badge badge-danger" style="margin-left: 8px;">Expired</span>` : '';
+                const ctcBadge = d.ctc && d.ctc !== 'Not Disclosed' ? `<span style="font-weight: 800; color: var(--success); font-size: 1.1rem;">${d.ctc}</span>` : `<span style="font-weight: 800; color: var(--success); font-size: 1.1rem;">Not Disclosed</span>`;
+
+                return `
+                <div class="drive-card" style="opacity: ${isExpired ? '0.7' : '1'};">
+                    <div class="flex-between" style="align-items: flex-start;">
+                        <div>
+                            <h3 style="margin: 0 0 8px 0; font-size: 1.2rem; color: var(--text-main); font-weight: 800;">${esc(d.company_name)}</h3>
+                            <span class="badge badge-primary" style="background:#EEF2FF; color:#4F46E5;">${esc(d.role)}</span>
+                            ${expiredBadge}
+                            <div style="margin-top: 12px; font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase;">Batch '${d.target_year !== 'ALL' ? d.target_year : 'ALL'}</div>
+                        </div>
+                        <div style="text-align: right;">
+                            ${ctcBadge}
+                            <div style="font-size: 0.8rem; color: ${isExpired ? 'var(--danger)' : 'var(--text-muted)'}; margin-top: 4px;">Deadline: ${displayDate}</div>
+                        </div>
+                    </div>
+                    <div class="flex-between" style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 20px;">
+                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);"><i class="fa-solid fa-graduation-cap"></i> Eligibility: ${esc(d.eligibility)}</span>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="action-btn btn-outline" style="font-size: 0.8rem; padding: 6px 12px;" onclick="viewDriveApplicants('${esc(d.company_name)}', '${esc(d.role)}')">View Apps</button>
+                            <button class="action-icon cancel" style="padding: 6px; border: 1px solid var(--danger); border-radius: 6px;" onclick="deleteActiveDrive(${d.id})"><i class="fa-solid fa-trash" style="font-size: 0.9rem;"></i></button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+    } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error loading drives</div>`; }
+}
+
+async function submitActiveDrive() {
+    const compInput = document.getElementById('ad-comp');
+    const roleInput = document.getElementById('ad-role');
+    const deadInput = document.getElementById('ad-dead');
+
+    const comp = compInput.value.trim();
+    const role = roleInput.value.trim();
+    const ctc = document.getElementById('ad-ctc').value.trim();
+    const elig = document.getElementById('ad-elig').value.trim();
+    const desc = document.getElementById('ad-desc').value.trim();
+    const dead = deadInput.value;
+    const targetYr = document.getElementById('ad-year').value;
+
+    // Reset Box Colors
+    compInput.style.border = '1px solid var(--border)';
+    roleInput.style.border = '1px solid var(--border)';
+    deadInput.style.border = '1px solid var(--border)';
+
+    // 🛑 RED HIGHLIGHTER IF FIELDS ARE EMPTY
+    if(!comp || !role || !dead) {
+        if(!comp) compInput.style.border = '2px solid red';
+        if(!role) roleInput.style.border = '2px solid red';
+        if(!dead) deadInput.style.border = '2px solid red';
+        alert("❌ Please fill in the required fields (Company, Role, and Deadline) highlighted in red.");
+        return;
+    }
+
+    const btn = document.querySelector('#add-active-drive-modal .btn-primary');
+    const ogText = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Posting...';
+
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/add-active-drive`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adminToken: globalToken, company_name: comp, role: role, ctc: ctc, eligibility: elig, description: desc, deadline: dead, target_year: targetYr })
+        });
+        const res = await req.json();
+        if(res.success) {
+            document.getElementById('add-active-drive-modal').style.display = 'none';
+            compInput.value = ''; roleInput.value = ''; document.getElementById('ad-ctc').value = ''; document.getElementById('ad-elig').value = ''; document.getElementById('ad-desc').value = ''; deadInput.value = '';
+            loadActiveDrives();
+        } else { alert("Failed to post drive: " + res.message); }
+    } catch(e) { alert("Network Error"); }
+    btn.innerHTML = ogText;
+}
+
+async function deleteActiveDrive(id) {
+    if(!confirm("⚠️ Delete this active drive?\n\nThis will instantly remove the drive from the portal AND delete all student applications associated with it!")) return;
+    try {
+        await fetch(`${BASE_URL}/api/admin/delete-active-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) });
+        loadActiveDrives(); loadAllPlacements();
+    } catch(e) { alert("Failed to delete drive"); }
+}
+
+function renderCompaniesTable(drives) {
+    const tbody = document.getElementById('companies-list-tbody');
+    if(!tbody) return;
+    if(!drives || drives.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No companies found.</td></tr>`; return; }
+
+    tbody.innerHTML = drives.map(d => {
+        let isExpired = false;
+        if(d.deadline && d.deadline.includes('-')) { const deadDate = new Date(d.deadline); deadDate.setHours(23, 59, 59, 999); if(deadDate < new Date()) isExpired = true; }
+        const stat = isExpired ? `<span class="badge badge-warning">Closed</span>` : `<span class="badge badge-success">Active</span>`;
+
+        return `<tr><td style="font-weight: 800; color: var(--text-main);">${esc(d.company_name)}</td><td style="color: var(--text-muted);">${esc(d.role)}</td><td style="font-weight: 700; color: var(--success);">${esc(d.ctc)}</td><td>Remote / Campus</td><td>${stat}</td></tr>`;
+    }).join('');
+}
+
 // --- STUDENT PLACEMENTS (ALL APPS) BOARD ---
 async function loadAllPlacements() {
     const tbody = document.getElementById('all-placements-tbody');
@@ -568,8 +694,10 @@ async function loadAllPlacements() {
             }
             renderAllPlacementsTable();
             updateDashboardOverview();
+        } else {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Failed to load placements.</td></tr>`;
         }
-    } catch(e) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error loading placements.</td></tr>`; }
+    } catch(e) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Network Error.</td></tr>`; }
 }
 function renderAllPlacementsTable() {
     const tbody = document.getElementById('all-placements-tbody');
@@ -594,6 +722,91 @@ async function submitPlacedDetails() {
     const btn = document.querySelector('#mark-placed-modal .btn-success'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
     try { await fetch(`${BASE_URL}/api/admin/mark-placed`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, app_id: appId, status: status, package: pack, internship: intern, offer_link: link }) }); } catch(e) { }
     document.getElementById('mark-placed-modal').style.display = 'none'; btn.innerHTML = 'Save Placement Record'; loadAllPlacements(); 
+}
+
+// 🛑 EXPORT TO EXCEL (CSV)
+function openExportModal() {
+    const modalHtml = `
+    <div id="export-excel-modal" class="modal-overlay" style="display: flex; align-items: center; justify-content: center; z-index: 99999;">
+        <div class="modal-content" style="width: 100%; max-width: 500px; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+            <div class="flex-between" style="margin-bottom: 20px;">
+                <h2 style="margin:0; font-weight: 800; font-size: 1.15rem; color: var(--text-main);">Export Placement Data</h2>
+                <i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted); font-size: 1.2rem;" onclick="document.getElementById('export-excel-modal').remove()"></i>
+            </div>
+            
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 6px;">Filter by Department</label>
+            <select id="exp-dept" class="control-input" style="width: 100%; margin-bottom: 12px; cursor: pointer;">
+                <option value="ALL">All Departments</option>
+                ${[...new Set(window.allGlobalPlacements.map(a => a.department).filter(Boolean))].map(d => `<option value="${d}">${d}</option>`).join('')}
+            </select>
+
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 6px;">Filter by Company</label>
+            <select id="exp-comp" class="control-input" style="width: 100%; margin-bottom: 12px; cursor: pointer;">
+                <option value="ALL">All Companies</option>
+                ${[...new Set(window.allGlobalPlacements.map(a => a.company).filter(Boolean))].map(c => `<option value="${c}">${c}</option>`).join('')}
+            </select>
+
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 6px;">Filter by Batch Year</label>
+            <select id="exp-year" class="control-input" style="width: 100%; margin-bottom: 12px; cursor: pointer;">
+                <option value="ALL">All Batch Years</option>
+                <option value="24">Batch 2024</option>
+                <option value="25">Batch 2025</option>
+                <option value="26">Batch 2026</option>
+            </select>
+
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 6px;">Minimum Salary Package (LPA)</label>
+            <input type="number" id="exp-sal" class="control-input" style="width: 100%; margin-bottom: 24px;" placeholder="e.g. 5 for 5 LPA and above" value="0">
+
+            <button class="action-btn btn-success" style="width: 100%; justify-content: center; padding: 12px; font-size: 1rem;" onclick="executeExcelExport()"><i class="fa-solid fa-download"></i> Generate Excel File</button>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function executeExcelExport() {
+    const dept = document.getElementById('exp-dept').value;
+    const comp = document.getElementById('exp-comp').value;
+    const year = document.getElementById('exp-year').value;
+
+    let filtered = window.allGlobalPlacements || [];
+
+    if(dept !== 'ALL') filtered = filtered.filter(a => a.department === dept);
+    if(comp !== 'ALL') filtered = filtered.filter(a => a.company === comp);
+    if(year !== 'ALL') {
+        filtered = filtered.filter(a => {
+            const yMatch = (a.student_email||'').split('@')[0].match(/\d{2}$/);
+            return yMatch && yMatch[0] === year;
+        });
+    }
+    
+    if(filtered.length === 0) return alert("❌ No data matches your selected filters!");
+
+    // Build CSV Content
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Student Name,Email Address,Department,Company,Role,Date Applied,Current Status\n";
+    
+    filtered.forEach(row => {
+        const safeName = esc(row.full_name).replace(/,/g, '');
+        const safeEmail = esc(row.student_email);
+        const safeDept = esc(row.department).replace(/,/g, '');
+        const safeComp = esc(row.company).replace(/,/g, '');
+        const safeRole = esc(row.role).replace(/,/g, '');
+        const safeDate = esc(row.date_applied);
+        const safeStatus = esc(row.status);
+        
+        csvContent += `${safeName},${safeEmail},${safeDept},${safeComp},${safeRole},${safeDate},${safeStatus}\n`;
+    });
+
+    // Trigger Download
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Placement_Report_${year}_${comp}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    document.getElementById('export-excel-modal').remove();
 }
 
 // 🛑 MODAL APPLICANTS LIST 
@@ -648,7 +861,6 @@ async function loadAnnouncements() {
         }
     } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error</div>`; }
 }
-
 async function submitPlacementAnnouncement() {
     const titleInput = document.getElementById('ann-title'); const contentInput = document.getElementById('ann-content'); const deptInput = document.getElementById('ann-target-dept'); const typeInput = document.getElementById('ann-type');
     if(!titleInput || !contentInput) return;
@@ -658,9 +870,4 @@ async function submitPlacementAnnouncement() {
     try { await fetch(`${BASE_URL}/api/admin/add-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, title: title, type: type, content: content, target_department: targetDept }) }); } catch(e) {} 
     document.getElementById('add-ann-modal').style.display = 'none'; titleInput.value = ''; contentInput.value = ''; if(deptInput) deptInput.value = 'ALL'; btn.innerHTML = originalBtnText; loadAnnouncements(); 
 }
-
-async function deleteAnnouncement(id) { 
-    if(!confirm("Delete this announcement?")) return; 
-    await fetch(`${BASE_URL}/api/admin/delete-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); 
-    loadAnnouncements(); 
-}
+async function deleteAnnouncement(id) { if(!confirm("Delete this announcement?")) return; await fetch(`${BASE_URL}/api/admin/delete-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); loadAnnouncements(); }
