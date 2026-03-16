@@ -65,7 +65,7 @@ const promisePool = dbPool.promise();
         await promisePool.query(`CREATE TABLE IF NOT EXISTS announcements (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), type VARCHAR(50), content TEXT, date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
         try { await promisePool.query(`ALTER TABLE announcements ADD COLUMN target_department VARCHAR(100) DEFAULT 'ALL'`); } catch(e){}
 
-        console.log("✅ Database Verified: PCDP Routes Restored.");
+        console.log("✅ Database Verified: Server is running with PCDP & Admin Roles.");
     } catch (err) { console.error("❌ DB Init Error:", err.message); }
 })();
 
@@ -129,15 +129,18 @@ app.post('/api/auth', async (req, res) => {
         let incomingToken = req.body.token || "";
         if (typeof incomingToken === 'string') incomingToken = incomingToken.replace(/['"]+/g, '');
 
+        // MANUAL ADMIN LOGIN
         if (incomingToken === 'custom_admin_token_pc123') {
             const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
             const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
-            return res.json({ success: true, isPlacementAdmin: true, isStaffAdmin: false, profile: { full_name: 'Placement Coordinator', email: 'placement@gmail.com' }, globalStats: globalStats ? globalStats[0] : null, globalDrives });
+            return res.json({ success: true, isAdmin: true, isPlacementAdmin: true, isStaffAdmin: false, profile: { full_name: 'Placement Coordinator', email: 'placement@gmail.com' }, globalStats: globalStats ? globalStats[0] : null, globalDrives });
         }
 
+        // PCDP ADMIN LOGIN
         if (incomingToken === 'pcdp_admin_authorized_token_7771') {
             return res.json({ 
                 success: true, 
+                isAdmin: true, // Prevents auto-logout on older scripts
                 isPcdpAdmin: true, 
                 profile: { 
                     full_name: 'PCDP Controller', 
@@ -150,21 +153,21 @@ app.post('/api/auth', async (req, res) => {
         const ticket = await googleClient.verifyIdToken({ idToken: incomingToken, audience: CLIENT_ID });
         const payload = ticket.getPayload(); const email = payload.email.toLowerCase();
         
-        // PLACEMENT ADMIN
+        // 🛑 ROLE 1: PLACEMENT ADMIN
         if (email === 'placement@gmail.com' || email === 'admin@gmail.com') {
             const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
             const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
-            return res.json({ success: true, isPlacementAdmin: true, isStaffAdmin: false, profile: { full_name: payload.name, email: email, picture: payload.picture }, globalStats: globalStats[0], globalDrives });
+            return res.json({ success: true, isAdmin: true, isPlacementAdmin: true, isStaffAdmin: false, profile: { full_name: payload.name, email: email, picture: payload.picture }, globalStats: globalStats[0], globalDrives });
         }
 
-        // STAFF ADMIN
+        // 🛑 ROLE 2: STAFF ADMIN (Fix for admin.html Auto-Logout)
         if (email === 'sivanagu7771@gmail.com') {
             const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
             const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
-            return res.json({ success: true, isPlacementAdmin: false, isStaffAdmin: true, profile: { full_name: payload.name, email: email, picture: payload.picture }, globalStats: globalStats[0], globalDrives });
+            return res.json({ success: true, isAdmin: true, isPlacementAdmin: false, isStaffAdmin: true, profile: { full_name: payload.name, email: email, picture: payload.picture }, globalStats: globalStats[0], globalDrives });
         }
         
-        // REGULAR STUDENT
+        // 🛑 REGULAR STUDENT
         if (!email.endsWith('@bitsathy.ac.in')) return res.json({ success: false, message: "Access Denied. Use BIT Sathy Email." });
         
         let [profile] = await promisePool.query("SELECT * FROM student_profile WHERE email = ?", [email]);
@@ -182,13 +185,13 @@ app.post('/api/auth', async (req, res) => {
         const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
         const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
         
-        res.json({ success: true, isPlacementAdmin: false, isStaffAdmin: false, profile: profile[0], courses, skills, semGpas, globalStats: globalStats[0], globalDrives, placeProfile: placeProfile[0], placeApps, picture: payload.picture });
+        res.json({ success: true, isAdmin: false, isPlacementAdmin: false, isStaffAdmin: false, profile: profile[0], courses, skills, semGpas, globalStats: globalStats[0], globalDrives, placeProfile: placeProfile[0], placeApps, picture: payload.picture });
     } catch (error) { res.json({ success: false, message: `Login Error: ${error.message}` }); }
 });
 
 
 // ============================================================================
-// --- PCDP MASTER ROUTES (ALL FULLY RESTORED) ---
+// --- PCDP MASTER ROUTES ---
 // ============================================================================
 
 app.post(['/api/pcdp/list', '/api/pcdp/master/courses'], async (req, res) => {
