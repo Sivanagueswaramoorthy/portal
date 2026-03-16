@@ -67,7 +67,7 @@ const promisePool = dbPool.promise();
         
         await promisePool.query(`CREATE TABLE IF NOT EXISTS active_drives (id INT AUTO_INCREMENT PRIMARY KEY, company_name VARCHAR(255), role VARCHAR(255), ctc VARCHAR(100), eligibility VARCHAR(255), description TEXT, deadline VARCHAR(100), target_year VARCHAR(50) DEFAULT 'ALL', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
-        console.log("✅ Database Verified: Set Primary Offer Feature Enabled.");
+        console.log("✅ Database Verified: Perfect Sync Enabled.");
     } catch (err) { console.error("❌ DB Init Error:", err.message); }
 })();
 
@@ -131,16 +131,13 @@ app.post('/api/auth', async (req, res) => {
 app.post('/api/student/update-resume', async (req, res) => { try { const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); const email = ticket.getPayload().email.toLowerCase(); await promisePool.query(`INSERT INTO placement_student_profile (student_email, resume_url) VALUES (?, ?) ON DUPLICATE KEY UPDATE resume_url = ?`, [email, req.body.resume_url, req.body.resume_url]); res.json({ success: true }); } catch(e) { res.json({ success: false, message: "Session Expired" }); } });
 app.post('/api/student/all-rewards', async (req, res) => { try { await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); let [rows] = await promisePool.query("SELECT full_name, roll_no, department, reward_points FROM student_profile"); res.json({ success: true, students: rows || [] }); } catch (e) { res.json({ success: false, message: "Session expired." }); } });
 
-// 🛑 NEW: STUDENT SETS PRIMARY OFFER API
 app.post('/api/student/set-primary', async (req, res) => {
     try {
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
         const email = ticket.getPayload().email.toLowerCase();
-        
         await promisePool.query(
             `INSERT INTO placement_student_profile (student_email, offer_company, offer_role, offer_ctc, status) 
-             VALUES (?, ?, ?, ?, 'Placed') 
-             ON DUPLICATE KEY UPDATE offer_company = ?, offer_role = ?, offer_ctc = ?, status = 'Placed'`, 
+             VALUES (?, ?, ?, ?, 'Placed') ON DUPLICATE KEY UPDATE offer_company = ?, offer_role = ?, offer_ctc = ?, status = 'Placed'`, 
             [email, req.body.company, req.body.role, req.body.ctc, req.body.company, req.body.role, req.body.ctc]
         );
         res.json({ success: true });
@@ -192,11 +189,67 @@ app.post('/api/drives/active-list', async (req, res) => {
 
 app.post('/api/admin/add-active-drive', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const ctcVal = req.body.ctc && req.body.ctc.trim() !== '' ? req.body.ctc : 'Not Disclosed'; const targetYear = req.body.target_year || 'ALL'; await promisePool.query("INSERT INTO active_drives (company_name, role, ctc, eligibility, description, deadline, target_year) VALUES (?, ?, ?, ?, ?, ?, ?)", [req.body.company_name, req.body.role, ctcVal, req.body.eligibility, req.body.description, req.body.deadline, targetYear]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
 app.post('/api/admin/delete-active-drive', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("DELETE FROM active_drives WHERE id = ?", [req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
-app.post('/api/student/apply-drive', async (req, res) => { try { const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); const email = ticket.getPayload().email.toLowerCase(); const [existing] = await promisePool.query("SELECT id FROM placement_apps WHERE student_email=? AND company=? AND role=?", [email, req.body.company, req.body.role]); if(existing.length > 0) return res.json({ success: false, message: "You have already applied for this role!" }); const dateStr = new Date().toLocaleDateString('en-GB'); await promisePool.query("INSERT INTO placement_apps (student_email, company, role, date_applied, status) VALUES (?, ?, ?, ?, 'Applied')", [email, req.body.company, req.body.role, dateStr]); res.json({ success: true }); } catch(e) { res.json({ success: false, message: "Session expired" }); } });
-app.post('/api/admin/update-app-status', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`UPDATE placement_apps SET status = ? WHERE id = ?`, [req.body.status, req.body.app_id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
-app.post('/api/admin/all-applications', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const [rows] = await promisePool.query(`SELECT pa.id as app_id, pa.student_email, pa.company, pa.role, pa.status, pa.date_applied, sp.full_name, sp.department FROM placement_apps pa JOIN student_profile sp ON pa.student_email = sp.email ORDER BY pa.id DESC`); res.json({ success: true, applications: rows }); } catch (e) { res.json({ success: false }); } });
-app.post('/api/admin/mark-placed', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`UPDATE placement_apps SET status = ?, salary_package = ?, internship_period = ?, call_letter_url = ? WHERE id = ?`, [req.body.status, req.body.package, req.body.internship, req.body.offer_link, req.body.app_id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
-app.post('/api/admin/drive-applicants', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const [rows] = await promisePool.query(`SELECT pa.id as app_id, pa.student_email, pa.status, pa.date_applied, sp.full_name, sp.department, sp.roll_no, psp.resume_url FROM placement_apps pa JOIN student_profile sp ON pa.student_email = sp.email LEFT JOIN placement_student_profile psp ON pa.student_email = psp.student_email WHERE pa.company = ? AND pa.role = ? ORDER BY pa.id DESC`, [req.body.company, req.body.role]); res.json({ success: true, applicants: rows }); } catch (e) { res.json({ success: false }); } });
+
+app.post('/api/student/apply-drive', async (req, res) => {
+    try {
+        const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
+        const email = ticket.getPayload().email.toLowerCase();
+        const [existing] = await promisePool.query("SELECT id FROM placement_apps WHERE student_email=? AND company=? AND role=?", [email, req.body.company, req.body.role]);
+        if(existing.length > 0) return res.json({ success: false, message: "You have already applied for this role!" });
+        const dateStr = new Date().toLocaleDateString('en-GB');
+        await promisePool.query("INSERT INTO placement_apps (student_email, company, role, date_applied, status) VALUES (?, ?, ?, ?, 'Applied')", [email, req.body.company, req.body.role, dateStr]);
+        res.json({ success: true });
+    } catch(e) { res.json({ success: false, message: "Session expired" }); }
+});
+
+app.post('/api/admin/update-app-status', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        await promisePool.query(`UPDATE placement_apps SET status = ? WHERE id = ?`, [req.body.status, req.body.app_id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
+app.post('/api/admin/all-applications', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        const [rows] = await promisePool.query(`SELECT pa.id as app_id, pa.student_email, pa.company, pa.role, pa.status, pa.date_applied, sp.full_name, sp.department FROM placement_apps pa JOIN student_profile sp ON pa.student_email = sp.email ORDER BY pa.id DESC`);
+        res.json({ success: true, applications: rows });
+    } catch (e) { res.json({ success: false }); }
+});
+
+// 🛑 UPDATED: DB CASCADING UPDATE
+app.post('/api/admin/mark-placed', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        
+        // 1. Update Application status
+        await promisePool.query(`UPDATE placement_apps SET status = ?, salary_package = ?, internship_period = ?, call_letter_url = ? WHERE id = ?`, 
+            [req.body.status, req.body.package, req.body.internship, req.body.offer_link, req.body.app_id]);
+        
+        // 2. Cascade to Global Student Profile
+        if(req.body.status === 'Placed' || req.body.status === 'Selected') {
+            const [app] = await promisePool.query(`SELECT student_email, company, role FROM placement_apps WHERE id = ?`, [req.body.app_id]);
+            if(app.length > 0) {
+                await promisePool.query(
+                    `INSERT INTO placement_student_profile (student_email, offer_company, offer_role, offer_ctc, status) 
+                     VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE offer_company = ?, offer_role = ?, offer_ctc = ?, status = ?`, 
+                    [app[0].student_email, app[0].company, app[0].role, req.body.package, req.body.status, 
+                     app[0].company, app[0].role, req.body.package, req.body.status]
+                );
+            }
+        }
+        res.json({ success: true });
+    } catch (e) { console.error("DB Error Mark Placed:", e); res.json({ success: false }); }
+});
+
+app.post('/api/admin/drive-applicants', async (req, res) => {
+    try {
+        await verifyAdmin(req.body.adminToken);
+        const [rows] = await promisePool.query(`SELECT pa.id as app_id, pa.student_email, pa.status, pa.date_applied, sp.full_name, sp.department, sp.roll_no, psp.resume_url FROM placement_apps pa JOIN student_profile sp ON pa.student_email = sp.email LEFT JOIN placement_student_profile psp ON pa.student_email = psp.student_email WHERE pa.company = ? AND pa.role = ? ORDER BY pa.id DESC`, [req.body.company, req.body.role]);
+        res.json({ success: true, applicants: rows });
+    } catch (e) { res.json({ success: false }); }
+});
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 BACKEND READY ON PORT ${PORT}`));

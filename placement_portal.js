@@ -26,9 +26,9 @@ window.onload = async () => {
 
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebar-overlay').classList.toggle('show'); }
 
-// 🛑 AUTO-LOCK EDITOR SECURITY LOGIC
+// 🛑 ADVANCED TAB ENGINE: Auto-Lock & Auto-Sync
 function switchTab(tabId, element) { 
-    // If navigating away from the restricted editor ecosystem, lock it instantly.
+    // 1. Security Lock
     if (tabId !== 'edit-list' && tabId !== 'edit-detail' && tabId !== 'student-login') {
         document.getElementById('nav-student-login').style.display = 'flex';
         document.getElementById('nav-edit-list').style.display = 'none';
@@ -37,10 +37,25 @@ function switchTab(tabId, element) {
         document.getElementById('edit-login-pass').value = '';
     }
 
+    // 2. Active State Styling
     document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active')); 
     if(element) element.classList.add('active'); 
     document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active')); 
     document.getElementById('view-' + tabId).classList.add('active'); 
+    
+    // 3. 🛑 SYNC FIX: Auto-fetch fresh data for the clicked tab
+    if (tabId === 'students' || tabId === 'analysis-list' || tabId === 'edit-list') {
+        fetchDirectory();
+    } else if (tabId === 'all-placements') {
+        loadAllPlacements();
+    } else if (tabId === 'college-placement') {
+        refreshGlobalPlacementData();
+    } else if (tabId === 'active-drives') {
+        loadActiveDrives();
+    } else if (tabId === 'announcements') {
+        loadAnnouncements();
+    }
+
     if(window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('show'); } 
 }
 
@@ -55,7 +70,6 @@ async function fetchDirectory() {
         if (data.success) {
             allStudentsList = data.students;
             
-            // Fill filters
             const depts = [...new Set(allStudentsList.map(s => s.department).filter(d => d))];
             let allYears = new Set();
             allStudentsList.forEach(s => {
@@ -69,6 +83,7 @@ async function fetchDirectory() {
             document.getElementById('deptEditFilter').innerHTML = '<option value="ALL">All Departments</option>' + depts.map(d => `<option value="${d}">${d}</option>`).join('');
             
             document.getElementById('yearAnalysisFilter').innerHTML = '<option value="ALL">All Batch Years</option>' + years.map(y => `<option value="${y}">Batch '${y}</option>`).join('');
+            document.getElementById('yearEditFilter').innerHTML = '<option value="ALL">All Batch Years</option>' + years.map(y => `<option value="${y}">Batch '${y}</option>`).join('');
 
             renderTable(allStudentsList);
             renderAnalysisTable(allStudentsList);
@@ -103,8 +118,7 @@ function renderAnalysisTable(students) {
     const tbody = document.getElementById('analysis-list-tbody');
     if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students match filter.</td></tr>`; return; }
     tbody.innerHTML = students.map(s => {
-        const yMatch = s.email.split('@')[0].match(/\d{2}$/);
-        const year = yMatch ? yMatch[0] : '--';
+        const yMatch = s.email.split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
         return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: var(--primary);">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color: #4F46E5; color: #4F46E5;" onclick="openAnalysisDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')">Full Analysis <i class="fa-solid fa-arrow-right" style="margin-left: 6px;"></i></button></td></tr>`;
     }).join('');
 }
@@ -249,6 +263,7 @@ async function submitGlobalDrive() {
     refreshGlobalPlacementData(); 
 }
 
+
 // --- STUDENT PLACEMENTS (ALL APPS) BOARD ---
 async function loadAllPlacements() {
     const tbody = document.getElementById('all-placements-tbody');
@@ -290,9 +305,9 @@ async function submitPlacedDetails() {
     document.getElementById('mark-placed-modal').style.display = 'none'; btn.innerHTML = 'Save Placement Record'; loadAllPlacements(); 
 }
 
-// --- 🛑 STRICT SKILLS EDITOR (ONLY TECH & APT) ---
+// --- 🛑 SECURE EDITOR DASHBOARD ---
 function loginAsStudent() {
-    const loginId = document.getElementById('edit-login-id').value.trim();
+    const loginId = document.getElementById('edit-login-id').value.trim().toLowerCase();
     const password = document.getElementById('edit-login-pass').value.trim();
     
     if(loginId === "1234" && password === "ed@123") {
@@ -302,7 +317,6 @@ function loginAsStudent() {
         const editNav = document.getElementById('nav-edit-list');
         const detailNav = document.getElementById('nav-edit-detail');
         editNav.style.display = 'flex';
-        detailNav.style.display = 'flex';
 
         switchTab('edit-list', editNav);
         
@@ -320,20 +334,32 @@ function lockEditor() {
 
 function renderEditTable(students) {
     const tbody = document.getElementById('edit-student-list-tbody');
-    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
+    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
     tbody.innerHTML = students.map(s => {
-        return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color:#B91C1C; color:#B91C1C;" onclick="openEditableStudentDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')">Edit Skills <i class="fa-solid fa-pen" style="margin-left: 6px;"></i></button></td></tr>`;
+        const yMatch = s.email.split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
+        return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: #B91C1C;">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color:#B91C1C; color:#B91C1C;" onclick="openEditableStudentDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')">Edit Skills <i class="fa-solid fa-pen" style="margin-left: 6px;"></i></button></td></tr>`;
     }).join('');
 }
 
 function filterEditStudents() {
-    const search = document.getElementById('searchEditStudent').value.toLowerCase(); const dept = document.getElementById('deptEditFilter').value;
-    const filtered = allStudentsList.filter(s => { const matchesSearch = (s.full_name && s.full_name.toLowerCase().includes(search)) || (s.email && s.email.toLowerCase().includes(search)); const matchesDept = dept === "ALL" || s.department === dept; return matchesSearch && matchesDept; });
+    const search = document.getElementById('searchEditStudent').value.toLowerCase(); 
+    const dept = document.getElementById('deptEditFilter').value;
+    const yearFilter = document.getElementById('yearEditFilter').value;
+
+    const filtered = allStudentsList.filter(s => { 
+        const matchesSearch = (s.full_name && s.full_name.toLowerCase().includes(search)) || (s.email && s.email.toLowerCase().includes(search)); 
+        const matchesDept = dept === "ALL" || s.department === dept; 
+        const yMatch = s.email.split('@')[0].match(/\d{2}$/);
+        const yExtracted = yMatch ? yMatch[0] : '';
+        const matchesYear = yearFilter === "ALL" || yExtracted === yearFilter;
+        return matchesSearch && matchesDept && matchesYear; 
+    });
     renderEditTable(filtered);
 }
 
 async function openEditableStudentDetail(email, name, roll_no, department) {
     targetStudentEmail = email;
+    document.getElementById('nav-edit-detail').style.display = 'flex';
     switchTab('edit-detail', document.getElementById('nav-edit-detail'));
     
     document.getElementById('edit-modal-content-body').style.display = 'none';
@@ -349,20 +375,36 @@ async function openEditableStudentDetail(email, name, roll_no, department) {
         const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) });
         const data = await req.json();
         if (data.success) { 
-            populatePerformance(data.placeProfile || {}); 
+            populateEditorPerformance(data.placeProfile || {}, data.placeApps || []); 
             document.getElementById('edit-modal-loading').style.display = 'none';
             document.getElementById('edit-modal-content-body').style.display = 'block';
         } else { alert("Failed to fetch placement data."); switchTab('edit-list', document.getElementById('nav-edit-list')); }
     } catch(e) { alert("Network error."); switchTab('edit-list', document.getElementById('nav-edit-list')); }
 }
 
-function populatePerformance(prf) {
+function populateEditorPerformance(prf, apps) {
+    // Top is Read Only
+    document.getElementById('val-p-role').innerText = prf.offer_role || '--'; document.getElementById('val-p-comp').innerText = prf.offer_company || '--'; document.getElementById('val-p-ctc').innerText = prf.offer_ctc || '--'; document.getElementById('val-p-status').innerText = prf.status || 'Unplaced'; document.getElementById('val-p-assess').innerText = prf.assessments || '0'; document.getElementById('val-p-int').innerText = prf.interviews || '0'; document.getElementById('val-p-off').innerText = prf.offers || '0';
+    
+    // Bottom Skills are Editable (Pencils exist in HTML)
     document.getElementById('val-t-dsa').innerText = prf.tech_dsa || '0'; document.getElementById('bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
     document.getElementById('val-t-oop').innerText = prf.tech_oop || '0'; document.getElementById('bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
     document.getElementById('val-t-core').innerText = prf.tech_core || '0'; document.getElementById('bar-t-core').style.width = `${prf.tech_core || 0}%`; 
     document.getElementById('val-a-quant').innerText = prf.apt_quant || '0'; document.getElementById('bar-a-quant').style.width = `${prf.apt_quant || 0}%`; 
     document.getElementById('val-a-log').innerText = prf.apt_logical || '0'; document.getElementById('bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
     document.getElementById('val-a-hr').innerText = prf.apt_hr || '0'; document.getElementById('bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
+
+    // Apps Table Read Only
+    const appBody = document.getElementById('edit-student-apps-tbody');
+    if (apps && apps.length > 0) {
+        appBody.innerHTML = apps.map(a => { 
+            let bClass = 'badge-primary'; let s = a.status.toLowerCase(); 
+            if(s.includes('select') || s.includes('offer') || s.includes('placed')) bClass = 'badge-success'; 
+            if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
+            if(s.includes('pend') || s.includes('wait') || s.includes('short')) bClass = 'badge-warning'; 
+            return `<tr style="border-bottom: 1px solid #F1F5F9;"><td style="padding: 16px 24px; font-weight: 800; color: #1E293B;">${a.company}</td><td style="padding: 16px 24px; font-weight: 600; color: #475569;">${a.role}</td><td style="padding: 16px 24px; color: #64748B;">${a.date_applied}</td><td style="padding: 16px 24px;"><span class="badge ${bClass}">${a.status}</span></td></tr>`; 
+        }).join('');
+    } else { appBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 40px; color:var(--text-muted);">No applications logged.</td></tr>`; }
 }
 
 function openPlacementProfileEdit(field, spanId, width) {
@@ -383,6 +425,7 @@ async function savePlacementProfileEdit(field, spanId, width) {
         const barId = spanId.replace('val-', 'bar-'); const bar = document.getElementById(barId); if(bar) bar.style.width = `${val}%`;
     } catch(e) { cancelPlacementProfileEdit(spanId, field, width); }
 }
+
 
 // --- ACTIVE DRIVES LOGIC ---
 async function loadActiveDrives() {
@@ -475,7 +518,11 @@ async function submitPlacementAnnouncement() {
     const title = titleInput.value.trim(); const content = contentInput.value.trim(); const targetDept = deptInput ? deptInput.value : 'ALL';
     if(!title || !content) return alert("Please enter both an Announcement Title and Content.");
     const btn = document.querySelector('#add-ann-modal .btn-primary'); const originalBtnText = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Posting...';
-    try { await fetch(`${BASE_URL}/api/admin/add-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, title: title, type: 'Placement Drive', content: content, target_department: targetDept }) }); } catch(e) { alert("Network error while posting."); } finally { document.getElementById('add-ann-modal').style.display = 'none'; titleInput.value = ''; contentInput.value = ''; if(deptInput) deptInput.value = 'ALL'; btn.innerHTML = originalBtnText; loadAnnouncements(); }
+    try { 
+        const req = await fetch(`${BASE_URL}/api/admin/add-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, title: title, type: 'Placement Drive', content: content, target_department: targetDept }) }); 
+        const res = await req.json();
+        if(!res.success) alert("DB Error: Failed to post announcement.");
+    } catch(e) {} finally { document.getElementById('add-ann-modal').style.display = 'none'; titleInput.value = ''; contentInput.value = ''; if(deptInput) deptInput.value = 'ALL'; btn.innerHTML = originalBtnText; loadAnnouncements(); }
 }
 async function deleteAnnouncement(id) { if(!confirm("Delete this announcement?")) return; await fetch(`${BASE_URL}/api/admin/delete-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); loadAnnouncements(); }
 function showToast(msg) { const container = document.getElementById('toast-container'); const toast = document.createElement('div'); toast.className = 'toast-msg'; toast.innerHTML = `<i class="fa-solid fa-circle-info" style="color:var(--primary);"></i> <span>${msg}</span>`; container.appendChild(toast); setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(20px)'; setTimeout(() => toast.remove(), 300); }, 3000); }
