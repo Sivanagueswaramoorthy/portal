@@ -61,7 +61,7 @@ const promisePool = dbPool.promise();
         await promisePool.query(`CREATE TABLE IF NOT EXISTS announcements (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), type VARCHAR(50), content TEXT, date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
         try { await promisePool.query(`ALTER TABLE announcements ADD COLUMN target_department VARCHAR(100) DEFAULT 'ALL'`); } catch(e){}
 
-        console.log("✅ Database Verified: Optimized for Admin & Student Portals Only.");
+        console.log("✅ Database Verified: Server is running correctly.");
     } catch (err) { console.error("❌ DB Init Error:", err.message); }
 })();
 
@@ -95,30 +95,49 @@ async function verifyAdmin(rawToken) {
 // --- AUTHENTICATION ROUTES ---
 // ============================================================================
 
+// 🛑 RESTORED MANUAL LOGIN ROUTE for admin@gmail.com
+app.post('/api/hr/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        // Hardcoded manual login for the Placement Coordinator
+        if (email === 'admin@gmail.com' && password === 'pc123') {
+            return res.json({ success: true, token: 'custom_admin_token_pc123', redirect: 'placement_portal.html' });
+        }
+        res.json({ success: false, message: "Invalid Admin Email or Password." });
+    } catch (e) { 
+        res.json({ success: false, message: "Database Error." }); 
+    }
+});
+
 app.post('/api/auth', async (req, res) => {
     try {
         let incomingToken = req.body.token || "";
         if (typeof incomingToken === 'string') {
-            incomingToken = incomingToken.replace(/['"]+/g, '');
+            incomingToken = incomingToken.replace(/['"]+/g, ''); // Remove bad quotes
         }
 
+        // 1. Admin Custom Login Check
         if (incomingToken === 'custom_admin_token_pc123') {
             const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
             const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
             return res.json({ success: true, isAdmin: true, profile: { full_name: 'Placement Coordinator', email: 'admin@gmail.com' }, globalStats: globalStats ? globalStats[0] : null, globalDrives });
         }
         
+        // 2. Verify Google Token
         const ticket = await googleClient.verifyIdToken({ idToken: incomingToken, audience: CLIENT_ID });
         const payload = ticket.getPayload(); const email = payload.email.toLowerCase();
         
+        // 3. Admin Master Email Check
         if (email === 'sivanagu7771@gmail.com' || email === 'admin@gmail.com') {
             const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
             const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
             return res.json({ success: true, isAdmin: true, profile: { full_name: payload.name, email: email, picture: payload.picture }, globalStats: globalStats[0], globalDrives });
         }
         
+        // 4. Strict BIT Sathy Student Check
         if (!email.endsWith('@bitsathy.ac.in')) return res.json({ success: false, message: "Access Denied." });
         
+        // 5. Build/Fetch Student Profile
         let [profile] = await promisePool.query("SELECT * FROM student_profile WHERE email = ?", [email]);
         if (profile.length === 0) {
             const autoDepartment = getDepartmentFromEmail(email);
@@ -193,7 +212,7 @@ app.post('/api/student/apply-drive', async (req, res) => {
 app.post('/api/admin/list', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const [rows] = await promisePool.query(`SELECT sp.email, sp.full_name, sp.roll_no, sp.department, sp.cgpa, psp.offer_company, psp.status, psp.resume_url FROM student_profile sp LEFT JOIN placement_student_profile psp ON LOWER(sp.email) = LOWER(psp.student_email) ORDER BY sp.full_name ASC`); res.json({ success: true, students: rows }); } catch (e) { res.json({ success: false }); } });
 app.post('/api/admin/student-data', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const email = req.body.targetEmail; const [profile] = await promisePool.query("SELECT * FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]); const [courses] = await promisePool.query("SELECT * FROM student_courses WHERE student_email = ? ORDER BY semester ASC", [email]); const [skills] = await promisePool.query("SELECT * FROM student_skills WHERE student_email = ?", [email]); const [semGpas] = await promisePool.query("SELECT semester, gpa FROM student_sem_gpa WHERE student_email = ?", [email]); const [placeProfile] = await promisePool.query("SELECT * FROM placement_student_profile WHERE student_email = ?", [email]); const [placeApps] = await promisePool.query("SELECT * FROM placement_apps WHERE student_email = ? ORDER BY id DESC", [email]); res.json({ success: true, profile: profile[0], courses, skills, semGpas, placeProfile: placeProfile[0], placeApps }); } catch (e) { res.json({ success: false }); } });
 
-// 🛑 COMPLETE CASCADING USER DELETE (RESTORED!)
+// 🛑 COMPLETE CASCADING USER DELETE
 app.post('/api/admin/delete-student', async (req, res) => {
     try {
         await verifyAdmin(req.body.adminToken);
