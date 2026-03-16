@@ -11,12 +11,24 @@ window.currentDriveApplicants = [];
 window.allGlobalPlacements = []; 
 window.globalDrivesList = [];
 
-// Helper to prevent HTML button breaks
-const safeStr = (str) => (str || '--').toString().replace(/'/g, "\\'");
+// 🛑 ANTI-BREAK ESCAPER (Fixes apostrophes in names breaking HTML buttons)
+const esc = (str) => (str || '--').toString().replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
 window.onload = async () => {
+    // Beautiful Loading Screen while Render Wakes Up
+    document.body.insertAdjacentHTML('beforeend', `
+        <div id="global-loader" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.95);color:white;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;transition:opacity 0.3s;">
+            <i class="fa-solid fa-server fa-bounce fa-3x" style="color:#4F46E5;margin-bottom:20px;"></i>
+            <h2 style="margin:0;font-weight:800;letter-spacing:1px;">Connecting to Secure Server...</h2>
+            <p style="color:#94A3B8;margin-top:10px;font-size:0.9rem;">If the server was asleep, this may take up to 50 seconds.</p>
+        </div>
+    `);
+
     try {
         const req = await fetch(`${BASE_URL}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
+        
+        if (!req.ok) throw new Error("Server responded with HTTP " + req.status);
+        
         const data = await req.json();
         
         if (!data.success || !data.isAdmin) { 
@@ -31,13 +43,23 @@ window.onload = async () => {
         if(document.getElementById('headerImage')) document.getElementById('headerImage').src = data.profile.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.profile.full_name)}&background=4F46E5&color=fff`;
 
         populateGlobalPlacement(data.globalStats, data.globalDrives);
-        fetchDirectory();
+        await fetchDirectory();
         loadAnnouncements();
         loadAllPlacements(); 
         loadActiveDrives();
+        
+        // Remove Loading Screen on Success
+        document.getElementById('global-loader').style.opacity = '0';
+        setTimeout(() => document.getElementById('global-loader').remove(), 300);
+
     } catch (e) { 
         console.error("Critical Auth Network Error:", e);
-        alert("CRITICAL ERROR: Could not connect to backend server. Make sure Render is awake.");
+        document.getElementById('global-loader').innerHTML = `
+            <i class="fa-solid fa-triangle-exclamation fa-3x" style="color:#EF4444;margin-bottom:20px;"></i>
+            <h2 style="margin:0;font-weight:800;">Server Connection Failed</h2>
+            <p style="color:#94A3B8;margin-top:10px;text-align:center;font-size:0.9rem;">The backend server (Render) is currently unreachable or booting up.<br>Please wait a moment and try again.</p>
+            <button onclick="window.location.reload()" style="margin-top:20px;padding:12px 24px;background:#4F46E5;color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;box-shadow:0 4px 6px rgba(79,70,229,0.3);">Refresh Connection</button>
+        `;
     }
 };
 
@@ -141,17 +163,9 @@ async function fetchDirectory() {
             if(document.getElementById('edit-student-list-tbody')) renderEditTable(allStudentsList);
             updateDashboardOverview();
         } else {
-            console.error("Backend Error Msg:", data.message);
-            if(document.getElementById('student-list-tbody')) {
-                document.getElementById('student-list-tbody').innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger);">Backend Error: ${data.message || 'Token Issue'}</td></tr>`;
-            }
+            console.error("Backend Error:", data.message);
         }
-    } catch(e) { 
-        console.error("Fetch Directory Catch Error:", e);
-        if(document.getElementById('student-list-tbody')) {
-            document.getElementById('student-list-tbody').innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger);">Network Error. Backend offline.</td></tr>`;
-        }
-    }
+    } catch(e) { console.error("Fetch Directory Error:", e); }
 }
 
 function renderTable(students) {
@@ -163,15 +177,15 @@ function renderTable(students) {
         const cgpa = s.cgpa ? parseFloat(s.cgpa).toFixed(2) : '--';
 
         return `<tr class="dir-row">
-            <td style="font-weight:600; color: var(--text-main); cursor: pointer;" onclick="openReadOnlyDetail('${safeStr(s.email)}', '${safeStr(s.full_name)}', '${safeStr(s.roll_no)}', '${safeStr(s.department)}')"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}<div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${s.email}</div></div></div></td>
+            <td style="font-weight:600; color: var(--text-main); cursor: pointer;" onclick="openReadOnlyDetail('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}<div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${s.email}</div></div></div></td>
             <td style="font-family: monospace;">${s.roll_no || '--'}</td>
             <td><span class="badge badge-primary">${s.department || '--'}</span></td>
             <td style="font-weight: 700; color: var(--primary);">${cgpa}</td>
             <td>${resumeLink}</td>
             <td>
                 <div style="display: flex; gap: 8px;">
-                    <button class="action-btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--primary); color: var(--primary);" onclick="openReadOnlyDetail('${safeStr(s.email)}', '${safeStr(s.full_name)}', '${safeStr(s.roll_no)}', '${safeStr(s.department)}')"><i class="fa-solid fa-eye"></i> View</button>
-                    <button class="action-btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--danger); color: var(--danger);" onclick="deleteStudent('${safeStr(s.email)}', '${safeStr(s.full_name)}')"><i class="fa-solid fa-trash"></i></button>
+                    <button class="action-btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--primary); color: var(--primary);" onclick="openReadOnlyDetail('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')"><i class="fa-solid fa-eye"></i> View</button>
+                    <button class="action-btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--danger); color: var(--danger);" onclick="deleteStudent('${esc(s.email)}', '${esc(s.full_name)}')"><i class="fa-solid fa-trash"></i></button>
                 </div>
             </td>
         </tr>`;
@@ -199,7 +213,7 @@ async function deleteStudent(email, name) {
             alert(`✅ ${name} has been completely deleted from the database.`);
             fetchDirectory(); 
             loadAllPlacements(); 
-        } else { alert("❌ Failed to delete student: " + (res.message || "Server rejected request.")); }
+        } else { alert("❌ Failed to delete student: " + (res.message || "Server error.")); }
     } catch(e) { alert("Network error while trying to delete."); }
 }
 
@@ -264,7 +278,7 @@ function renderAnalysisTable(students) {
     if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students match filter.</td></tr>`; return; }
     tbody.innerHTML = students.map(s => {
         const yMatch = s.email.split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
-        return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: var(--primary);">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color: #4F46E5; color: #4F46E5;" onclick="openAnalysisDetail('${safeStr(s.email)}', '${safeStr(s.full_name)}', '${safeStr(s.roll_no)}', '${safeStr(s.department)}')">Full Analysis <i class="fa-solid fa-arrow-right" style="margin-left: 6px;"></i></button></td></tr>`;
+        return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: var(--primary);">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color: #4F46E5; color: #4F46E5;" onclick="openAnalysisDetail('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')">Full Analysis <i class="fa-solid fa-arrow-right" style="margin-left: 6px;"></i></button></td></tr>`;
     }).join('');
 }
 
@@ -356,10 +370,10 @@ function lockEditor() {
 function renderEditTable(students) {
     const tbody = document.getElementById('edit-student-list-tbody');
     if(!tbody) return;
-    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
+    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
     tbody.innerHTML = students.map(s => {
         const yMatch = s.email.split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
-        return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: #B91C1C;">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color:#B91C1C; color:#B91C1C;" onclick="openEditableStudentDetail('${safeStr(s.email)}', '${safeStr(s.full_name)}', '${safeStr(s.roll_no)}', '${safeStr(s.department)}')">Edit Skills <i class="fa-solid fa-pen" style="margin-left: 6px;"></i></button></td></tr>`;
+        return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: #B91C1C;">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color:#B91C1C; color:#B91C1C;" onclick="openEditableStudentDetail('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')">Edit Skills <i class="fa-solid fa-pen" style="margin-left: 6px;"></i></button></td></tr>`;
     }).join('');
 }
 
@@ -406,10 +420,8 @@ async function openEditableStudentDetail(email, name, roll_no, department) {
 }
 
 function populateEditorPerformance(prf, apps) {
-    // Top Stats & Offers (Read Only inside Editor context)
     document.getElementById('val-p-role').innerText = prf.offer_role || '--'; document.getElementById('val-p-comp').innerText = prf.offer_company || '--'; document.getElementById('val-p-ctc').innerText = prf.offer_ctc || '--'; document.getElementById('val-p-status').innerText = prf.status || 'Unplaced'; document.getElementById('val-p-assess').innerText = prf.assessments || '0'; document.getElementById('val-p-int').innerText = prf.interviews || '0'; document.getElementById('val-p-off').innerText = prf.offers || '0';
     
-    // Bottom Skills are Editable (Pencils exist in HTML)
     document.getElementById('val-t-dsa').innerText = prf.tech_dsa || '0'; document.getElementById('bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
     document.getElementById('val-t-oop').innerText = prf.tech_oop || '0'; document.getElementById('bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
     document.getElementById('val-t-core').innerText = prf.tech_core || '0'; document.getElementById('bar-t-core').style.width = `${prf.tech_core || 0}%`; 
@@ -417,7 +429,6 @@ function populateEditorPerformance(prf, apps) {
     document.getElementById('val-a-log').innerText = prf.apt_logical || '0'; document.getElementById('bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
     document.getElementById('val-a-hr').innerText = prf.apt_hr || '0'; document.getElementById('bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
 
-    // Apps Table (Read Only)
     const appBody = document.getElementById('edit-student-apps-tbody');
     if (apps && apps.length > 0) {
         appBody.innerHTML = apps.map(a => { 

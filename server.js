@@ -7,6 +7,10 @@ const app = express();
 app.use(cors()); 
 app.use(express.json());
 
+// 🛑 ANTI-CRASH SHIELDS: Prevents server from dying on bad DB queries
+process.on('uncaughtException', err => console.error('Uncaught Exception:', err));
+process.on('unhandledRejection', err => console.error('Unhandled Rejection:', err));
+
 // --- CONFIGURATION ---
 const CLIENT_ID = "159246343111-o9bv4lgk1hmmvdkef0qnq0ih9qefjhmj.apps.googleusercontent.com";
 const googleClient = new OAuth2Client(CLIENT_ID);
@@ -78,7 +82,7 @@ function getDepartmentFromEmail(email) {
     } catch (e) {} return department;
 }
 
-// 🛑 BULLETPROOF ADMIN VERIFICATION
+// 🛑 ADMIN VERIFICATION
 async function verifyAdmin(rawToken) {
     if (!rawToken) throw new Error("No token provided");
     const token = String(rawToken).replace(/['"]+/g, ''); 
@@ -90,9 +94,8 @@ async function verifyAdmin(rawToken) {
     return true;
 }
 
-
 // ============================================================================
-// --- AUTHENTICATION ROUTES ---
+// --- API ROUTES ---
 // ============================================================================
 
 app.post('/api/hr/login', async (req, res) => {
@@ -103,7 +106,6 @@ app.post('/api/hr/login', async (req, res) => {
         }
         res.json({ success: false, message: "Invalid Admin Email or Password." });
     } catch (e) { 
-        console.error("HR Login Error:", e);
         res.json({ success: false, message: "Server Error." }); 
     }
 });
@@ -147,11 +149,9 @@ app.post('/api/auth', async (req, res) => {
         
         res.json({ success: true, isAdmin: false, profile: profile[0], courses, skills, semGpas, globalStats: globalStats[0], globalDrives, placeProfile: placeProfile[0], placeApps, picture: payload.picture });
     } catch (error) { 
-        console.error("Auth Error:", error.message);
         res.json({ success: false, message: `Login Error: ${error.message}` }); 
     }
 });
-
 
 // ============================================================================
 // --- STUDENT ROUTES ---
@@ -199,7 +199,6 @@ app.post('/api/student/apply-drive', async (req, res) => {
     } catch(e) { res.json({ success: false, message: "Session expired" }); }
 });
 
-
 // ============================================================================
 // --- ADMIN ROUTES ---
 // ============================================================================
@@ -209,10 +208,7 @@ app.post('/api/admin/list', async (req, res) => {
         await verifyAdmin(req.body.adminToken); 
         const [rows] = await promisePool.query(`SELECT sp.email, sp.full_name, sp.roll_no, sp.department, sp.cgpa, psp.offer_company, psp.status, psp.resume_url FROM student_profile sp LEFT JOIN placement_student_profile psp ON LOWER(sp.email) = LOWER(psp.student_email) ORDER BY sp.full_name ASC`); 
         res.json({ success: true, students: rows }); 
-    } catch (e) { 
-        console.error("Admin List Error:", e);
-        res.json({ success: false, message: e.message }); 
-    } 
+    } catch (e) { res.json({ success: false, message: e.message }); } 
 });
 
 app.post('/api/admin/student-data', async (req, res) => { 
@@ -226,10 +222,7 @@ app.post('/api/admin/student-data', async (req, res) => {
         const [placeProfile] = await promisePool.query("SELECT * FROM placement_student_profile WHERE student_email = ?", [email]); 
         const [placeApps] = await promisePool.query("SELECT * FROM placement_apps WHERE student_email = ? ORDER BY id DESC", [email]); 
         res.json({ success: true, profile: profile[0], courses, skills, semGpas, placeProfile: placeProfile[0], placeApps }); 
-    } catch (e) { 
-        console.error("Student Data Error:", e);
-        res.json({ success: false, message: e.message }); 
-    } 
+    } catch (e) { res.json({ success: false, message: e.message }); } 
 });
 
 app.post('/api/admin/delete-student', async (req, res) => {
@@ -243,10 +236,7 @@ app.post('/api/admin/delete-student', async (req, res) => {
         await promisePool.query("DELETE FROM placement_student_profile WHERE LOWER(student_email) = ?", [targetEmail]);
         await promisePool.query("DELETE FROM placement_apps WHERE LOWER(student_email) = ?", [targetEmail]);
         res.json({ success: true });
-    } catch (e) { 
-        console.error("Delete Student Error:", e); 
-        res.json({ success: false, message: e.message }); 
-    }
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
 app.post('/api/admin/add-app', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("INSERT INTO placement_apps (student_email, company, role, date_applied, status) VALUES (?, ?, ?, ?, ?)", [req.body.targetEmail.toLowerCase(), req.body.company, req.body.role, req.body.date_applied, req.body.status]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
@@ -342,10 +332,6 @@ app.post('/api/admin/drive-applicants', async (req, res) => {
         res.json({ success: true, applicants: rows });
     } catch (e) { res.json({ success: false }); }
 });
-
-// 🛑 BULLETPROOF ERROR CATCHER
-process.on('uncaughtException', err => console.error('Uncaught Exception:', err));
-process.on('unhandledRejection', err => console.error('Unhandled Rejection:', err));
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 BACKEND READY ON PORT ${PORT}`));
