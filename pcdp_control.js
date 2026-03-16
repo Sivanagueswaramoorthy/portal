@@ -1,5 +1,5 @@
 let adminToken = localStorage.getItem('pcdp_session_token');
-let masterCoursesData = []; // Stores all data so we can edit it
+let masterCoursesData = []; 
 
 const BASE_URL = 'https://portal-6crm.onrender.com';
 
@@ -24,18 +24,31 @@ function signOut() {
     window.location.href = 'index.html'; 
 }
 
+// Modal Controllers
+function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if(modal) modal.style.display = 'flex';
+}
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if(modal) modal.style.display = 'none';
+}
+
 async function loadMasterCourses() {
     document.getElementById('pcdp-courses-grid').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px;"><i class="fa-solid fa-spinner fa-spin fa-2x" style="color: var(--purple);"></i></div>`;
     try {
         const req = await fetch(`${BASE_URL}/api/pcdp/master/courses`, { 
             method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ adminToken: adminToken }) 
+            body: JSON.stringify({ token: adminToken }) 
         });
         const data = await req.json();
         if (data.success) { 
             masterCoursesData = data.courses; 
             renderMasterGrid(masterCoursesData); 
-        } else { signOut(); }
+        } else { 
+            alert("Session expired or Unauthorized. Please log in again.");
+            signOut(); 
+        }
     } catch(e) { 
         document.getElementById('pcdp-courses-grid').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px; color: var(--danger); background: var(--danger-bg); border-radius: 12px; border: 1px solid var(--danger-light);">Network Error. Backend might be sleeping.</div>`;
     }
@@ -51,6 +64,8 @@ function renderMasterGrid(courses) {
     grid.innerHTML = courses.map(c => {
         const fallbackImg = 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
         const imgUrl = (c.image_url && c.image_url.trim() !== "") ? c.image_url : fallbackImg;
+        // Prevents HTML buttons from breaking if course name has an apostrophe
+        const safeName = (c.course_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
         
         return `
         <div class="skill-card" id="master-card-${c.id}" style="padding: 0; display: flex; flex-direction: column; height: 100%; min-height: 380px; border: 1px solid var(--border); border-radius: 12px; background: white; box-shadow: var(--shadow-sm); transition: all 0.2s ease;">
@@ -116,24 +131,29 @@ async function submitEditMasterCourse() {
     if(!name || !levels) return alert("Course Title and Max Levels are required.");
 
     const btn = document.querySelector('#edit-course-modal .btn-success');
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    if(btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
 
-    await fetch(`${BASE_URL}/api/pcdp/master/edit`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            adminToken: adminToken, 
-            id: id, 
-            course_name: name, 
-            description: desc, 
-            total_levels: levels, 
-            category: cat, 
-            image_url: img 
-        })
-    });
-
-    btn.innerHTML = 'Save Changes';
-    closeModal('edit-course-modal');
-    loadMasterCourses();
+    try {
+        const req = await fetch(`${BASE_URL}/api/pcdp/master/edit`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                token: adminToken, 
+                id: id, 
+                course_name: name, 
+                description: desc, 
+                total_levels: levels, 
+                category: cat, 
+                image_url: img 
+            })
+        });
+        const data = await req.json();
+        if(!data.success) throw new Error(data.message);
+        
+        closeModal('edit-course-modal');
+        loadMasterCourses();
+    } catch(e) { alert("Failed to save edits: " + e.message); }
+    
+    if(btn) btn.innerHTML = 'Save Changes';
 }
 
 // Create new data
@@ -147,32 +167,36 @@ async function submitNewMasterCourse() {
     if(!name || !levels) return alert("Course Title and Max Levels are required.");
 
     const btn = document.querySelector('#add-course-modal .btn-primary');
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    if(btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
 
-    await fetch(`${BASE_URL}/api/pcdp/master/add`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminToken: adminToken, course_name: name, description: desc, total_levels: levels, category: cat, image_url: img })
-    });
-    
-    // Clear inputs
-    document.getElementById('c-name').value = ''; 
-    document.getElementById('c-desc').value = '';
-    document.getElementById('c-levels').value = ''; 
-    document.getElementById('c-cat').value = ''; 
-    document.getElementById('c-img').value = '';
-    
-    btn.innerHTML = '<i class="fa-solid fa-plus"></i> Save to Global Hub';
-    closeModal('add-course-modal'); 
-    loadMasterCourses();
+    try {
+        const req = await fetch(`${BASE_URL}/api/pcdp/master/add`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: adminToken, course_name: name, description: desc, total_levels: levels, category: cat, image_url: img })
+        });
+        
+        // Clear inputs
+        document.getElementById('c-name').value = ''; 
+        document.getElementById('c-desc').value = '';
+        document.getElementById('c-levels').value = ''; 
+        document.getElementById('c-cat').value = ''; 
+        document.getElementById('c-img').value = '';
+        
+        closeModal('add-course-modal'); 
+        loadMasterCourses();
+    } catch(e) { alert("Error adding course."); }
+
+    if(btn) btn.innerHTML = '<i class="fa-solid fa-plus"></i> Save to Global Hub';
 }
 
 async function deleteMasterCourse(id) {
     if(!confirm("Are you sure you want to delete this master course?\n\n(Note: This will not remove it from students who already have it assigned in their personal profiles.)")) return;
     
-    await fetch(`${BASE_URL}/api/pcdp/master/delete`, { 
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ adminToken: adminToken, id: id }) 
-    });
-    
-    loadMasterCourses();
+    try {
+        await fetch(`${BASE_URL}/api/pcdp/master/delete`, { 
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ token: adminToken, id: id }) 
+        });
+        loadMasterCourses();
+    } catch(e) { alert("Failed to delete course."); }
 }

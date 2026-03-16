@@ -65,7 +65,7 @@ const promisePool = dbPool.promise();
         await promisePool.query(`CREATE TABLE IF NOT EXISTS announcements (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), type VARCHAR(50), content TEXT, date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
         try { await promisePool.query(`ALTER TABLE announcements ADD COLUMN target_department VARCHAR(100) DEFAULT 'ALL'`); } catch(e){}
 
-        console.log("✅ Database Verified: Server is running with PCDP & Admin Roles.");
+        console.log("✅ Database Verified: PCDP Routes Restored.");
     } catch (err) { console.error("❌ DB Init Error:", err.message); }
 })();
 
@@ -100,7 +100,7 @@ async function verifyAdmin(reqBody) {
 
 // 🛑 PCDP ADMIN VERIFICATION
 async function verifyPCDP(reqBody) {
-    const token = reqBody.token || reqBody.pcdpToken;
+    const token = reqBody.token || reqBody.pcdpToken || reqBody.adminToken;
     if (!token) throw new Error("No token provided");
     
     const cleanToken = String(token).replace(/['"]+/g, '');
@@ -133,6 +133,18 @@ app.post('/api/auth', async (req, res) => {
             const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
             const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
             return res.json({ success: true, isPlacementAdmin: true, isStaffAdmin: false, profile: { full_name: 'Placement Coordinator', email: 'placement@gmail.com' }, globalStats: globalStats ? globalStats[0] : null, globalDrives });
+        }
+
+        if (incomingToken === 'pcdp_admin_authorized_token_7771') {
+            return res.json({ 
+                success: true, 
+                isPcdpAdmin: true, 
+                profile: { 
+                    full_name: 'PCDP Controller', 
+                    email: 'pcdp@gmail.com', 
+                    picture: 'https://ui-avatars.com/api/?name=PCDP&background=8B5CF6&color=fff' 
+                } 
+            });
         }
         
         const ticket = await googleClient.verifyIdToken({ idToken: incomingToken, audience: CLIENT_ID });
@@ -176,7 +188,7 @@ app.post('/api/auth', async (req, res) => {
 
 
 // ============================================================================
-// --- PCDP MASTER ROUTES (RESTORED TO FIX 404 ERRORS) ---
+// --- PCDP MASTER ROUTES (ALL FULLY RESTORED) ---
 // ============================================================================
 
 app.post(['/api/pcdp/list', '/api/pcdp/master/courses'], async (req, res) => {
@@ -187,7 +199,7 @@ app.post(['/api/pcdp/list', '/api/pcdp/master/courses'], async (req, res) => {
     } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-app.post(['/api/pcdp/add', '/api/pcdp/master/add-course'], async (req, res) => {
+app.post(['/api/pcdp/add', '/api/pcdp/master/add-course', '/api/pcdp/master/add'], async (req, res) => {
     try {
         await verifyPCDP(req.body);
         const levels = req.body.total_levels || 1;
@@ -201,7 +213,21 @@ app.post(['/api/pcdp/add', '/api/pcdp/master/add-course'], async (req, res) => {
     } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-app.post(['/api/pcdp/delete', '/api/pcdp/master/delete-course'], async (req, res) => {
+app.post(['/api/pcdp/edit', '/api/pcdp/master/edit'], async (req, res) => {
+    try {
+        await verifyPCDP(req.body);
+        const levels = req.body.total_levels || 1;
+        const cat = req.body.category || 'General';
+        const img = req.body.image_url || '';
+        await promisePool.query(
+            "UPDATE pcdp_master_courses SET course_name = ?, description = ?, total_levels = ?, category = ?, image_url = ? WHERE id = ?", 
+            [req.body.course_name, req.body.description, levels, cat, img, req.body.id]
+        );
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post(['/api/pcdp/delete', '/api/pcdp/master/delete-course', '/api/pcdp/master/delete'], async (req, res) => {
     try {
         await verifyPCDP(req.body);
         await promisePool.query("DELETE FROM pcdp_master_courses WHERE id = ?", [req.body.id]);
