@@ -1,13 +1,18 @@
 const BASE_URL = 'https://portal-6crm.onrender.com';
 
-let globalToken = localStorage.getItem('bit_session_token');
+// 🛑 BULLETPROOF TOKEN STRIPPER (Prevents Auto-Logout)
+let globalToken = localStorage.getItem('bit_session_token'); 
+if (globalToken) {
+    globalToken = globalToken.replace(/['"]+/g, ''); 
+} else {
+    window.location.href = 'index.html';
+}
+
 let gpaChartInstance = null;
 let allRewardsData = [];
 
 let studentProfilePicture = "";
 window.studentAppliedApps = [];
-
-if (!globalToken) window.location.href = 'index.html';
 
 function getAvatar(name) { return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff&bold=true&rounded=true`; }
 function setTopHeader(name, email, pic) { document.getElementById('headerName').innerText = name; document.getElementById('headerEmail').innerText = email; document.getElementById('headerImage').src = pic || getAvatar(name); }
@@ -16,21 +21,25 @@ function switchTab(tabId, element) { document.querySelectorAll('.nav-item').forE
 function signOut() { localStorage.removeItem('bit_session_token'); window.location.href = 'index.html'; }
 
 window.onload = async () => {
-    const initialReq = await fetch(`${BASE_URL}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
-    const initialData = await initialReq.json();
-    
-    if (!initialData.success) { localStorage.removeItem('bit_session_token'); window.location.href = 'index.html'; return; }
-    if (initialData.isAdmin) { window.location.href = 'admin.html'; return; }
-    if (initialData.isHR) { window.location.href = 'hr.html'; return; }
-    
-    let loggedInName = initialData.profile.full_name; 
-    let loggedInEmail = initialData.profile.email; 
-    studentProfilePicture = initialData.picture || getAvatar(loggedInName);
-    
-    setTopHeader(loggedInName, loggedInEmail, studentProfilePicture);
-    renderDataViews(initialData);
+    try {
+        const req = await fetch(`${BASE_URL}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
+        const data = await req.json();
+        
+        if (!data.success) { localStorage.removeItem('bit_session_token'); window.location.href = 'index.html'; return; }
+        
+        // 🛑 FIXED ADMIN REDIRECT
+        if (data.isAdmin) { window.location.href = 'placement_portal.html'; return; }
+        if (data.isHR) { window.location.href = 'hr.html'; return; }
+        
+        let loggedInName = data.profile.full_name; 
+        let loggedInEmail = data.profile.email; 
+        studentProfilePicture = data.picture || getAvatar(loggedInName);
+        
+        setTopHeader(loggedInName, loggedInEmail, studentProfilePicture);
+        renderDataViews(data);
 
-    setInterval(backgroundRefreshLoop, 5000);
+        setInterval(backgroundRefreshLoop, 5000);
+    } catch (e) { console.error("Student portal load warning:", e); }
 };
 
 async function backgroundRefreshLoop() {
@@ -109,13 +118,9 @@ function populateGlobalPlacement(gStats, gDrives) {
     if (gDrives && gDrives.length > 0) { drvBody.innerHTML = gDrives.map(d => `<tr><td style="font-weight: 700; color: var(--text-main);">${d.company}</td><td>${d.role}</td><td style="font-family: monospace;">${d.appeared}</td><td><span class="badge badge-success">${d.selected}</span></td><td style="font-weight: 700; color: var(--primary);">${d.ctc}</td></tr>`).join(''); } else { drvBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:var(--text-muted);">No campus drives recorded.</td></tr>`; }
 }
 
-// -----------------------------------------------------------------------------
-// 🛑 AUTO-OFFER CALCULATION & PRIMARY OFFER LOGIC
-// -----------------------------------------------------------------------------
 function populatePersonalPlacement(pProfile, pApps) {
     pProfile = pProfile || {}; const prf = pProfile;
     
-    // Auto-calculate total offers based on status
     let calculatedOffers = 0;
     if (pApps) {
         calculatedOffers = pApps.filter(a => a.status.toLowerCase().includes('select') || a.status.toLowerCase().includes('plac')).length;
@@ -128,7 +133,7 @@ function populatePersonalPlacement(pProfile, pApps) {
     document.getElementById('val-p-status').innerText = prf.status || 'Unplaced'; 
     document.getElementById('val-p-assess').innerText = prf.assessments || '0'; 
     document.getElementById('val-p-int').innerText = prf.interviews || '0'; 
-    document.getElementById('val-p-off').innerText = displayOffers; // Updated Offer Count
+    document.getElementById('val-p-off').innerText = displayOffers; 
     
     document.getElementById('val-t-dsa').innerText = prf.tech_dsa || '0'; document.getElementById('bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; document.getElementById('val-t-oop').innerText = prf.tech_oop || '0'; document.getElementById('bar-t-oop').style.width = `${prf.tech_oop || 0}%`; document.getElementById('val-t-core').innerText = prf.tech_core || '0'; document.getElementById('bar-t-core').style.width = `${prf.tech_core || 0}%`; document.getElementById('val-a-quant').innerText = prf.apt_quant || '0'; document.getElementById('bar-a-quant').style.width = `${prf.apt_quant || 0}%`; document.getElementById('val-a-log').innerText = prf.apt_logical || '0'; document.getElementById('bar-a-log').style.width = `${prf.apt_logical || 0}%`; document.getElementById('val-a-hr').innerText = prf.apt_hr || '0'; document.getElementById('bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
 
@@ -156,7 +161,6 @@ function populatePersonalPlacement(pProfile, pApps) {
             const extraDetails = (ctcBadge || internBadge) ? `<div style="display: flex; gap: 6px; margin-top: 8px;">${ctcBadge}${internBadge}</div>` : '';
             const letterBtn = (a.call_letter_url && a.call_letter_url.trim() !== '') ? `<a href="${a.call_letter_url}" target="_blank" style="margin-top: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.75rem; font-weight: 700; color: #4F46E5; text-decoration: none; padding: 6px 12px; background: #EEF2FF; border-radius: 6px; transition: 0.2s; border: 1px solid #C7D2FE;" onmouseover="this.style.background='#E0E7FF'" onmouseout="this.style.background='#EEF2FF'"><i class="fa-solid fa-file-arrow-down"></i> View Offer</a>` : '';
 
-            // Set Primary Action Button Logic
             let actionHtml = `<span style="color:var(--text-muted); font-size:0.75rem;">--</span>`;
             if(isSelected) {
                 if(prf.offer_company === a.company && prf.offer_role === a.role) {
@@ -196,7 +200,7 @@ function populatePersonalPlacement(pProfile, pApps) {
 }
 
 async function setPrimaryOffer(company, role, ctc) {
-    if(!confirm(`Set ${company} as your Primary Offer?\n\nThis will instantly feature this offer at the top of your Placement Profile.`)) return;
+    if(!confirm(`Set ${company} as your Primary Offer?\n\nBy clicking OK, this will instantly feature this offer at the top of your Placement Profile.`)) return;
     try {
         const req = await fetch(`${BASE_URL}/api/student/set-primary`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -204,73 +208,13 @@ async function setPrimaryOffer(company, role, ctc) {
         });
         const res = await req.json();
         if(res.success) {
-            backgroundRefreshLoop(); // Ajax auto refresh the board!
+            backgroundRefreshLoop(); 
         } else {
             alert("Session expired. Please log in again.");
         }
     } catch(e) { alert("Network Error."); }
 }
 
-async function saveResume() {
-    const link = document.getElementById('resume-link-input').value.trim();
-    if (!link) return alert("Please paste a link first.");
-    document.getElementById('resume-link-input').disabled = true;
-    try {
-        const req = await fetch(`${BASE_URL}/api/student/update-resume`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken, resume_url: link }) });
-        const data = await req.json();
-        if(data.success) { alert("✅ UPDATE SUCCESS: Resume link saved! HR can now view it."); document.getElementById('view-resume-btn').href = link; document.getElementById('view-resume-btn').style.display = 'inline-flex'; } else { alert(`❌ ERROR: ${data.details || data.message}\n\nYour Google Session has reached its 1-hour limit. You will now be redirected to log in again.`); signOut(); }
-    } catch(e) { alert("❌ CRITICAL NETWORK ERROR: Ensure your backend server is awake!"); }
-    document.getElementById('resume-link-input').disabled = false;
-}
-
-// -----------------------------------------------------------------------------
-// Leaderboard & Announcements
-// -----------------------------------------------------------------------------
-
-async function fetchAllRewards() {
-    const tbody = document.getElementById('all-rewards-tbody'); tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Leaderboard...</td></tr>`;
-    try {
-        const req = await fetch(`${BASE_URL}/api/student/all-rewards`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) }); const data = await req.json();
-        if (data.success && Array.isArray(data.students)) { allRewardsData = data.students; allRewardsData.sort((a, b) => (parseInt(b.reward_points) || 0) - (parseInt(a.reward_points) || 0)); renderRewardsTable(allRewardsData); } else { signOut(); }
-    } catch (e) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--danger);">Server error or sleeping. Refresh the page.</td></tr>`; }
-}
-
-function renderRewardsTable(students) {
-    const tbody = document.getElementById('all-rewards-tbody');
-    if (!students || students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No records found.</td></tr>`; return; }
-    tbody.innerHTML = students.map((s, index) => {
-        let rankBadge = `<span style="font-weight: 800; color: var(--text-muted);">${index + 1}</span>`;
-        if (index === 0) rankBadge = `<span class="badge" style="background: #FEF08A; color: #854D0E; border: none;"><i class="fa-solid fa-trophy"></i> 1st</span>`;
-        if (index === 1) rankBadge = `<span class="badge" style="background: #E2E8F0; color: #475569; border: none;">2nd</span>`;
-        if (index === 2) rankBadge = `<span class="badge" style="background: #FFEDD5; color: #9A3412; border: none;">3rd</span>`;
-        return `<tr class="dir-row"><td>${rankBadge}</td><td style="font-weight:700; color: var(--text-main);">${s.full_name || '--'}</td><td style="font-family: monospace; font-size: 0.95rem;">${s.roll_no || '--'}</td><td><span class="badge badge-primary">${s.department || 'Not Assigned'}</span></td><td style="font-weight: 800; color: #B45309; font-size: 1.1rem;">${s.reward_points || '0'}</td></tr>`;
-    }).join('');
-}
-
-function filterRewards() {
-    const searchTerm = document.getElementById('rewardSearch').value.toLowerCase();
-    const filtered = allRewardsData.filter(s => (s.full_name || "").toLowerCase().includes(searchTerm) || (s.roll_no || "").toLowerCase().includes(searchTerm) );
-    renderRewardsTable(filtered);
-}
-
-async function fetchStudentAnnouncements() {
-    const feed = document.getElementById('student-ann-feed'); feed.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Checking for updates...</div>`;
-    try {
-        const req = await fetch(`${BASE_URL}/api/announcements/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) }); const data = await req.json();
-        if (data.success) {
-            if(data.announcements.length === 0) { feed.innerHTML = `<div class="card" style="text-align:center; padding: 40px; color:var(--text-muted);">No new announcements.</div>`; return; }
-            feed.innerHTML = data.announcements.map(ann => {
-                let isPlacement = ann.type === "Placement Drive"; let icon = isPlacement ? "fa-building-user" : "fa-building-columns"; let color = isPlacement ? "var(--success)" : "var(--primary)"; let dateStr = new Date(ann.date_posted).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-                let targetLabel = ann.target_department || 'ALL'; let deptBadge = targetLabel === 'ALL' ? `<span class="badge" style="background: #E2E8F0; color: #475569; margin-right: 10px;"><i class="fa-solid fa-globe"></i> Global Notice</span>` : `<span class="badge" style="background: var(--purple-light); color: var(--purple); margin-right: 10px;"><i class="fa-solid fa-bullseye"></i> Specifically for ${targetLabel}</span>`;
-                return `<div class="card" style="display: flex; gap: 20px; align-items: flex-start; padding: 24px; border-left: 4px solid ${color};"><div style="background: ${color}20; color: ${color}; width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;"><i class="fa-solid ${icon}"></i></div><div style="flex: 1;"><h3 style="margin: 0 0 8px 0; font-size: 1.1rem; color: var(--text-main); font-weight: 800;">${ann.title}</h3><div style="margin-bottom: 12px;"><span class="badge" style="background: ${color}10; color: ${color}; border: 1px solid ${color}40; margin-right: 10px;">${ann.type}</span>${deptBadge}<span style="font-size: 0.8rem; color: var(--text-muted);"><i class="fa-regular fa-clock"></i> ${dateStr}</span></div><p style="margin: 0; color: var(--text-muted); line-height: 1.6; font-size: 0.95rem; white-space: pre-wrap;">${ann.content}</p></div></div>`;
-            }).join('');
-        }
-    } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error. Refresh to try again.</div>`; }
-}
-
-// -----------------------------------------------------------------------------
-// STUDENT ACTIVE DRIVES & APPLY LOGIC
-// -----------------------------------------------------------------------------
 async function fetchActiveDrives() {
     const grid = document.getElementById('student-drives-grid'); grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Openings...</div>`;
     try {

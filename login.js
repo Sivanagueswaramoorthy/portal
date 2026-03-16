@@ -63,7 +63,6 @@ window.onload = () => {
                 const data = await req.json();
 
                 if (data.success) {
-                    // 🛑 NEW LOGIC: Check where the server wants to redirect us
                     if (data.redirect === 'placement_portal.html') {
                         // It's the Coordinator
                         localStorage.setItem('bit_session_token', data.token); 
@@ -115,8 +114,10 @@ async function handleLogin(response) {
 
         if (data.success) {
             localStorage.setItem('bit_session_token', globalToken);
+            
+            // 🛑 FIXED: Redirect Admin to placement_portal.html instead of admin.html
             if (data.isAdmin) {
-                window.location.href = 'admin.html';
+                window.location.href = 'placement_portal.html';
             } else {
                 window.location.href = 'student.html';
             }

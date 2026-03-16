@@ -1,6 +1,13 @@
 const BASE_URL = 'https://portal-6crm.onrender.com';
 
+// 🛑 BULLETPROOF TOKEN STRIPPER (Prevents Auto-Logout)
 let globalToken = localStorage.getItem('bit_session_token'); 
+if (globalToken) {
+    globalToken = globalToken.replace(/['"]+/g, ''); // Removes corrupting quotes
+} else {
+    window.location.href = 'index.html';
+}
+
 let allStudentsList = [];
 let targetStudentEmail = ""; 
 let originalValues = {}; 
@@ -8,37 +15,35 @@ window.currentDriveApplicants = [];
 window.allGlobalPlacements = []; 
 window.globalDrivesList = [];
 
-// 🛑 BULLETPROOF TOKEN STRIPPER (Fixes Auto-Logout)
-if (globalToken) { globalToken = globalToken.replace(/['"]+/g, ''); } 
-else { window.location.href = 'index.html'; }
-
 window.onload = async () => {
     try {
         const req = await fetch(`${BASE_URL}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
         const data = await req.json();
         
-        // Ensure successful auth AND Admin rights before loading Dashboard
         if (!data.success || !data.isAdmin) { 
             localStorage.removeItem('bit_session_token'); 
             window.location.href = 'index.html'; 
             return; 
         }
-
-        document.getElementById('headerName').innerText = data.profile.full_name;
-        document.getElementById('headerEmail').innerText = data.profile.email;
-        document.getElementById('headerImage').src = data.profile.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.profile.full_name)}&background=4F46E5&color=fff`;
+        
+        // Safely update DOM headers
+        if(document.getElementById('headerName')) document.getElementById('headerName').innerText = data.profile.full_name;
+        if(document.getElementById('headerEmail')) document.getElementById('headerEmail').innerText = data.profile.email;
+        if(document.getElementById('headerImage')) document.getElementById('headerImage').src = data.profile.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.profile.full_name)}&background=4F46E5&color=fff`;
 
         populateGlobalPlacement(data.globalStats, data.globalDrives);
         fetchDirectory();
         loadAnnouncements();
         loadAllPlacements(); 
         loadActiveDrives();
-    } catch (e) { window.location.href = 'index.html'; }
+    } catch (e) { 
+        console.error("Dashboard Load Warning: Backend asleep or minor UI glitch. Staying on page.", e);
+        // 🛑 REMOVED THE AUTO-REDIRECT TO INDEX.HTML HERE TO STOP THE LOOP!
+    }
 };
 
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebar-overlay').classList.toggle('show'); }
 
-// 🛑 ADVANCED TAB SWITCHING
 function switchTab(tabId, element) { 
     if (tabId !== 'edit-list' && tabId !== 'edit-detail' && tabId !== 'student-login') {
         document.getElementById('nav-student-login').style.display = 'flex';
@@ -62,7 +67,7 @@ function switchTab(tabId, element) {
         'events': 'Events / Training', 'announcements': 'Notifications / Updates', 'eligibility': 'Eligibility Criteria', 'settings': 'Admin Settings',
         'analysis-list': 'Student Analysis Dashboard', 'analysis-detail': 'Student Profile Analysis'
     };
-    if(titles[tabId]) document.getElementById('top-title-bar').innerText = titles[tabId];
+    if(titles[tabId] && document.getElementById('top-title-bar')) document.getElementById('top-title-bar').innerText = titles[tabId];
 
     if (tabId === 'dashboard') updateDashboardOverview();
     if (tabId === 'students' || tabId === 'edit-list' || tabId === 'analysis-list') fetchDirectory();
@@ -78,22 +83,24 @@ function signOut() { localStorage.removeItem('bit_session_token'); window.locati
 
 // --- DASHBOARD UPDATER ---
 function updateDashboardOverview() {
-    document.getElementById('dash-total-students').innerText = allStudentsList.length || '0';
+    if(document.getElementById('dash-total-students')) document.getElementById('dash-total-students').innerText = allStudentsList.length || '0';
     const placed = allStudentsList.filter(s => s.status === 'Placed' || s.status === 'Selected').length;
-    document.getElementById('dash-placed-students').innerText = placed || '0';
+    if(document.getElementById('dash-placed-students')) document.getElementById('dash-placed-students').innerText = placed || '0';
     
     const tbody = document.getElementById('dash-recent-apps-tbody');
-    if(window.allGlobalPlacements && window.allGlobalPlacements.length > 0) {
-        const recent = window.allGlobalPlacements.slice(0, 5);
-        tbody.innerHTML = recent.map(a => {
-            let bClass = 'badge-primary'; let s = a.status.toLowerCase(); 
-            if(s.includes('select') || s.includes('plac')) bClass = 'badge-success'; 
-            if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
-            if(s.includes('pend') || s.includes('short')) bClass = 'badge-warning'; 
-            return `<tr><td style="font-weight:600; font-size:0.85rem;">${a.full_name}</td><td style="font-size:0.85rem;">${a.company}</td><td><span class="badge ${bClass}" style="font-size:0.7rem;">${a.status}</span></td></tr>`;
-        }).join('');
-    } else {
-        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 20px; color:var(--text-muted); font-size:0.85rem;">No recent applications.</td></tr>`;
+    if(tbody) {
+        if(window.allGlobalPlacements && window.allGlobalPlacements.length > 0) {
+            const recent = window.allGlobalPlacements.slice(0, 5);
+            tbody.innerHTML = recent.map(a => {
+                let bClass = 'badge-primary'; let s = a.status.toLowerCase(); 
+                if(s.includes('select') || s.includes('plac')) bClass = 'badge-success'; 
+                if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
+                if(s.includes('pend') || s.includes('short')) bClass = 'badge-warning'; 
+                return `<tr><td style="font-weight:600; font-size:0.85rem;">${a.full_name}</td><td style="font-size:0.85rem;">${a.company}</td><td><span class="badge ${bClass}" style="font-size:0.7rem;">${a.status}</span></td></tr>`;
+            }).join('');
+        } else {
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 20px; color:var(--text-muted); font-size:0.85rem;">No recent applications.</td></tr>`;
+        }
     }
 }
 
@@ -134,7 +141,7 @@ async function fetchDirectory() {
             if(document.getElementById('edit-student-list-tbody')) renderEditTable(allStudentsList);
             updateDashboardOverview();
         }
-    } catch(e) { }
+    } catch(e) { if(document.getElementById('student-list-tbody')) document.getElementById('student-list-tbody').innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger);">Server Error. Please refresh.</td></tr>`; }
 }
 
 function renderTable(students) {
@@ -360,8 +367,10 @@ async function openEditableStudentDetail(email, name, roll_no, department) {
 }
 
 function populateEditorPerformance(prf, apps) {
+    // Top Stats & Offers (Read Only inside Editor context)
     document.getElementById('val-p-role').innerText = prf.offer_role || '--'; document.getElementById('val-p-comp').innerText = prf.offer_company || '--'; document.getElementById('val-p-ctc').innerText = prf.offer_ctc || '--'; document.getElementById('val-p-status').innerText = prf.status || 'Unplaced'; document.getElementById('val-p-assess').innerText = prf.assessments || '0'; document.getElementById('val-p-int').innerText = prf.interviews || '0'; document.getElementById('val-p-off').innerText = prf.offers || '0';
     
+    // Bottom Skills are Editable (Pencils exist in HTML)
     document.getElementById('val-t-dsa').innerText = prf.tech_dsa || '0'; document.getElementById('bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
     document.getElementById('val-t-oop').innerText = prf.tech_oop || '0'; document.getElementById('bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
     document.getElementById('val-t-core').innerText = prf.tech_core || '0'; document.getElementById('bar-t-core').style.width = `${prf.tech_core || 0}%`; 
@@ -369,6 +378,7 @@ function populateEditorPerformance(prf, apps) {
     document.getElementById('val-a-log').innerText = prf.apt_logical || '0'; document.getElementById('bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
     document.getElementById('val-a-hr').innerText = prf.apt_hr || '0'; document.getElementById('bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
 
+    // Apps Table (Read Only)
     const appBody = document.getElementById('edit-student-apps-tbody');
     if (apps && apps.length > 0) {
         appBody.innerHTML = apps.map(a => { 
