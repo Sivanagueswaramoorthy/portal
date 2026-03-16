@@ -14,6 +14,42 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="style.css?v=student_ui_fix">
+    <style>
+        /* --- MOBILE RESPONSIVE UI OPTIMIZATIONS --- */
+        .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; border-radius: 8px; }
+        
+        @media (max-width: 768px) {
+            /* Stack grids nicely */
+            .dash-grid, .stats-grid, .skills-grid, .academics-grid { grid-template-columns: 1fr !important; gap: 15px; }
+            div[style*="grid-template-columns: repeat(4, 1fr)"] { grid-template-columns: 1fr !important; }
+            div[style*="grid-column: span 2"], div[style*="grid-column: span 1"] { grid-column: 1 / -1 !important; }
+            
+            /* Spacing adjustments */
+            .view-section { padding: 15px 10px !important; }
+            .card { padding: 16px !important; margin-bottom: 16px !important; }
+            .stat-box { padding: 16px !important; }
+            
+            /* Text & Flex Adjustments */
+            .page-title { font-size: 1.3rem !important; }
+            .view-section .flex-between { flex-direction: column; align-items: flex-start !important; gap: 12px; }
+            .view-section .flex-between > div { width: 100%; text-align: left; }
+            
+            /* Inputs and Buttons */
+            .control-input, .modal-input, .search-wrapper input { width: 100% !important; box-sizing: border-box; }
+            .search-wrapper { max-width: 100% !important; width: 100%; }
+            .action-btn { width: 100%; justify-content: center; }
+            
+            /* Profile & Placements Card */
+            .card[style*="background: linear-gradient"] { flex-direction: column !important; align-items: center !important; text-align: center; }
+            .card[style*="background: linear-gradient"] > div { text-align: center !important; width: 100%; }
+            .card[style*="background: linear-gradient"] .flex-center { justify-content: center; }
+        }
+        
+        @media (max-width: 480px) {
+            .profile-hero { flex-direction: column; text-align: center; gap: 12px; }
+            .detail-item { flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 0; }
+        }
+    </style>
 </head>
 <body>
 
@@ -29,7 +65,7 @@
             <a class="nav-item" id="nav-announcements" onclick="switchTab('announcements', this); fetchStudentAnnouncements();"><i class="fa-solid fa-bullhorn"></i> Notice Board</a>
             <a class="nav-item" id="nav-act" onclick="switchTab('activities', this)"><i class="fa-solid fa-rocket"></i> PCDP Activities</a>
             <a class="nav-item" id="nav-acad" onclick="switchTab('academics', this)"><i class="fa-solid fa-book-open"></i> Academic Records</a>
-<a class="nav-item" id="nav-col-place" onclick="switchTab('college-placement', this)"><i class="fa-solid fa-building-user"></i> College Placement</a>
+            <a class="nav-item" id="nav-col-place" onclick="switchTab('college-placement', this)"><i class="fa-solid fa-building-user"></i> College Placement</a>
             <a class="nav-item" id="nav-apply-companies" onclick="switchTab('apply-companies', this); fetchActiveDrives();"><i class="fa-solid fa-paper-plane"></i> Job Openings</a>
             <a class="nav-item" id="nav-place" onclick="switchTab('placement', this)"><i class="fa-solid fa-briefcase"></i> My Placement Hub</a>
             <a class="nav-item" id="nav-rewards" onclick="switchTab('rewards', this); fetchAllRewards();"><i class="fa-solid fa-gift"></i> Reward Points Board</a>
@@ -230,7 +266,7 @@
                             <div style="font-size: 0.8rem; opacity: 0.8; font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">Total CTC Offered</div>
                             <div class="flex-center"><div style="font-size: 2.2rem; font-weight: 800;"><span id="val-p-ctc">--</span> <span style="font-size: 1.2rem; opacity: 0.8;">LPA</span></div></div>
                         </div>
-                        <div class="card" style="margin-bottom: 24px; border: 1px solid var(--primary-light); background: #F8FAFC;">
+                        <div class="card" style="margin-bottom: 24px; border: 1px solid var(--primary-light); background: #F8FAFC; width: 100%;">
                         <h3 style="font-size: 1rem; font-weight: 800; margin: 0 0 16px 0; color: var(--primary);"><i class="fa-solid fa-file-pdf"></i> Resume Portfolio Link</h3>
                         <div class="flex-center" style="flex-wrap: wrap;">
                             <input type="url" id="resume-link-input" class="control-input" style="flex: 1; min-width: 250px;" placeholder="Paste Google Drive / Portfolio URL here...">
