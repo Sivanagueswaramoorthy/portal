@@ -11,12 +11,16 @@ window.currentDriveApplicants = [];
 window.allGlobalPlacements = []; 
 window.globalDrivesList = [];
 
+// Helper to prevent HTML button breaks
+const safeStr = (str) => (str || '--').toString().replace(/'/g, "\\'");
+
 window.onload = async () => {
     try {
         const req = await fetch(`${BASE_URL}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
         const data = await req.json();
         
         if (!data.success || !data.isAdmin) { 
+            alert(`Authentication Failed: ${data.message || 'Not authorized'}`);
             localStorage.removeItem('bit_session_token'); 
             window.location.href = 'index.html'; 
             return; 
@@ -31,7 +35,10 @@ window.onload = async () => {
         loadAnnouncements();
         loadAllPlacements(); 
         loadActiveDrives();
-    } catch (e) {}
+    } catch (e) { 
+        console.error("Critical Auth Network Error:", e);
+        alert("CRITICAL ERROR: Could not connect to backend server. Make sure Render is awake.");
+    }
 };
 
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebar-overlay').classList.toggle('show'); }
@@ -84,7 +91,7 @@ function updateDashboardOverview() {
         if(window.allGlobalPlacements && window.allGlobalPlacements.length > 0) {
             const recent = window.allGlobalPlacements.slice(0, 5);
             tbody.innerHTML = recent.map(a => {
-                let bClass = 'badge-primary'; let s = a.status.toLowerCase(); 
+                let bClass = 'badge-primary'; let s = (a.status || '').toLowerCase(); 
                 if(s.includes('select') || s.includes('plac')) bClass = 'badge-success'; 
                 if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
                 if(s.includes('pend') || s.includes('short')) bClass = 'badge-warning'; 
@@ -101,6 +108,7 @@ async function fetchDirectory() {
     try {
         const req = await fetch(`${BASE_URL}/api/admin/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken }) });
         const data = await req.json();
+        
         if (data.success) {
             allStudentsList = data.students;
             const deptSelect = document.getElementById('deptFilter');
@@ -132,8 +140,18 @@ async function fetchDirectory() {
             if(document.getElementById('analysis-list-tbody')) renderAnalysisTable(allStudentsList);
             if(document.getElementById('edit-student-list-tbody')) renderEditTable(allStudentsList);
             updateDashboardOverview();
+        } else {
+            console.error("Backend Error Msg:", data.message);
+            if(document.getElementById('student-list-tbody')) {
+                document.getElementById('student-list-tbody').innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger);">Backend Error: ${data.message || 'Token Issue'}</td></tr>`;
+            }
         }
-    } catch(e) { if(document.getElementById('student-list-tbody')) document.getElementById('student-list-tbody').innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger);">Server Error. Please refresh.</td></tr>`; }
+    } catch(e) { 
+        console.error("Fetch Directory Catch Error:", e);
+        if(document.getElementById('student-list-tbody')) {
+            document.getElementById('student-list-tbody').innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger);">Network Error. Backend offline.</td></tr>`;
+        }
+    }
 }
 
 function renderTable(students) {
@@ -145,12 +163,17 @@ function renderTable(students) {
         const cgpa = s.cgpa ? parseFloat(s.cgpa).toFixed(2) : '--';
 
         return `<tr class="dir-row">
-            <td style="font-weight:600; color: var(--text-main); cursor: pointer;" onclick="openReadOnlyDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}<div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${s.email}</div></div></div></td>
+            <td style="font-weight:600; color: var(--text-main); cursor: pointer;" onclick="openReadOnlyDetail('${safeStr(s.email)}', '${safeStr(s.full_name)}', '${safeStr(s.roll_no)}', '${safeStr(s.department)}')"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}<div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${s.email}</div></div></div></td>
             <td style="font-family: monospace;">${s.roll_no || '--'}</td>
             <td><span class="badge badge-primary">${s.department || '--'}</span></td>
             <td style="font-weight: 700; color: var(--primary);">${cgpa}</td>
             <td>${resumeLink}</td>
-            <td><button class="action-btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--primary); color: var(--primary);" onclick="openReadOnlyDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')"><i class="fa-solid fa-eye"></i> View Profile</button></td>
+            <td>
+                <div style="display: flex; gap: 8px;">
+                    <button class="action-btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--primary); color: var(--primary);" onclick="openReadOnlyDetail('${safeStr(s.email)}', '${safeStr(s.full_name)}', '${safeStr(s.roll_no)}', '${safeStr(s.department)}')"><i class="fa-solid fa-eye"></i> View</button>
+                    <button class="action-btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--danger); color: var(--danger);" onclick="deleteStudent('${safeStr(s.email)}', '${safeStr(s.full_name)}')"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            </td>
         </tr>`;
     }).join('');
 }
@@ -159,6 +182,25 @@ function filterStudents() {
     const search = document.getElementById('searchStudent').value.toLowerCase(); const dept = document.getElementById('deptFilter').value;
     const filtered = allStudentsList.filter(s => { const matchesSearch = (s.full_name && s.full_name.toLowerCase().includes(search)) || (s.email && s.email.toLowerCase().includes(search)) || (s.roll_no && s.roll_no.toLowerCase().includes(search)); const matchesDept = dept === "ALL" || s.department === dept; return matchesSearch && matchesDept; });
     renderTable(filtered);
+}
+
+async function deleteStudent(email, name) {
+    if(!confirm(`⚠️ CRITICAL WARNING: Are you sure you want to completely delete ${name} (${email})?\n\nThis will erase their profile, academic records, skills, and ALL placement applications. This CANNOT be undone.`)) return;
+
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/delete-student`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adminToken: globalToken, targetEmail: email })
+        });
+        const res = await req.json();
+        
+        if(res.success) {
+            alert(`✅ ${name} has been completely deleted from the database.`);
+            fetchDirectory(); 
+            loadAllPlacements(); 
+        } else { alert("❌ Failed to delete student: " + (res.message || "Server rejected request.")); }
+    } catch(e) { alert("Network error while trying to delete."); }
 }
 
 // 🛑 READ-ONLY QUICK VIEW MODAL
@@ -200,7 +242,7 @@ function populateReadOnlyModal(prf, apps) {
     const appBody = document.getElementById('ro-student-apps-tbody');
     if (apps && apps.length > 0) {
         appBody.innerHTML = apps.map(a => { 
-            let bClass = 'badge-primary'; let s = a.status.toLowerCase(); 
+            let bClass = 'badge-primary'; let s = (a.status || '').toLowerCase(); 
             if(s.includes('select') || s.includes('offer') || s.includes('placed')) bClass = 'badge-success'; 
             if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
             if(s.includes('pend') || s.includes('wait') || s.includes('short')) bClass = 'badge-warning'; 
@@ -213,6 +255,77 @@ function populateReadOnlyModal(prf, apps) {
         }).join('');
     } else { appBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 30px; color:var(--text-muted);">No applications logged.</td></tr>`; }
 }
+
+
+// --- 2. STUDENT ANALYSIS LIST (FULL PAGE RO) ---
+function renderAnalysisTable(students) {
+    const tbody = document.getElementById('analysis-list-tbody');
+    if(!tbody) return;
+    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students match filter.</td></tr>`; return; }
+    tbody.innerHTML = students.map(s => {
+        const yMatch = s.email.split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
+        return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: var(--primary);">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color: #4F46E5; color: #4F46E5;" onclick="openAnalysisDetail('${safeStr(s.email)}', '${safeStr(s.full_name)}', '${safeStr(s.roll_no)}', '${safeStr(s.department)}')">Full Analysis <i class="fa-solid fa-arrow-right" style="margin-left: 6px;"></i></button></td></tr>`;
+    }).join('');
+}
+
+function filterAnalysisStudents() {
+    const search = document.getElementById('searchAnalysis').value.toLowerCase(); 
+    const dept = document.getElementById('deptAnalysisFilter').value;
+    const yearFilter = document.getElementById('yearAnalysisFilter').value;
+
+    const filtered = allStudentsList.filter(s => { 
+        const matchesSearch = (s.full_name && s.full_name.toLowerCase().includes(search)) || (s.email && s.email.toLowerCase().includes(search)); 
+        const matchesDept = dept === "ALL" || s.department === dept; 
+        const yMatch = s.email.split('@')[0].match(/\d{2}$/);
+        const yExtracted = yMatch ? yMatch[0] : '';
+        const matchesYear = yearFilter === "ALL" || yExtracted === yearFilter;
+        return matchesSearch && matchesDept && matchesYear; 
+    });
+    renderAnalysisTable(filtered);
+}
+
+// 🛑 FULL PAGE ANALYSIS DASHBOARD
+async function openAnalysisDetail(email, name, roll_no, department) {
+    switchTab('analysis-detail', document.getElementById('nav-analysis-list'));
+    document.getElementById('ana-modal-content-body').style.display = 'none'; 
+    document.getElementById('ana-modal-loading').style.display = 'block'; 
+    document.getElementById('ana-detail-name').innerText = name; 
+    document.getElementById('ana-detail-sub').innerText = `${roll_no || 'No Roll No'} | ${department || 'No Dept'}`; 
+    document.getElementById('ana-detail-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff`;
+
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) });
+        const data = await req.json();
+        if (data.success) { 
+            populateAnalysisModal(data.placeProfile || {}, data.placeApps || []); 
+            document.getElementById('ana-modal-loading').style.display = 'none'; 
+            document.getElementById('ana-modal-content-body').style.display = 'block'; 
+        } else { alert("Failed to fetch placement data."); switchTab('analysis-list', document.getElementById('nav-analysis-list')); }
+    } catch(e) { alert("Network error."); switchTab('analysis-list', document.getElementById('nav-analysis-list')); }
+}
+
+function populateAnalysisModal(prf, apps) {
+    document.getElementById('ana-p-role').innerText = prf.offer_role || '--'; document.getElementById('ana-p-comp').innerText = prf.offer_company || '--'; document.getElementById('ana-p-ctc').innerText = prf.offer_ctc || '--'; 
+    document.getElementById('ana-p-status').innerText = prf.status || 'Unplaced'; document.getElementById('ana-p-assess').innerText = prf.assessments || '0'; document.getElementById('ana-p-int').innerText = prf.interviews || '0'; document.getElementById('ana-p-off').innerText = prf.offers || '0';
+    document.getElementById('ana-t-dsa').innerText = prf.tech_dsa || '0'; document.getElementById('ana-bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
+    document.getElementById('ana-t-oop').innerText = prf.tech_oop || '0'; document.getElementById('ana-bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
+    document.getElementById('ana-t-core').innerText = prf.tech_core || '0'; document.getElementById('ana-bar-t-core').style.width = `${prf.tech_core || 0}%`; 
+    document.getElementById('ana-a-quant').innerText = prf.apt_quant || '0'; document.getElementById('ana-bar-a-quant').style.width = `${prf.apt_quant || 0}%`; 
+    document.getElementById('ana-a-log').innerText = prf.apt_logical || '0'; document.getElementById('ana-bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
+    document.getElementById('ana-a-hr').innerText = prf.apt_hr || '0'; document.getElementById('ana-bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
+
+    const appBody = document.getElementById('ana-student-apps-tbody');
+    if (apps && apps.length > 0) {
+        appBody.innerHTML = apps.map(a => { 
+            let bClass = 'badge-primary'; let s = (a.status || '').toLowerCase(); 
+            if(s.includes('select') || s.includes('offer') || s.includes('placed')) bClass = 'badge-success'; 
+            if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
+            if(s.includes('pend') || s.includes('wait') || s.includes('short')) bClass = 'badge-warning'; 
+            return `<tr style="border-bottom: 1px solid #F1F5F9;"><td style="padding: 16px 24px; font-weight: 800; color: #1E293B;">${a.company}</td><td style="padding: 16px 24px; font-weight: 600; color: #475569;">${a.role}</td><td style="padding: 16px 24px; color: #64748B;">${a.date_applied}</td><td style="padding: 16px 24px;"><span class="badge ${bClass}" style="font-size: 0.75rem; padding: 4px 10px;">${a.status}</span></td></tr>`; 
+        }).join('');
+    } else { appBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 40px; color:var(--text-muted);">No applications logged.</td></tr>`; }
+}
+
 
 // --- 3. STUDENT LOGIN & SECURE EDITING GATEWAY ---
 function loginAsStudent() {
@@ -240,30 +353,13 @@ function lockEditor() {
     switchTab('student-login', document.getElementById('nav-student-login'));
 }
 
-// 🛑 FULLY SECURE EDIT TABLE WITH DELETE BUTTON
 function renderEditTable(students) {
     const tbody = document.getElementById('edit-student-list-tbody');
     if(!tbody) return;
-    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
+    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
     tbody.innerHTML = students.map(s => {
-        const resumeLink = (s.resume_url && s.resume_url !== '--' && s.resume_url.trim() !== '') ? `<a href="${s.resume_url}" target="_blank" class="action-btn btn-outline" style="padding: 4px 8px; font-size: 0.75rem; border-color: var(--primary); color: var(--primary); text-decoration: none;"><i class="fa-solid fa-file-pdf"></i> View</a>` : `<span style="font-size: 0.75rem; color: var(--text-muted); background: #f1f5f9; padding: 4px 8px; border-radius: 4px;">Not Uploaded</span>`;
-        const cgpa = s.cgpa ? parseFloat(s.cgpa).toFixed(2) : '--';
-        const currentStatus = s.status || 'Unplaced';
-
-        return `<tr class="dir-row">
-            <td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}<div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${s.email}</div></div></div></td>
-            <td style="font-family: monospace;">${s.roll_no || '--'}</td>
-            <td><span class="badge badge-primary">${s.department || '--'}</span></td>
-            <td style="font-weight: 700; color: var(--primary);">${cgpa}</td>
-            <td>${resumeLink}</td>
-            <td><select onchange="updateStudentStatus('${s.email}', this.value)" class="control-input" style="padding: 4px; font-size: 0.75rem; width: 110px; cursor: pointer; border-color: var(--border); font-weight: 600;"><option value="Unplaced" ${currentStatus === 'Unplaced' ? 'selected' : ''}>Unplaced</option><option value="Ongoing" ${currentStatus === 'Ongoing' ? 'selected' : ''}>Ongoing</option><option value="Placed" ${currentStatus === 'Placed' ? 'selected' : ''}>Placed</option><option value="Rejected" ${currentStatus === 'Rejected' ? 'selected' : ''}>Rejected</option></select></td>
-            <td style="text-align: right;">
-                <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                    <button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color:#4F46E5; color:#4F46E5;" onclick="openEditableStudentDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')"><i class="fa-solid fa-pen"></i> Edit</button>
-                    <button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color:var(--danger); color:var(--danger);" onclick="deleteStudent('${s.email}', '${s.full_name}')"><i class="fa-solid fa-trash"></i></button>
-                </div>
-            </td>
-        </tr>`;
+        const yMatch = s.email.split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
+        return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: #B91C1C;">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color:#B91C1C; color:#B91C1C;" onclick="openEditableStudentDetail('${safeStr(s.email)}', '${safeStr(s.full_name)}', '${safeStr(s.roll_no)}', '${safeStr(s.department)}')">Edit Skills <i class="fa-solid fa-pen" style="margin-left: 6px;"></i></button></td></tr>`;
     }).join('');
 }
 
@@ -281,30 +377,6 @@ function filterEditStudents() {
         return matchesSearch && matchesDept && matchesYear; 
     });
     renderEditTable(filtered);
-}
-
-// 🛑 DELETE STUDENT FUNCTION (Cascades everywhere)
-async function deleteStudent(email, name) {
-    if(!confirm(`⚠️ CRITICAL WARNING: Are you sure you want to completely delete ${name} (${email})?\n\nThis will erase their profile, academic records, skills, and ALL placement applications. This CANNOT be undone.`)) return;
-
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/delete-student`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ adminToken: globalToken, targetEmail: email })
-        });
-        const res = await req.json();
-        
-        if(res.success) {
-            alert(`✅ ${name} has been completely deleted from the database.`);
-            fetchDirectory(); 
-            loadAllPlacements(); 
-        } else {
-            alert("❌ Failed to delete student.");
-        }
-    } catch(e) {
-        alert("Network error.");
-    }
 }
 
 // 🛑 FULL PAGE EDITABLE PROFILE (SKILLS ONLY)
@@ -334,8 +406,10 @@ async function openEditableStudentDetail(email, name, roll_no, department) {
 }
 
 function populateEditorPerformance(prf, apps) {
+    // Top Stats & Offers (Read Only inside Editor context)
     document.getElementById('val-p-role').innerText = prf.offer_role || '--'; document.getElementById('val-p-comp').innerText = prf.offer_company || '--'; document.getElementById('val-p-ctc').innerText = prf.offer_ctc || '--'; document.getElementById('val-p-status').innerText = prf.status || 'Unplaced'; document.getElementById('val-p-assess').innerText = prf.assessments || '0'; document.getElementById('val-p-int').innerText = prf.interviews || '0'; document.getElementById('val-p-off').innerText = prf.offers || '0';
     
+    // Bottom Skills are Editable (Pencils exist in HTML)
     document.getElementById('val-t-dsa').innerText = prf.tech_dsa || '0'; document.getElementById('bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
     document.getElementById('val-t-oop').innerText = prf.tech_oop || '0'; document.getElementById('bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
     document.getElementById('val-t-core').innerText = prf.tech_core || '0'; document.getElementById('bar-t-core').style.width = `${prf.tech_core || 0}%`; 
@@ -343,10 +417,11 @@ function populateEditorPerformance(prf, apps) {
     document.getElementById('val-a-log').innerText = prf.apt_logical || '0'; document.getElementById('bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
     document.getElementById('val-a-hr').innerText = prf.apt_hr || '0'; document.getElementById('bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
 
+    // Apps Table (Read Only)
     const appBody = document.getElementById('edit-student-apps-tbody');
     if (apps && apps.length > 0) {
         appBody.innerHTML = apps.map(a => { 
-            let bClass = 'badge-primary'; let s = a.status.toLowerCase(); 
+            let bClass = 'badge-primary'; let s = (a.status || '').toLowerCase(); 
             if(s.includes('select') || s.includes('offer') || s.includes('placed')) bClass = 'badge-success'; 
             if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
             if(s.includes('pend') || s.includes('wait') || s.includes('short')) bClass = 'badge-warning'; 
