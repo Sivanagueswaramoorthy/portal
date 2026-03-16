@@ -29,7 +29,6 @@ const promisePool = dbPool.promise();
 // --- DATABASE AUTO-INITIALIZER & MIGRATION ---
 (async function initializeDatabase() {
     try {
-        // 1. Core Profiles
         await promisePool.query(`CREATE TABLE IF NOT EXISTS student_profile (email VARCHAR(255) PRIMARY KEY, full_name VARCHAR(255), roll_no VARCHAR(50), department VARCHAR(100))`);
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN cgpa VARCHAR(10) DEFAULT '0'`); } catch(e){}
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN sgpa VARCHAR(10) DEFAULT '0'`); } catch(e){}
@@ -38,26 +37,20 @@ const promisePool = dbPool.promise();
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN arrears VARCHAR(10) DEFAULT '0'`); } catch(e){}
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN leaves VARCHAR(10) DEFAULT '0'`); } catch(e){}
         
-        // 2. Academics & PCDP
         await promisePool.query(`CREATE TABLE IF NOT EXISTS pcdp_master_courses (id INT AUTO_INCREMENT PRIMARY KEY, course_name VARCHAR(255), description TEXT, total_levels INT DEFAULT 1, category VARCHAR(100), image_url TEXT)`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS student_courses (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), semester INT, course_name VARCHAR(255), marks VARCHAR(50), grade VARCHAR(10))`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS student_skills (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), skill_name VARCHAR(255), total_levels INT, completed_levels INT, category VARCHAR(100), image_url TEXT)`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS pcdp_courses (id INT AUTO_INCREMENT PRIMARY KEY, course_name VARCHAR(255) UNIQUE, total_levels INT DEFAULT 1, category VARCHAR(100), image_url TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS student_sem_gpa (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255) NOT NULL, semester INT NOT NULL, gpa VARCHAR(10), UNIQUE KEY unique_sem (student_email, semester))`);
         
-        // 3. Placement Core Data
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_global (id INT PRIMARY KEY, total_placed VARCHAR(50), ongoing_drives VARCHAR(50), highest_ctc VARCHAR(50), avg_ctc VARCHAR(50))`);
         await promisePool.query(`INSERT IGNORE INTO placement_global (id, total_placed, ongoing_drives, highest_ctc, avg_ctc) VALUES (1, '0', '0', '0', '0')`);
-        
-        // Legacy College Drives Table
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_drives (id INT AUTO_INCREMENT PRIMARY KEY, company VARCHAR(255), role VARCHAR(255), appeared VARCHAR(50), selected VARCHAR(50), ctc VARCHAR(50))`);
         
-        // 4. Student Specific Placement Profile
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_student_profile (student_email VARCHAR(255) PRIMARY KEY, offer_role VARCHAR(255) DEFAULT '--', offer_company VARCHAR(255) DEFAULT '--', offer_ctc VARCHAR(50) DEFAULT '--', status VARCHAR(50) DEFAULT 'Unplaced', assessments VARCHAR(50) DEFAULT '0', interviews VARCHAR(50) DEFAULT '0', offers VARCHAR(50) DEFAULT '0', tech_dsa VARCHAR(50) DEFAULT '0', tech_oop VARCHAR(50) DEFAULT '0', tech_core VARCHAR(50) DEFAULT '0', apt_quant VARCHAR(50) DEFAULT '0', apt_logical VARCHAR(50) DEFAULT '0', apt_hr VARCHAR(50) DEFAULT '0', resume_url LONGTEXT)`);
         try { await promisePool.query(`ALTER TABLE placement_student_profile ADD COLUMN resume_url LONGTEXT`); } catch(e){}
         try { await promisePool.query(`ALTER TABLE placement_student_profile MODIFY COLUMN resume_url LONGTEXT`); } catch(e){}
 
-        // 5. Active Job Drives & Applications
         await promisePool.query(`CREATE TABLE IF NOT EXISTS active_drives (id INT AUTO_INCREMENT PRIMARY KEY, company_name VARCHAR(255), role VARCHAR(255), ctc VARCHAR(100), eligibility VARCHAR(255), description TEXT, deadline VARCHAR(100), target_year VARCHAR(50) DEFAULT 'ALL', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
         
         await promisePool.query(`CREATE TABLE IF NOT EXISTS placement_apps (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), company VARCHAR(255), role VARCHAR(255), date_applied VARCHAR(50), status VARCHAR(50))`);
@@ -67,12 +60,11 @@ const promisePool = dbPool.promise();
         try { await promisePool.query(`ALTER TABLE placement_apps ADD COLUMN call_letter_url LONGTEXT`); } catch(e){}
         try { await promisePool.query(`ALTER TABLE placement_apps ADD COLUMN internship_period VARCHAR(100) DEFAULT '--'`); } catch(e){}
 
-        // 6. Announcements & HR
         await promisePool.query(`CREATE TABLE IF NOT EXISTS hr_profile (email VARCHAR(255) PRIMARY KEY, company_name VARCHAR(255), password VARCHAR(255))`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS announcements (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), type VARCHAR(50), content TEXT, date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
         try { await promisePool.query(`ALTER TABLE announcements ADD COLUMN target_department VARCHAR(100) DEFAULT 'ALL'`); } catch(e){}
 
-        console.log("✅ Database Verified & Synchronized.");
+        console.log("✅ Database Verified: Auth Fixes Enabled.");
     } catch (err) { console.error("❌ DB Init Error:", err.message); }
 })();
 
@@ -89,10 +81,15 @@ function getDepartmentFromEmail(email) {
     } catch (e) {} return department;
 }
 
-async function verifyAdmin(token) {
+// 🛑 BULLETPROOF ADMIN VERIFICATION
+async function verifyAdmin(rawToken) {
+    if (!rawToken) throw new Error("No token provided");
+    const token = String(rawToken).replace(/['"]+/g, ''); // Strip bad formatting
     if (token === 'custom_admin_token_pc123') return true; 
+    
     const ticket = await googleClient.verifyIdToken({ idToken: token, audience: CLIENT_ID });
-    if (ticket.getPayload().email.toLowerCase() !== 'sivanagu7771@gmail.com') throw new Error("Unauthorized"); 
+    const email = ticket.getPayload().email.toLowerCase();
+    if (email !== 'sivanagu7771@gmail.com' && email !== 'admin@gmail.com') throw new Error("Unauthorized"); 
     return true;
 }
 
@@ -115,19 +112,25 @@ app.post('/api/hr/login', async (req, res) => {
 
 app.post('/api/auth', async (req, res) => {
     try {
+        // 🛑 BULLETPROOF ADMIN TOKEN CHECK
+        let incomingToken = req.body.token || "";
+        if (typeof incomingToken === 'string') {
+            incomingToken = incomingToken.replace(/['"]+/g, ''); // Remove bad quotes
+        }
+
         // 1. Admin Custom Login
-        if (req.body.token === 'custom_admin_token_pc123') {
+        if (incomingToken === 'custom_admin_token_pc123') {
             const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
             const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
             return res.json({ success: true, isAdmin: true, profile: { full_name: 'Placement Coordinator', email: 'admin@gmail.com' }, globalStats: globalStats ? globalStats[0] : null, globalDrives });
         }
         
         // 2. Verify Google Token
-        const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
+        const ticket = await googleClient.verifyIdToken({ idToken: incomingToken, audience: CLIENT_ID });
         const payload = ticket.getPayload(); const email = payload.email.toLowerCase();
         
-        // 3. Admin Master Email
-        if (email === 'sivanagu7771@gmail.com') {
+        // 3. Admin Master Email Check
+        if (email === 'sivanagu7771@gmail.com' || email === 'admin@gmail.com') {
             const [globalStats] = await promisePool.query("SELECT * FROM placement_global WHERE id = 1");
             const [globalDrives] = await promisePool.query("SELECT * FROM placement_drives ORDER BY id DESC");
             return res.json({ success: true, isAdmin: true, profile: { full_name: payload.name, email: email, picture: payload.picture }, globalStats: globalStats[0], globalDrives });
@@ -144,7 +147,6 @@ app.post('/api/auth', async (req, res) => {
             [profile] = await promisePool.query("SELECT * FROM student_profile WHERE email = ?", [email]);
         }
         
-        // Fetch all relational data for Student Dashboard
         const [courses] = await promisePool.query("SELECT * FROM student_courses WHERE student_email = ? ORDER BY semester ASC", [email]);
         const [skills] = await promisePool.query("SELECT * FROM student_skills WHERE student_email = ?", [email]);
         const [semGpas] = await promisePool.query("SELECT semester, gpa FROM student_sem_gpa WHERE student_email = ?", [email]);
@@ -162,24 +164,9 @@ app.post('/api/auth', async (req, res) => {
 // --- STUDENT ROUTES ---
 // ============================================================================
 
-app.post('/api/student/update-resume', async (req, res) => { 
-    try { 
-        const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); 
-        const email = ticket.getPayload().email.toLowerCase(); 
-        await promisePool.query(`INSERT INTO placement_student_profile (student_email, resume_url) VALUES (?, ?) ON DUPLICATE KEY UPDATE resume_url = ?`, [email, req.body.resume_url, req.body.resume_url]); 
-        res.json({ success: true }); 
-    } catch(e) { res.json({ success: false, message: "Session Expired" }); } 
-});
+app.post('/api/student/update-resume', async (req, res) => { try { const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); const email = ticket.getPayload().email.toLowerCase(); await promisePool.query(`INSERT INTO placement_student_profile (student_email, resume_url) VALUES (?, ?) ON DUPLICATE KEY UPDATE resume_url = ?`, [email, req.body.resume_url, req.body.resume_url]); res.json({ success: true }); } catch(e) { res.json({ success: false, message: "Session Expired" }); } });
+app.post('/api/student/all-rewards', async (req, res) => { try { await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); let [rows] = await promisePool.query("SELECT full_name, roll_no, department, reward_points FROM student_profile"); res.json({ success: true, students: rows || [] }); } catch (e) { res.json({ success: false, message: "Session expired." }); } });
 
-app.post('/api/student/all-rewards', async (req, res) => { 
-    try { 
-        await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); 
-        let [rows] = await promisePool.query("SELECT full_name, roll_no, department, reward_points FROM student_profile"); 
-        res.json({ success: true, students: rows || [] }); 
-    } catch (e) { res.json({ success: false, message: "Session expired." }); } 
-});
-
-// 🛑 SET PRIMARY OFFER
 app.post('/api/student/set-primary', async (req, res) => {
     try {
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
@@ -193,16 +180,12 @@ app.post('/api/student/set-primary', async (req, res) => {
     } catch (e) { res.json({ success: false, message: "Session Expired" }); }
 });
 
-// APPLY FOR JOB DRIVE
 app.post('/api/student/apply-drive', async (req, res) => {
     try {
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID });
         const email = ticket.getPayload().email.toLowerCase();
-        
-        // Check if already applied
         const [existing] = await promisePool.query("SELECT id FROM placement_apps WHERE student_email=? AND company=? AND role=?", [email, req.body.company, req.body.role]);
         if(existing.length > 0) return res.json({ success: false, message: "You have already applied for this role!" });
-        
         const dateStr = new Date().toLocaleDateString('en-GB');
         await promisePool.query("INSERT INTO placement_apps (student_email, company, role, date_applied, status) VALUES (?, ?, ?, ?, 'Applied')", [email, req.body.company, req.body.role, dateStr]);
         res.json({ success: true });
@@ -214,50 +197,23 @@ app.post('/api/student/apply-drive', async (req, res) => {
 // --- ADMIN ROUTES ---
 // ============================================================================
 
-// 1. Fetch Students
-app.post('/api/admin/list', async (req, res) => { 
-    try { 
-        await verifyAdmin(req.body.adminToken); 
-        const [rows] = await promisePool.query(`SELECT sp.email, sp.full_name, sp.roll_no, sp.department, sp.cgpa, psp.offer_company, psp.status, psp.resume_url FROM student_profile sp LEFT JOIN placement_student_profile psp ON LOWER(sp.email) = LOWER(psp.student_email) ORDER BY sp.full_name ASC`); 
-        res.json({ success: true, students: rows }); 
-    } catch (e) { res.json({ success: false }); } 
-});
-
-// 2. Fetch Individual Student Data
-app.post('/api/admin/student-data', async (req, res) => { 
-    try { 
-        await verifyAdmin(req.body.adminToken); 
-        const email = req.body.targetEmail; 
-        const [profile] = await promisePool.query("SELECT * FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]); 
-        const [courses] = await promisePool.query("SELECT * FROM student_courses WHERE student_email = ? ORDER BY semester ASC", [email]); 
-        const [skills] = await promisePool.query("SELECT * FROM student_skills WHERE student_email = ?", [email]); 
-        const [semGpas] = await promisePool.query("SELECT semester, gpa FROM student_sem_gpa WHERE student_email = ?", [email]); 
-        const [placeProfile] = await promisePool.query("SELECT * FROM placement_student_profile WHERE student_email = ?", [email]); 
-        const [placeApps] = await promisePool.query("SELECT * FROM placement_apps WHERE student_email = ? ORDER BY id DESC", [email]); 
-        res.json({ success: true, profile: profile[0], courses, skills, semGpas, placeProfile: placeProfile[0], placeApps }); 
-    } catch (e) { res.json({ success: false }); } 
-});
-
-// 3. Update Profiles
-app.post('/api/admin/update-field', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`UPDATE student_profile SET ${req.body.field} = ? WHERE LOWER(email) = LOWER(?)`, [req.body.value, req.body.targetEmail]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
-app.post('/api/admin/update-placement-profile', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`INSERT IGNORE INTO placement_student_profile (student_email) VALUES (?)`, [req.body.targetEmail.toLowerCase()]); await promisePool.query(`UPDATE placement_student_profile SET ${req.body.field} = ? WHERE student_email = ?`, [req.body.value, req.body.targetEmail.toLowerCase()]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
-
-// 4. Manual App CRUD (Editor Dashboard)
+app.post('/api/admin/list', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const [rows] = await promisePool.query(`SELECT sp.email, sp.full_name, sp.roll_no, sp.department, sp.cgpa, psp.offer_company, psp.status, psp.resume_url FROM student_profile sp LEFT JOIN placement_student_profile psp ON LOWER(sp.email) = LOWER(psp.student_email) ORDER BY sp.full_name ASC`); res.json({ success: true, students: rows }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/student-data', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const email = req.body.targetEmail; const [profile] = await promisePool.query("SELECT * FROM student_profile WHERE LOWER(email) = LOWER(?)", [email]); const [courses] = await promisePool.query("SELECT * FROM student_courses WHERE student_email = ? ORDER BY semester ASC", [email]); const [skills] = await promisePool.query("SELECT * FROM student_skills WHERE student_email = ?", [email]); const [semGpas] = await promisePool.query("SELECT semester, gpa FROM student_sem_gpa WHERE student_email = ?", [email]); const [placeProfile] = await promisePool.query("SELECT * FROM placement_student_profile WHERE student_email = ?", [email]); const [placeApps] = await promisePool.query("SELECT * FROM placement_apps WHERE student_email = ? ORDER BY id DESC", [email]); res.json({ success: true, profile: profile[0], courses, skills, semGpas, placeProfile: placeProfile[0], placeApps }); } catch (e) { res.json({ success: false }); } });
 app.post('/api/admin/add-app', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("INSERT INTO placement_apps (student_email, company, role, date_applied, status) VALUES (?, ?, ?, ?, ?)", [req.body.targetEmail.toLowerCase(), req.body.company, req.body.role, req.body.date_applied, req.body.status]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
 app.post('/api/admin/update-app', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`UPDATE placement_apps SET ${req.body.field} = ? WHERE id = ?`, [req.body.value, req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
 app.post('/api/admin/delete-app', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("DELETE FROM placement_apps WHERE id = ?", [req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
-
-// 5. College Placement Global Stats
+app.post('/api/admin/update-field', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`UPDATE student_profile SET ${req.body.field} = ? WHERE LOWER(email) = LOWER(?)`, [req.body.value, req.body.targetEmail]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
+app.post('/api/admin/update-placement-profile', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`INSERT IGNORE INTO placement_student_profile (student_email) VALUES (?)`, [req.body.targetEmail.toLowerCase()]); await promisePool.query(`UPDATE placement_student_profile SET ${req.body.field} = ? WHERE student_email = ?`, [req.body.value, req.body.targetEmail.toLowerCase()]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
 app.post('/api/admin/update-global-stat', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`UPDATE placement_global SET ${req.body.field} = ? WHERE id = 1`, [req.body.value]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
 app.post('/api/admin/add-drive', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("INSERT INTO placement_drives (company, role, appeared, selected, ctc) VALUES (?, ?, ?, ?, ?)", [req.body.company, req.body.role, req.body.appeared, req.body.selected, req.body.ctc]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
 app.post('/api/admin/update-drive', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query(`UPDATE placement_drives SET ${req.body.field} = ? WHERE id = ?`, [req.body.value, req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
 app.post('/api/admin/delete-drive', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("DELETE FROM placement_drives WHERE id = ?", [req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
 
-
-// 6. Announcements & Notifications
 app.post('/api/announcements/list', async (req, res) => {
     try {
-        if (req.body.token === 'custom_admin_token_pc123') { const [rows] = await promisePool.query("SELECT * FROM announcements ORDER BY date_posted DESC"); return res.json({ success: true, announcements: rows }); }
+        let incomingToken = req.body.token || "";
+        if (typeof incomingToken === 'string') incomingToken = incomingToken.replace(/['"]+/g, '');
+        if (incomingToken === 'custom_admin_token_pc123') { const [rows] = await promisePool.query("SELECT * FROM announcements ORDER BY date_posted DESC"); return res.json({ success: true, announcements: rows }); }
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); const email = ticket.getPayload().email.toLowerCase();
         if (email === 'sivanagu7771@gmail.com') { const [rows] = await promisePool.query("SELECT * FROM announcements ORDER BY date_posted DESC"); return res.json({ success: true, announcements: rows }); }
         const [profile] = await promisePool.query("SELECT department FROM student_profile WHERE email = ?", [email]); const studentDept = (profile.length > 0) ? profile[0].department : 'Not Assigned';
@@ -265,17 +221,15 @@ app.post('/api/announcements/list', async (req, res) => {
         res.json({ success: true, announcements: rows });
     } catch (e) { res.json({ success: false }); }
 });
+
 app.post('/api/admin/add-announcement', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("INSERT INTO announcements (title, type, content, target_department) VALUES (?, ?, ?, ?)", [req.body.title, req.body.type, req.body.content, req.body.target_department || 'ALL']); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
 app.post('/api/admin/delete-announcement', async (req, res) => { try { await verifyAdmin(req.body.adminToken); await promisePool.query("DELETE FROM announcements WHERE id = ?", [req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
 
-
-// ============================================================================
-// --- ACTIVE DRIVES & GLOBAL APPLICATION MANAGEMENT ---
-// ============================================================================
-
 app.post('/api/drives/active-list', async (req, res) => {
     try {
-        if (req.body.token === 'custom_admin_token_pc123') { const [rows] = await promisePool.query("SELECT * FROM active_drives ORDER BY id DESC"); return res.json({ success: true, drives: rows }); }
+        let incomingToken = req.body.token || "";
+        if (typeof incomingToken === 'string') incomingToken = incomingToken.replace(/['"]+/g, '');
+        if (incomingToken === 'custom_admin_token_pc123') { const [rows] = await promisePool.query("SELECT * FROM active_drives ORDER BY id DESC"); return res.json({ success: true, drives: rows }); }
         const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); const email = ticket.getPayload().email.toLowerCase();
         if(email === 'sivanagu7771@gmail.com') { const [rows] = await promisePool.query("SELECT * FROM active_drives ORDER BY id DESC"); return res.json({ success: true, drives: rows }); }
         const localPart = email.split('@')[0]; const yearMatch = localPart.match(/\d+$/); const studentYear = yearMatch ? yearMatch[0] : 'NONE';
@@ -284,41 +238,19 @@ app.post('/api/drives/active-list', async (req, res) => {
     } catch (e) { res.json({ success: false }); }
 });
 
-app.post('/api/admin/add-active-drive', async (req, res) => { 
-    try { 
-        await verifyAdmin(req.body.adminToken); 
-        const ctcVal = req.body.ctc && req.body.ctc.trim() !== '' ? req.body.ctc : 'Not Disclosed'; 
-        const targetYear = req.body.target_year || 'ALL'; 
-        await promisePool.query("INSERT INTO active_drives (company_name, role, ctc, eligibility, description, deadline, target_year) VALUES (?, ?, ?, ?, ?, ?, ?)", [req.body.company_name, req.body.role, ctcVal, req.body.eligibility, req.body.description, req.body.deadline, targetYear]); 
-        res.json({ success: true }); 
-    } catch (e) { res.json({ success: false }); } 
-});
+app.post('/api/admin/add-active-drive', async (req, res) => { try { await verifyAdmin(req.body.adminToken); const ctcVal = req.body.ctc && req.body.ctc.trim() !== '' ? req.body.ctc : 'Not Disclosed'; const targetYear = req.body.target_year || 'ALL'; await promisePool.query("INSERT INTO active_drives (company_name, role, ctc, eligibility, description, deadline, target_year) VALUES (?, ?, ?, ?, ?, ?, ?)", [req.body.company_name, req.body.role, ctcVal, req.body.eligibility, req.body.description, req.body.deadline, targetYear]); res.json({ success: true }); } catch (e) { res.json({ success: false }); } });
 
-// 🛑 CASCADING DRIVE DELETE
 app.post('/api/admin/delete-active-drive', async (req, res) => { 
     try { 
         await verifyAdmin(req.body.adminToken); 
-        
-        // 1. Get company and role of the drive being deleted
         const [drive] = await promisePool.query("SELECT company_name, role FROM active_drives WHERE id = ?", [req.body.id]);
-        
         if (drive.length > 0) {
             const comp = drive[0].company_name;
             const role = drive[0].role;
-            
-            // 2. Cascade Delete: Erase all student applications tied to this drive
             await promisePool.query("DELETE FROM placement_apps WHERE company = ? AND role = ?", [comp, role]);
-            
-            // 3. Clear Primary Offers: Reset students if this was their Primary Offer
-            await promisePool.query(
-                "UPDATE placement_student_profile SET offer_company = '--', offer_role = '--', offer_ctc = '--', status = 'Unplaced' WHERE offer_company = ? AND offer_role = ?", 
-                [comp, role]
-            );
+            await promisePool.query("UPDATE placement_student_profile SET offer_company = '--', offer_role = '--', offer_ctc = '--', status = 'Unplaced' WHERE offer_company = ? AND offer_role = ?", [comp, role]);
         }
-
-        // 4. Delete the actual drive
         await promisePool.query("DELETE FROM active_drives WHERE id = ?", [req.body.id]); 
-        
         res.json({ success: true }); 
     } catch (e) { res.json({ success: false }); } 
 });
@@ -336,30 +268,21 @@ app.post('/api/admin/update-app-status', async (req, res) => {
         await verifyAdmin(req.body.adminToken);
         await promisePool.query(`UPDATE placement_apps SET status = ? WHERE id = ?`, [req.body.status, req.body.app_id]);
         res.json({ success: true });
-    } catch (e) { console.error("DB Error Mark Status:", e); res.json({ success: false }); }
+    } catch (e) { res.json({ success: false }); }
 });
 
-// 🛑 DB CASCADING UPDATE: Mark Placed updates profile too
 app.post('/api/admin/mark-placed', async (req, res) => {
     try {
         await verifyAdmin(req.body.adminToken);
-        
-        await promisePool.query(`UPDATE placement_apps SET status = ?, salary_package = ?, internship_period = ?, call_letter_url = ? WHERE id = ?`, 
-            [req.body.status, req.body.package, req.body.internship, req.body.offer_link, req.body.app_id]);
-        
+        await promisePool.query(`UPDATE placement_apps SET status = ?, salary_package = ?, internship_period = ?, call_letter_url = ? WHERE id = ?`, [req.body.status, req.body.package, req.body.internship, req.body.offer_link, req.body.app_id]);
         if(req.body.status === 'Placed' || req.body.status === 'Selected') {
             const [app] = await promisePool.query(`SELECT student_email, company, role FROM placement_apps WHERE id = ?`, [req.body.app_id]);
             if(app.length > 0) {
-                await promisePool.query(
-                    `INSERT INTO placement_student_profile (student_email, offer_company, offer_role, offer_ctc, status) 
-                     VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE offer_company = ?, offer_role = ?, offer_ctc = ?, status = ?`, 
-                    [app[0].student_email, app[0].company, app[0].role, req.body.package, req.body.status, 
-                     app[0].company, app[0].role, req.body.package, req.body.status]
-                );
+                await promisePool.query(`INSERT INTO placement_student_profile (student_email, offer_company, offer_role, offer_ctc, status) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE offer_company = ?, offer_role = ?, offer_ctc = ?, status = ?`, [app[0].student_email, app[0].company, app[0].role, req.body.package, req.body.status, app[0].company, app[0].role, req.body.package, req.body.status]);
             }
         }
         res.json({ success: true });
-    } catch (e) { console.error("DB Error Mark Placed:", e); res.json({ success: false }); }
+    } catch (e) { res.json({ success: false }); }
 });
 
 app.post('/api/admin/drive-applicants', async (req, res) => {
@@ -370,6 +293,5 @@ app.post('/api/admin/drive-applicants', async (req, res) => {
     } catch (e) { res.json({ success: false }); }
 });
 
-// START SERVER
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 BACKEND READY ON PORT ${PORT}`));

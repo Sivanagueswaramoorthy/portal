@@ -8,13 +8,22 @@ window.currentDriveApplicants = [];
 window.allGlobalPlacements = []; 
 window.globalDrivesList = [];
 
-if (!globalToken) window.location.href = 'index.html';
+// 🛑 BULLETPROOF TOKEN STRIPPER (Fixes Auto-Logout)
+if (globalToken) { globalToken = globalToken.replace(/['"]+/g, ''); } 
+else { window.location.href = 'index.html'; }
 
 window.onload = async () => {
     try {
         const req = await fetch(`${BASE_URL}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
         const data = await req.json();
-        if (!data.success || !data.isAdmin) { localStorage.removeItem('bit_session_token'); window.location.href = 'index.html'; return; }
+        
+        // Ensure successful auth AND Admin rights before loading Dashboard
+        if (!data.success || !data.isAdmin) { 
+            localStorage.removeItem('bit_session_token'); 
+            window.location.href = 'index.html'; 
+            return; 
+        }
+
         document.getElementById('headerName').innerText = data.profile.full_name;
         document.getElementById('headerEmail').innerText = data.profile.email;
         document.getElementById('headerImage').src = data.profile.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.profile.full_name)}&background=4F46E5&color=fff`;
@@ -29,9 +38,8 @@ window.onload = async () => {
 
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebar-overlay').classList.toggle('show'); }
 
-// 🛑 ADVANCED TAB SWITCHING: AUTO-LOCK & AUTO-SYNC
+// 🛑 ADVANCED TAB SWITCHING
 function switchTab(tabId, element) { 
-    // 1. Secure Editor Auto-Lock
     if (tabId !== 'edit-list' && tabId !== 'edit-detail' && tabId !== 'student-login') {
         document.getElementById('nav-student-login').style.display = 'flex';
         document.getElementById('nav-edit-list').style.display = 'none';
@@ -56,7 +64,6 @@ function switchTab(tabId, element) {
     };
     if(titles[tabId]) document.getElementById('top-title-bar').innerText = titles[tabId];
 
-    // 2. Auto-Sync Engine: Fetch fresh data based on which tab is clicked!
     if (tabId === 'dashboard') updateDashboardOverview();
     if (tabId === 'students' || tabId === 'edit-list' || tabId === 'analysis-list') fetchDirectory();
     if (tabId === 'companies' || tabId === 'drives') loadActiveDrives();
@@ -155,7 +162,7 @@ function filterStudents() {
     renderTable(filtered);
 }
 
-// 🛑 READ-ONLY QUICK VIEW MODAL (WITH FULL DETAILS NOW)
+// 🛑 READ-ONLY QUICK VIEW MODAL
 async function openReadOnlyDetail(email, name, roll_no, department) {
     document.getElementById('student-detail-modal').style.display = 'flex'; 
     document.getElementById('ro-modal-content-body').style.display = 'none'; 
@@ -198,14 +205,13 @@ function populateReadOnlyModal(prf, apps) {
             if(s.includes('select') || s.includes('offer') || s.includes('placed')) bClass = 'badge-success'; 
             if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
             if(s.includes('pend') || s.includes('wait') || s.includes('short')) bClass = 'badge-warning'; 
-            
             return `<tr style="border-bottom: 1px solid #F1F5F9;"><td style="padding: 16px 24px;"><div style="font-weight: 800; color: #1E293B; font-size: 1rem;">${a.company}</div></td><td style="padding: 16px 24px;"><div style="font-weight: 600; color: #475569; font-size: 0.9rem;">${a.role}</div></td><td style="padding: 16px 24px; color: #64748B; font-size: 0.85rem; font-weight: 500;">${a.date_applied}</td><td style="padding: 16px 24px;"><span class="badge ${bClass}" style="font-size: 0.75rem; padding: 4px 10px;">${a.status}</span></td></tr>`; 
         }).join('');
     } else { appBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 30px; color:var(--text-muted);">No applications logged.</td></tr>`; }
 }
 
 
-// --- 2. STUDENT ANALYSIS LIST (FULL PAGE READ ONLY) ---
+// --- 2. STUDENT ANALYSIS LIST (FULL PAGE RO) ---
 function renderAnalysisTable(students) {
     const tbody = document.getElementById('analysis-list-tbody');
     if(!tbody) return;
@@ -232,6 +238,7 @@ function filterAnalysisStudents() {
     renderAnalysisTable(filtered);
 }
 
+// 🛑 FULL PAGE ANALYSIS DASHBOARD
 async function openAnalysisDetail(email, name, roll_no, department) {
     switchTab('analysis-detail', document.getElementById('nav-analysis-list'));
     document.getElementById('ana-modal-content-body').style.display = 'none'; 
@@ -303,10 +310,10 @@ function lockEditor() {
 function renderEditTable(students) {
     const tbody = document.getElementById('edit-student-list-tbody');
     if(!tbody) return;
-    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
+    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
     tbody.innerHTML = students.map(s => {
         const yMatch = s.email.split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
-        return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: #B91C1C;">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color:#B91C1C; color:#B91C1C;" onclick="openEditableStudentDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')">Edit Profile <i class="fa-solid fa-pen" style="margin-left: 6px;"></i></button></td></tr>`;
+        return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: #B91C1C;">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color:#B91C1C; color:#B91C1C;" onclick="openEditableStudentDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')">Edit Skills <i class="fa-solid fa-pen" style="margin-left: 6px;"></i></button></td></tr>`;
     }).join('');
 }
 
@@ -326,7 +333,7 @@ function filterEditStudents() {
     renderEditTable(filtered);
 }
 
-// 🛑 FULL PAGE EDITABLE PROFILE
+// 🛑 FULL PAGE EDITABLE PROFILE (SKILLS ONLY)
 async function openEditableStudentDetail(email, name, roll_no, department) {
     targetStudentEmail = email;
     document.getElementById('nav-edit-detail').style.display = 'flex';
@@ -353,10 +360,8 @@ async function openEditableStudentDetail(email, name, roll_no, department) {
 }
 
 function populateEditorPerformance(prf, apps) {
-    // Top Stats & Offers (Read Only inside Editor context, updated via Apps table)
     document.getElementById('val-p-role').innerText = prf.offer_role || '--'; document.getElementById('val-p-comp').innerText = prf.offer_company || '--'; document.getElementById('val-p-ctc').innerText = prf.offer_ctc || '--'; document.getElementById('val-p-status').innerText = prf.status || 'Unplaced'; document.getElementById('val-p-assess').innerText = prf.assessments || '0'; document.getElementById('val-p-int').innerText = prf.interviews || '0'; document.getElementById('val-p-off').innerText = prf.offers || '0';
     
-    // Bottom Skills are Editable (Pencils exist in HTML)
     document.getElementById('val-t-dsa').innerText = prf.tech_dsa || '0'; document.getElementById('bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
     document.getElementById('val-t-oop').innerText = prf.tech_oop || '0'; document.getElementById('bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
     document.getElementById('val-t-core').innerText = prf.tech_core || '0'; document.getElementById('bar-t-core').style.width = `${prf.tech_core || 0}%`; 
@@ -364,7 +369,6 @@ function populateEditorPerformance(prf, apps) {
     document.getElementById('val-a-log').innerText = prf.apt_logical || '0'; document.getElementById('bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
     document.getElementById('val-a-hr').innerText = prf.apt_hr || '0'; document.getElementById('bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
 
-    // Apps Table (Editable)
     const appBody = document.getElementById('edit-student-apps-tbody');
     if (apps && apps.length > 0) {
         appBody.innerHTML = apps.map(a => { 
@@ -372,9 +376,9 @@ function populateEditorPerformance(prf, apps) {
             if(s.includes('select') || s.includes('offer') || s.includes('placed')) bClass = 'badge-success'; 
             if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
             if(s.includes('pend') || s.includes('wait') || s.includes('short')) bClass = 'badge-warning'; 
-            return `<tr id="row-app-${a.id}" style="border-bottom: 1px solid #F1F5F9;"><td style="padding: 16px 24px; font-weight: 800; color: #1E293B;">${a.company}</td><td style="padding: 16px 24px; font-weight: 600; color: #475569;">${a.role}</td><td style="padding: 16px 24px; color: #64748B;">${a.date_applied}</td><td style="padding: 16px 24px;"><span class="badge ${bClass}">${a.status}</span></td><td style="padding: 16px 24px; text-align:right;"><i class="fa-solid fa-pen admin-table-edit" onclick="editAppRow(${a.id})"></i> <i class="fa-solid fa-trash admin-table-del" onclick="deleteApp(${a.id})"></i></td></tr>`; 
+            return `<tr style="border-bottom: 1px solid #F1F5F9;"><td style="padding: 16px 24px; font-weight: 800; color: #1E293B;">${a.company}</td><td style="padding: 16px 24px; font-weight: 600; color: #475569;">${a.role}</td><td style="padding: 16px 24px; color: #64748B;">${a.date_applied}</td><td style="padding: 16px 24px;"><span class="badge ${bClass}" style="font-size: 0.75rem; padding: 4px 10px;">${a.status}</span></td></tr>`; 
         }).join('');
-    } else { appBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:var(--text-muted);">No applications logged.</td></tr>`; }
+    } else { appBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 30px; color:var(--text-muted);">No applications logged.</td></tr>`; }
 }
 
 function openPlacementProfileEdit(field, spanId, width) {
@@ -396,194 +400,8 @@ async function savePlacementProfileEdit(field, spanId, width) {
     } catch(e) { cancelPlacementProfileEdit(spanId, field, width); }
 }
 
-function editAppRow(id) {
-    const tr = document.getElementById(`row-app-${id}`); const comp = tr.children[0].innerText; const role = tr.children[1].innerText; const date = tr.children[2].innerText; const stat = tr.children[3].innerText;
-    tr.innerHTML = `<td><input type="text" id="e-app-c-${id}" class="inline-input" style="width: 100%;" value="${comp}"></td><td><input type="text" id="e-app-r-${id}" class="inline-input" style="width: 100%;" value="${role}"></td><td><input type="text" id="e-app-d-${id}" class="inline-input" style="width: 100px;" value="${date}"></td><td><input type="text" id="e-app-s-${id}" class="inline-input" style="width: 120px;" value="${stat}"></td><td style="text-align:right; white-space: nowrap;"><i class="fa-solid fa-check action-icon save" onclick="saveAppRow(${id})"></i><i class="fa-solid fa-xmark action-icon cancel" onclick="openEditableStudentDetail(targetStudentEmail)"></i></td>`;
-}
-async function saveAppRow(id) {
-    const tr = document.getElementById(`row-app-${id}`); tr.lastElementChild.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    const updates = [{ field: 'company', value: document.getElementById(`e-app-c-${id}`).value }, { field: 'role', value: document.getElementById(`e-app-r-${id}`).value }, { field: 'date_applied', value: document.getElementById(`e-app-d-${id}`).value }, { field: 'status', value: document.getElementById(`e-app-s-${id}`).value }];
-    for (let u of updates) { await fetch(`${BASE_URL}/api/admin/update-app`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id, field: u.field, value: u.value }) }); }
-    openEditableStudentDetail(targetStudentEmail);
-}
-async function deleteApp(id) { 
-    if(!confirm("Delete application?")) return; 
-    await fetch(`${BASE_URL}/api/admin/delete-app`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); 
-    openEditableStudentDetail(targetStudentEmail); 
-}
-async function submitNewApp() {
-    try { await fetch(`${BASE_URL}/api/admin/add-app`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, company: document.getElementById('app-comp').value, role: document.getElementById('app-role').value, date_applied: document.getElementById('app-date').value, status: document.getElementById('app-stat').value }) }); } catch(e) {}
-    document.getElementById('add-app-modal').style.display = 'none'; openEditableStudentDetail(targetStudentEmail); 
-}
 
-
-// --- 4. JOB / INTERNSHIP DRIVES ---
-async function loadActiveDrives() {
-    const feed = document.getElementById('active-drives-feed');
-    if(!feed) return;
-    feed.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Drives...</div>`;
-    try {
-        const req = await fetch(`${BASE_URL}/api/drives/active-list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
-        const data = await req.json();
-        if (data.success) {
-            window.globalDrivesList = data.drives;
-            if(document.getElementById('dash-active-drives')) document.getElementById('dash-active-drives').innerText = data.drives.length;
-            renderCompaniesTable(data.drives);
-
-            if(data.drives.length === 0) { feed.innerHTML = `<div class="card" style="text-align:center; padding: 40px; color:var(--text-muted);">No active drives posted yet.</div>`; return; }
-            
-            feed.innerHTML = data.drives.map(d => {
-                let isExpired = false; let displayDate = d.deadline;
-                if(d.deadline && d.deadline.includes('-')) {
-                    const deadDate = new Date(d.deadline); displayDate = deadDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); deadDate.setHours(23, 59, 59, 999); if(deadDate < new Date()) isExpired = true;
-                }
-                const expiredBadge = isExpired ? `<span class="badge badge-danger" style="margin-left: 8px;">Expired</span>` : '';
-                
-                const ctcBadge = d.ctc && d.ctc !== 'Not Disclosed' ? `<span style="font-weight: 800; color: var(--success); font-size: 1.1rem;">${d.ctc}</span>` : `<span style="font-weight: 800; color: var(--success); font-size: 1.1rem;">Not Disclosed</span>`;
-
-                return `
-                <div class="drive-card" style="opacity: ${isExpired ? '0.7' : '1'};">
-                    <div class="flex-between" style="align-items: flex-start;">
-                        <div>
-                            <h3 style="margin: 0 0 8px 0; font-size: 1.2rem; color: var(--text-main); font-weight: 800;">${d.company_name}</h3>
-                            <span class="badge badge-primary" style="background:#EEF2FF; color:#4F46E5;">${d.role}</span>
-                            ${expiredBadge}
-                            <div style="margin-top: 12px; font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase;">Batch '${d.target_year !== 'ALL' ? d.target_year : 'ALL'}</div>
-                        </div>
-                        <div style="text-align: right;">
-                            ${ctcBadge}
-                            <div style="font-size: 0.8rem; color: ${isExpired ? 'var(--danger)' : 'var(--text-muted)'}; margin-top: 4px;">Deadline: ${displayDate}</div>
-                        </div>
-                    </div>
-                    
-                    <div class="flex-between" style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 20px;">
-                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);"><i class="fa-solid fa-graduation-cap"></i> Eligibility: ${d.eligibility}</span>
-                        <div style="display: flex; gap: 8px;">
-                            <button class="action-btn btn-outline" style="font-size: 0.8rem; padding: 6px 12px;" onclick="viewDriveApplicants('${d.company_name}', '${d.role}')">View Apps</button>
-                            <button class="action-icon cancel" style="padding: 6px; border: 1px solid var(--danger); border-radius: 6px;" onclick="deleteActiveDrive(${d.id})"><i class="fa-solid fa-trash" style="font-size: 0.9rem;"></i></button>
-                        </div>
-                    </div>
-                </div>`;
-            }).join('');
-        }
-    } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error</div>`; }
-}
-
-async function submitActiveDrive() {
-    const comp = document.getElementById('ad-comp').value; const role = document.getElementById('ad-role').value; const ctc = document.getElementById('ad-ctc').value; const elig = document.getElementById('ad-elig').value; const desc = document.getElementById('ad-desc').value; const dead = document.getElementById('ad-dead').value; const targetYr = document.getElementById('ad-year').value;
-    if(!comp || !role || !dead) return alert("Company, Role, and Deadline are required!");
-    document.querySelector('#add-active-drive-modal .btn-primary').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Posting...';
-    try { await fetch(`${BASE_URL}/api/admin/add-active-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, company_name: comp, role: role, ctc: ctc, eligibility: elig, description: desc, deadline: dead, target_year: targetYr }) }); } catch(e) {}
-    document.getElementById('add-active-drive-modal').style.display = 'none'; document.querySelector('#add-active-drive-modal .btn-primary').innerHTML = 'Post Drive to Students'; 
-    loadActiveDrives(); 
-}
-
-// 🛑 UPDATED: TAB SYNC DELETION
-async function deleteActiveDrive(id) {
-    if(!confirm("⚠️ Delete this active drive?\n\nThis will instantly remove the drive from the portal AND delete all student applications associated with it!")) return;
-    
-    await fetch(`${BASE_URL}/api/admin/delete-active-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); 
-    
-    loadActiveDrives(); 
-    loadAllPlacements(); // Automatically refresh the Application Management board too!
-}
-
-// --- 3. COMPANY MANAGEMENT (Rendered from Drives) ---
-function renderCompaniesTable(drives) {
-    const tbody = document.getElementById('companies-list-tbody');
-    if(!tbody) return;
-    if(!drives || drives.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No companies found.</td></tr>`; return; }
-    
-    tbody.innerHTML = drives.map(d => {
-        let isExpired = false;
-        if(d.deadline && d.deadline.includes('-')) { const deadDate = new Date(d.deadline); deadDate.setHours(23, 59, 59, 999); if(deadDate < new Date()) isExpired = true; }
-        const stat = isExpired ? `<span class="badge badge-warning">Closed</span>` : `<span class="badge badge-success">Active</span>`;
-
-        return `<tr><td style="font-weight: 800; color: var(--text-main);">${d.company_name}</td><td style="color: var(--text-muted);">${d.role}</td><td style="font-weight: 700; color: var(--success);">${d.ctc}</td><td>Remote / Campus</td><td>${stat}</td></tr>`;
-    }).join('');
-}
-
-
-// --- 5. APPLICATIONS MANAGEMENT ---
-async function loadAllPlacements() {
-    const tbody = document.getElementById('all-placements-tbody');
-    if(!tbody) return;
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading all applications...</td></tr>`;
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/all-applications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken }) });
-        const data = await req.json();
-        if (data.success) {
-            window.allGlobalPlacements = data.applications;
-            const filterDropdown = document.getElementById('placementCompanyFilter');
-            const companies = [...new Set(data.applications.map(a => a.company).filter(c => c))];
-            if(filterDropdown) {
-                filterDropdown.innerHTML = '<option value="ALL">All Companies</option>';
-                companies.forEach(c => { filterDropdown.innerHTML += `<option value="${c}">${c}</option>`; });
-            }
-            renderAllPlacementsTable();
-            updateDashboardOverview();
-        }
-    } catch(e) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error loading placements.</td></tr>`; }
-}
-
-function renderAllPlacementsTable() {
-    const tbody = document.getElementById('all-placements-tbody');
-    const selectedComp = document.getElementById('placementCompanyFilter').value;
-    const filteredApps = selectedComp === 'ALL' ? window.allGlobalPlacements : window.allGlobalPlacements.filter(a => a.company === selectedComp);
-    if(filteredApps.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No applications found.</td></tr>`; return; }
-
-    tbody.innerHTML = filteredApps.map(a => {
-        return `<tr><td style="font-weight:600; color: var(--text-main);"><div style="font-size:0.95rem;">${a.full_name}</div><div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${a.student_email}</div></td><td><div style="font-weight:700; color:var(--text-main);">${a.company}</div></td><td><div style="font-size:0.85rem; color:var(--text-muted);">${a.role}</div></td><td style="font-size:0.85rem;">${a.date_applied}</td><td><select onchange="handlePlacementStatusChange(${a.app_id}, this)" class="control-input" style="padding: 6px; font-size: 0.8rem; width: 140px; border-color: var(--border); font-weight: 600; color: var(--text-main);"><option value="Applied" ${a.status === 'Applied' ? 'selected' : ''}>Applied (Pending)</option><option value="Shortlisted" ${a.status === 'Shortlisted' ? 'selected' : ''}>Shortlisted</option><option value="Interview" ${a.status === 'Interview' ? 'selected' : ''}>In Interview</option><option value="Selected" ${a.status === 'Selected' ? 'selected' : ''}>Selected / Placed</option><option value="Rejected" ${a.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select></td></tr>`;
-    }).join('');
-}
-
-function handlePlacementStatusChange(appId, selectElement) {
-    const newStatus = selectElement.value;
-    if(newStatus === 'Placed' || newStatus === 'Selected') { document.getElementById('placed-app-id').value = appId; document.getElementById('placed-status-val').value = newStatus; document.getElementById('mark-placed-modal').style.display = 'flex'; } else { updateApplicationStatus(appId, newStatus); }
-}
-
-async function updateApplicationStatus(appId, newStatus) {
-    try { await fetch(`${BASE_URL}/api/admin/update-app-status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, app_id: appId, status: newStatus }) }); loadAllPlacements(); } catch(e) { }
-}
-
-async function submitPlacedDetails() {
-    const appId = document.getElementById('placed-app-id').value; const status = document.getElementById('placed-status-val').value; const pack = document.getElementById('placed-package').value || '--'; const intern = document.getElementById('placed-internship').value || '--'; const link = document.getElementById('placed-offer-link').value || '';
-    const btn = document.querySelector('#mark-placed-modal .btn-success'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
-    try { await fetch(`${BASE_URL}/api/admin/mark-placed`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, app_id: appId, status: status, package: pack, internship: intern, offer_link: link }) }); } catch(e) { }
-    document.getElementById('mark-placed-modal').style.display = 'none'; btn.innerHTML = 'Save Placement Record'; loadAllPlacements(); 
-}
-
-// 🛑 MODAL APPLICANTS LIST 
-async function viewDriveApplicants(company, role) {
-    document.getElementById('app-modal-title').innerText = `Applicants: ${company} - ${role}`;
-    document.getElementById('view-applicants-modal').style.display = 'flex';
-    document.getElementById('applicants-tbody').innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>`;
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/drive-applicants`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, company: company, role: role }) });
-        const data = await req.json();
-        if(data.success) {
-            window.currentDriveApplicants = data.applicants; 
-            const filterDropdown = document.getElementById('app-dept-filter');
-            const depts = [...new Set(data.applicants.map(a => a.department).filter(d => d && d !== 'Not Assigned'))];
-            filterDropdown.innerHTML = '<option value="ALL">All Departments</option>';
-            depts.forEach(d => { filterDropdown.innerHTML += `<option value="${d}">${d}</option>`; });
-            renderApplicantsTable();
-        } else { document.getElementById('applicants-tbody').innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">Failed to load applicants.</td></tr>`; }
-    } catch(e) { document.getElementById('applicants-tbody').innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error loading.</td></tr>`; }
-}
-
-function renderApplicantsTable() {
-    const tbody = document.getElementById('applicants-tbody');
-    const selectedDept = document.getElementById('app-dept-filter').value;
-    const filteredApps = selectedDept === 'ALL' ? window.currentDriveApplicants : window.currentDriveApplicants.filter(a => a.department === selectedDept);
-    if(!filteredApps || filteredApps.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No applicants found for this department.</td></tr>`; return; }
-    tbody.innerHTML = filteredApps.map(a => {
-        const resumeLink = (a.resume_url && a.resume_url !== '--' && a.resume_url.trim() !== '') ? `<a href="${a.resume_url}" target="_blank" style="color:var(--primary); font-weight:600; text-decoration:none;"><i class="fa-solid fa-file-pdf"></i> View</a>` : `<span style="color:var(--text-muted);">None</span>`;
-        return `<tr><td style="font-weight:600; color: var(--text-main);"><div style="font-size:0.95rem;">${a.full_name}</div><div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${a.student_email} | ${a.roll_no||'--'}</div></td><td><span class="badge badge-primary" style="background:#EEF2FF; color:#4F46E5;">${a.department || '--'}</span></td><td style="color:var(--text-muted); font-size:0.85rem; font-weight: 600;">${a.date_applied}</td><td>${resumeLink}</td><td><select onchange="updateApplicationStatus(${a.app_id}, this.value)" class="control-input" style="padding: 4px; font-size: 0.8rem; width: 130px; border-color: var(--border); font-weight: 600; color: var(--text-main);"><option value="Applied" ${a.status === 'Applied' ? 'selected' : ''}>Applied (Pending)</option><option value="Shortlisted" ${a.status === 'Shortlisted' ? 'selected' : ''}>Shortlisted</option><option value="Interview" ${a.status === 'Interview' ? 'selected' : ''}>In Interview</option><option value="Selected" ${a.status === 'Selected' ? 'selected' : ''}>Selected / Placed</option><option value="Rejected" ${a.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select></td></tr>`;
-    }).join('');
-}
-
-// --- 6. PLACEMENT STATISTICS ---
+// --- COLLEGE PLACEMENT STATS ---
 async function refreshGlobalPlacementData() {
     try {
         const req = await fetch(`${BASE_URL}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
@@ -594,7 +412,6 @@ async function refreshGlobalPlacementData() {
 
 function populateGlobalPlacement(gStats, gDrives) {
     gStats = gStats || {};
-    
     if(document.getElementById('wrap-g-total')) document.getElementById('wrap-g-total').innerHTML = `<span id="val-g-total">${gStats.total_placed || '0'}</span><i class="fa-solid fa-pen admin-table-edit" onclick="openGlobalStatEdit('total_placed', 'val-g-total', '90px')"></i>`;
     if(document.getElementById('wrap-g-ongoing')) document.getElementById('wrap-g-ongoing').innerHTML = `<span id="val-g-ongoing">${gStats.ongoing_drives || '0'}</span><i class="fa-solid fa-pen admin-table-edit" onclick="openGlobalStatEdit('ongoing_drives', 'val-g-ongoing', '90px')"></i>`;
     if(document.getElementById('wrap-g-highest')) document.getElementById('wrap-g-highest').innerHTML = `<div><span id="val-g-highest">${gStats.highest_ctc || '0'}</span> <span style="font-size: 0.8rem; color: var(--text-muted);">LPA</span></div><i class="fa-solid fa-pen admin-table-edit" onclick="openGlobalStatEdit('highest_ctc', 'val-g-highest', '90px')"></i>`;
@@ -638,7 +455,83 @@ async function submitGlobalDrive() {
     refreshGlobalPlacementData(); 
 }
 
-// --- 8. ANNOUNCEMENTS & NOTIFICATIONS ---
+// --- STUDENT PLACEMENTS (ALL APPS) BOARD ---
+async function loadAllPlacements() {
+    const tbody = document.getElementById('all-placements-tbody');
+    if(!tbody) return;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading all applications...</td></tr>`;
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/all-applications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken }) });
+        const data = await req.json();
+        if (data.success) {
+            window.allGlobalPlacements = data.applications;
+            const filterDropdown = document.getElementById('placementCompanyFilter');
+            const companies = [...new Set(data.applications.map(a => a.company).filter(c => c))];
+            if(filterDropdown) {
+                filterDropdown.innerHTML = '<option value="ALL">All Companies</option>';
+                companies.forEach(c => { filterDropdown.innerHTML += `<option value="${c}">${c}</option>`; });
+            }
+            renderAllPlacementsTable();
+            updateDashboardOverview();
+        }
+    } catch(e) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error loading placements.</td></tr>`; }
+}
+function renderAllPlacementsTable() {
+    const tbody = document.getElementById('all-placements-tbody');
+    if(!tbody) return;
+    const selectedComp = document.getElementById('placementCompanyFilter').value;
+    const filteredApps = selectedComp === 'ALL' ? window.allGlobalPlacements : window.allGlobalPlacements.filter(a => a.company === selectedComp);
+    if(filteredApps.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No applications found.</td></tr>`; return; }
+
+    tbody.innerHTML = filteredApps.map(a => {
+        return `<tr><td style="font-weight:600; color: var(--text-main);"><div style="font-size:0.95rem;">${a.full_name}</div><div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${a.student_email}</div></td><td><span class="badge badge-primary" style="background:#EEF2FF; color:#4F46E5;">${a.department || '--'}</span></td><td><div style="font-weight:700; color:var(--text-main);">${a.company}</div><div style="font-size:0.8rem; color:var(--text-muted);">${a.role}</div></td><td style="font-size:0.85rem;">${a.date_applied}</td><td><select onchange="handlePlacementStatusChange(${a.app_id}, this)" class="control-input" style="padding: 6px; font-size: 0.8rem; width: 140px; border-color: var(--border); font-weight: 600; color: var(--text-main);"><option value="Applied" ${a.status === 'Applied' ? 'selected' : ''}>Applied (Pending)</option><option value="Shortlisted" ${a.status === 'Shortlisted' ? 'selected' : ''}>Shortlisted</option><option value="Interview" ${a.status === 'Interview' ? 'selected' : ''}>In Interview</option><option value="Selected" ${a.status === 'Selected' ? 'selected' : ''}>Selected / Placed</option><option value="Rejected" ${a.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select></td></tr>`;
+    }).join('');
+}
+function handlePlacementStatusChange(appId, selectElement) {
+    const newStatus = selectElement.value;
+    if(newStatus === 'Placed' || newStatus === 'Selected') { document.getElementById('placed-app-id').value = appId; document.getElementById('placed-status-val').value = newStatus; document.getElementById('mark-placed-modal').style.display = 'flex'; } else { updateApplicationStatus(appId, newStatus); }
+}
+async function updateApplicationStatus(appId, newStatus) {
+    try { await fetch(`${BASE_URL}/api/admin/update-app-status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, app_id: appId, status: newStatus }) }); loadAllPlacements(); } catch(e) { }
+}
+async function submitPlacedDetails() {
+    const appId = document.getElementById('placed-app-id').value; const status = document.getElementById('placed-status-val').value; const pack = document.getElementById('placed-package').value || '--'; const intern = document.getElementById('placed-internship').value || '--'; const link = document.getElementById('placed-offer-link').value || '';
+    const btn = document.querySelector('#mark-placed-modal .btn-success'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    try { await fetch(`${BASE_URL}/api/admin/mark-placed`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, app_id: appId, status: status, package: pack, internship: intern, offer_link: link }) }); } catch(e) { }
+    document.getElementById('mark-placed-modal').style.display = 'none'; btn.innerHTML = 'Save Placement Record'; loadAllPlacements(); 
+}
+
+// 🛑 MODAL APPLICANTS LIST 
+async function viewDriveApplicants(company, role) {
+    document.getElementById('app-modal-title').innerText = `Applicants: ${company} - ${role}`;
+    document.getElementById('view-applicants-modal').style.display = 'flex';
+    document.getElementById('applicants-tbody').innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>`;
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/drive-applicants`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, company: company, role: role }) });
+        const data = await req.json();
+        if(data.success) {
+            window.currentDriveApplicants = data.applicants; 
+            const filterDropdown = document.getElementById('app-dept-filter');
+            const depts = [...new Set(data.applicants.map(a => a.department).filter(d => d && d !== 'Not Assigned'))];
+            filterDropdown.innerHTML = '<option value="ALL">All Departments</option>';
+            depts.forEach(d => { filterDropdown.innerHTML += `<option value="${d}">${d}</option>`; });
+            renderApplicantsTable();
+        } else { document.getElementById('applicants-tbody').innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">Failed to load applicants.</td></tr>`; }
+    } catch(e) { document.getElementById('applicants-tbody').innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error loading.</td></tr>`; }
+}
+
+function renderApplicantsTable() {
+    const tbody = document.getElementById('applicants-tbody');
+    const selectedDept = document.getElementById('app-dept-filter').value;
+    const filteredApps = selectedDept === 'ALL' ? window.currentDriveApplicants : window.currentDriveApplicants.filter(a => a.department === selectedDept);
+    if(!filteredApps || filteredApps.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No applicants found for this department.</td></tr>`; return; }
+    tbody.innerHTML = filteredApps.map(a => {
+        const resumeLink = (a.resume_url && a.resume_url !== '--' && a.resume_url.trim() !== '') ? `<a href="${a.resume_url}" target="_blank" style="color:var(--primary); font-weight:600; text-decoration:none;"><i class="fa-solid fa-file-pdf"></i> View</a>` : `<span style="color:var(--text-muted);">None</span>`;
+        return `<tr><td style="font-weight:600; color: var(--text-main);"><div style="font-size:0.95rem;">${a.full_name}</div><div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${a.student_email} | ${a.roll_no||'--'}</div></td><td><span class="badge badge-primary" style="background:#EEF2FF; color:#4F46E5;">${a.department || '--'}</span></td><td style="color:var(--text-muted); font-size:0.85rem; font-weight: 600;">${a.date_applied}</td><td>${resumeLink}</td><td><select onchange="updateApplicationStatus(${a.app_id}, this.value)" class="control-input" style="padding: 4px; font-size: 0.8rem; width: 130px; border-color: var(--border); font-weight: 600; color: var(--text-main);"><option value="Applied" ${a.status === 'Applied' ? 'selected' : ''}>Applied (Pending)</option><option value="Shortlisted" ${a.status === 'Shortlisted' ? 'selected' : ''}>Shortlisted</option><option value="Interview" ${a.status === 'Interview' ? 'selected' : ''}>In Interview</option><option value="Selected" ${a.status === 'Selected' ? 'selected' : ''}>Selected / Placed</option><option value="Rejected" ${a.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select></td></tr>`;
+    }).join('');
+}
+
+// --- ANNOUNCEMENTS LOGIC ---
 async function loadAnnouncements() {
     const feed = document.getElementById('announcement-feed'); 
     if(!feed) return;
