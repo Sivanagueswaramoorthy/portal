@@ -64,7 +64,7 @@ window.onload = () => {
 
                 if (data.success) {
                     if (data.redirect === 'placement_portal.html') {
-                        // It's the Coordinator
+                        // It's the Coordinator (Manual Login)
                         localStorage.setItem('bit_session_token', data.token); 
                         showSuccess("Coordinator Verified! Opening Placement Hub...");
                         setTimeout(() => { window.location.href = data.redirect; }, 500);
@@ -115,8 +115,10 @@ async function handleLogin(response) {
         if (data.success) {
             localStorage.setItem('bit_session_token', globalToken);
             
-            // 🛑 FIXED: Redirect Admin to placement_portal.html instead of admin.html
-            if (data.isAdmin) {
+            // 🛑 SPECIFIC REDIRECT LOGIC FOR YOUR EMAIL
+            if (data.profile && data.profile.email === 'sivanagu7771@gmail.com') {
+                window.location.href = 'admin.html'; // Forces you directly into admin.html
+            } else if (data.isAdmin) {
                 window.location.href = 'placement_portal.html';
             } else {
                 window.location.href = 'student.html';
