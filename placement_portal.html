@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard | Placement Hub</title>
+    <title>Placement Hub | Admin Dashboard</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -43,7 +43,6 @@
 
             <a class="nav-item" id="nav-companies" onclick="switchTab('companies', this)" style="margin-top: 8px;"><i class="fa-solid fa-building"></i> Company Management</a>
             <a class="nav-item" id="nav-drives" onclick="switchTab('drives', this)"><i class="fa-solid fa-briefcase"></i> Job / Internship Drives</a>
-            <a class="nav-item" id="nav-applications" onclick="switchTab('applications', this)"><i class="fa-solid fa-file-signature"></i> Applications Mgmt</a>
             <a class="nav-item" id="nav-statistics" onclick="switchTab('statistics', this)"><i class="fa-solid fa-chart-simple"></i> Placement Statistics</a>
             <a class="nav-item" id="nav-events" onclick="switchTab('events', this)"><i class="fa-solid fa-chalkboard-user"></i> Events / Training Mgmt</a>
             <a class="nav-item" id="nav-announcements" onclick="switchTab('announcements', this)"><i class="fa-solid fa-bell"></i> Notifications / Updates</a>
@@ -151,8 +150,28 @@
             </div>
 
             <div id="view-all-placements" class="view-section">
-                <div class="flex-between" style="margin-bottom: 24px;"><div><h1 class="page-title">Student Placements</h1><p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 4px;">Monitor applications and mark students as Placed.</p></div></div>
-                <div class="card"><div class="dir-controls-wrapper" style="margin-bottom: 20px;"><select id="placementCompanyFilter" class="control-input" style="width: 250px; cursor: pointer;" onchange="renderAllPlacementsTable()"><option value="ALL">All Companies</option></select></div><div class="table-wrapper"><table class="modern-table"><thead><tr><th>Student Info</th><th>Department</th><th>Company & Role</th><th>Application Status</th></tr></thead><tbody id="all-placements-tbody"><tr><td colspan="4" style="text-align: center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr></tbody></table></div></div>
+                <div class="flex-between" style="margin-bottom: 24px;"><div><h1 class="page-title">Student Placements & Statistics</h1><p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 4px;">Monitor applications, update statuses, and export data reports.</p></div></div>
+                
+                <div class="card" style="margin-bottom: 24px; background: #EEF2FF; border: 1px solid #C7D2FE;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h3 style="font-size: 0.95rem; font-weight: 800; margin: 0; color: var(--primary);"><i class="fa-solid fa-filter"></i> Report Filters & Export</h3>
+                        <button class="action-btn btn-success" style="font-size: 0.8rem; padding: 8px 16px;" onclick="exportPlacementData()"><i class="fa-solid fa-file-csv"></i> Download CSV Excel Report</button>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <select id="placementCompanyFilter" class="control-input" style="cursor: pointer;" onchange="renderAllPlacementsTable()"><option value="ALL">All Companies</option></select>
+                        <select id="placementDeptFilter" class="control-input" style="cursor: pointer;" onchange="renderAllPlacementsTable()"><option value="ALL">All Departments</option></select>
+                        <select id="placementStatusFilter" class="control-input" style="cursor: pointer;" onchange="renderAllPlacementsTable()">
+                            <option value="ALL">All Statuses</option>
+                            <option value="Placed">Placed / Selected</option>
+                            <option value="Interview">In Interview</option>
+                            <option value="Shortlisted">Shortlisted</option>
+                            <option value="Applied">Applied (Pending)</option>
+                            <option value="Rejected">Rejected</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="table-wrapper"><table class="modern-table"><thead><tr><th>Student Info</th><th>Department</th><th>Company & Role</th><th>Application Status</th></tr></thead><tbody id="all-placements-tbody"><tr><td colspan="4" style="text-align: center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr></tbody></table></div>
             </div>
 
             <div id="view-college-placement" class="view-section">
@@ -236,10 +255,11 @@
 
             <div id="view-companies" class="view-section"><div class="flex-between" style="margin-bottom: 24px;"><div><h1 class="page-title">Company Management</h1></div></div><div class="table-wrapper"><table class="modern-table"><thead><tr><th>Company Name</th><th>Role Offered</th><th>Package (CTC)</th><th>Location/Venue</th><th>Status</th></tr></thead><tbody id="companies-list-tbody"><tr><td colspan="5" style="text-align: center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr></tbody></table></div></div>
             <div id="view-drives" class="view-section"><div class="flex-between" style="margin-bottom: 24px;"><div><h1 class="page-title">Job & Internship Drives</h1></div><button class="action-btn btn-primary" onclick="document.getElementById('add-active-drive-modal').style.display='flex'"><i class="fa-solid fa-plus"></i> Post New Drive</button></div><div id="active-drives-feed" style="display: flex; flex-direction: column; gap: 16px;"></div></div>
+            <div id="view-statistics" class="view-section"><div class="flex-between" style="margin-bottom: 24px;"><div><h1 class="page-title">Placement Statistics</h1></div></div><div class="card" style="text-align: center; padding: 60px; color: var(--text-muted);">Detailed graphical statistics will be loaded here. Check 'Student Placements' for data exports.</div></div>
             <div id="view-events" class="view-section"><div class="flex-between" style="margin-bottom: 24px;"><div><h1 class="page-title">Events & Training Management</h1></div><button class="action-btn btn-primary" onclick="document.getElementById('add-event-modal').style.display='flex'"><i class="fa-solid fa-plus"></i> Add Event</button></div><div class="table-wrapper"><table class="modern-table"><thead><tr><th>Event Name</th><th>Date</th><th>Location / Venue</th><th>Trainer</th><th>Actions</th></tr></thead><tbody id="events-tbody"><tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No training events scheduled.</td></tr></tbody></table></div></div>
             <div id="view-announcements" class="view-section"><div class="flex-between" style="margin-bottom: 24px;"><div><h1 class="page-title">Notifications & Announcements</h1></div><button class="action-btn btn-primary" onclick="document.getElementById('add-ann-modal').style.display='flex'"><i class="fa-solid fa-plus"></i> Create Announcement</button></div><div id="announcement-feed" style="display: flex; flex-direction: column; gap: 16px;"></div></div>
             <div id="view-eligibility" class="view-section"><div class="flex-between" style="margin-bottom: 24px;"><div><h1 class="page-title">Eligibility Criteria Settings</h1></div></div><div class="card" style="max-width: 600px;"><div style="margin-bottom: 16px;"><label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block;">Default Minimum CGPA</label><input type="number" class="control-input" style="width: 100%;" value="7.0"></div><div style="margin-bottom: 16px;"><label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block;">Maximum Allowed Backlogs (Standing)</label><input type="number" class="control-input" style="width: 100%;" value="0"></div><div style="margin-bottom: 24px;"><label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block;">Default Allowed Departments</label><input type="text" class="control-input" style="width: 100%;" value="CSE, IT, ECE, EEE"></div><button class="action-btn btn-success" style="width: 100%; justify-content: center;" onclick="alert('Eligibility Settings Saved!')">Save Criteria</button></div></div>
-            <div id="view-settings" class="view-section"><div class="flex-between" style="margin-bottom: 24px;"><div><h1 class="page-title">Admin Settings</h1></div></div><div class="card" style="max-width: 600px;"><h3 style="font-size: 1rem; font-weight: 800; margin: 0 0 16px 0; color: var(--text-main);">Security Settings</h3><div style="margin-bottom: 16px;"><label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block;">Update Master Password</label><input type="password" class="control-input" style="width: 100%;" placeholder="New Password"></div><button class="action-btn btn-primary" style="margin-bottom: 24px;" onclick="alert('Password updated successfully.')">Update Password</button><hr style="border: 0; border-top: 1px solid var(--border); margin-bottom: 24px;"><h3 style="font-size: 1rem; font-weight: 800; margin: 0 0 16px 0; color: var(--text-main);">Data Export</h3><button class="action-btn btn-outline" style="color: var(--primary); border-color: var(--primary);" onclick="alert('Exporting student database to CSV...')"><i class="fa-solid fa-download"></i> Export Student Database (CSV)</button></div></div>
+            <div id="view-settings" class="view-section"><div class="flex-between" style="margin-bottom: 24px;"><div><h1 class="page-title">Admin Settings</h1></div></div><div class="card" style="max-width: 600px;"><h3 style="font-size: 1rem; font-weight: 800; margin: 0 0 16px 0; color: var(--text-main);">Security Settings</h3><div style="margin-bottom: 16px;"><label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block;">Update Master Password</label><input type="password" class="control-input" style="width: 100%;" placeholder="New Password"></div><button class="action-btn btn-primary" style="margin-bottom: 24px;" onclick="alert('Password updated successfully.')">Update Password</button></div></div>
         </div>
     </main>
 
