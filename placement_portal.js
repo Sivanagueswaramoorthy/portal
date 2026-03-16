@@ -1,12 +1,8 @@
 const BASE_URL = 'https://portal-6crm.onrender.com';
 
-// 🛑 BULLETPROOF TOKEN STRIPPER (Prevents Auto-Logout)
 let globalToken = localStorage.getItem('bit_session_token'); 
-if (globalToken) {
-    globalToken = globalToken.replace(/['"]+/g, ''); // Removes corrupting quotes
-} else {
-    window.location.href = 'index.html';
-}
+if (globalToken) { globalToken = globalToken.replace(/['"]+/g, ''); } 
+else { window.location.href = 'index.html'; }
 
 let allStudentsList = [];
 let targetStudentEmail = ""; 
@@ -25,8 +21,7 @@ window.onload = async () => {
             window.location.href = 'index.html'; 
             return; 
         }
-        
-        // Safely update DOM headers
+
         if(document.getElementById('headerName')) document.getElementById('headerName').innerText = data.profile.full_name;
         if(document.getElementById('headerEmail')) document.getElementById('headerEmail').innerText = data.profile.email;
         if(document.getElementById('headerImage')) document.getElementById('headerImage').src = data.profile.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.profile.full_name)}&background=4F46E5&color=fff`;
@@ -36,10 +31,7 @@ window.onload = async () => {
         loadAnnouncements();
         loadAllPlacements(); 
         loadActiveDrives();
-    } catch (e) { 
-        console.error("Dashboard Load Warning: Backend asleep or minor UI glitch. Staying on page.", e);
-        // 🛑 REMOVED THE AUTO-REDIRECT TO INDEX.HTML HERE TO STOP THE LOOP!
-    }
+    } catch (e) {}
 };
 
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebar-overlay').classList.toggle('show'); }
@@ -49,8 +41,8 @@ function switchTab(tabId, element) {
         document.getElementById('nav-student-login').style.display = 'flex';
         document.getElementById('nav-edit-list').style.display = 'none';
         document.getElementById('nav-edit-detail').style.display = 'none';
-        document.getElementById('edit-login-id').value = '';
-        document.getElementById('edit-login-pass').value = '';
+        if(document.getElementById('edit-login-id')) document.getElementById('edit-login-id').value = '';
+        if(document.getElementById('edit-login-pass')) document.getElementById('edit-login-pass').value = '';
     }
 
     document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active')); 
@@ -144,6 +136,7 @@ async function fetchDirectory() {
     } catch(e) { if(document.getElementById('student-list-tbody')) document.getElementById('student-list-tbody').innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger);">Server Error. Please refresh.</td></tr>`; }
 }
 
+// 🛑 ADDED DELETE BUTTON TO STUDENT MANAGEMENT
 function renderTable(students) {
     const tbody = document.getElementById('student-list-tbody');
     if(!tbody) return;
@@ -158,7 +151,12 @@ function renderTable(students) {
             <td><span class="badge badge-primary">${s.department || '--'}</span></td>
             <td style="font-weight: 700; color: var(--primary);">${cgpa}</td>
             <td>${resumeLink}</td>
-            <td><button class="action-btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--primary); color: var(--primary);" onclick="openReadOnlyDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')"><i class="fa-solid fa-eye"></i> View Profile</button></td>
+            <td>
+                <div style="display: flex; gap: 8px;">
+                    <button class="action-btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--primary); color: var(--primary);" onclick="openReadOnlyDetail('${s.email}', '${s.full_name}', '${s.roll_no}', '${s.department}')"><i class="fa-solid fa-eye"></i> View</button>
+                    <button class="action-btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--danger); color: var(--danger);" onclick="deleteStudent('${s.email}', '${s.full_name}')"><i class="fa-solid fa-trash"></i> Delete</button>
+                </div>
+            </td>
         </tr>`;
     }).join('');
 }
@@ -167,6 +165,30 @@ function filterStudents() {
     const search = document.getElementById('searchStudent').value.toLowerCase(); const dept = document.getElementById('deptFilter').value;
     const filtered = allStudentsList.filter(s => { const matchesSearch = (s.full_name && s.full_name.toLowerCase().includes(search)) || (s.email && s.email.toLowerCase().includes(search)) || (s.roll_no && s.roll_no.toLowerCase().includes(search)); const matchesDept = dept === "ALL" || s.department === dept; return matchesSearch && matchesDept; });
     renderTable(filtered);
+}
+
+// 🛑 DELETE STUDENT FUNCTION (Cascades everywhere)
+async function deleteStudent(email, name) {
+    if(!confirm(`⚠️ CRITICAL WARNING: Are you sure you want to completely delete ${name} (${email})?\n\nThis will erase their profile, academic records, skills, and ALL placement applications. This CANNOT be undone.`)) return;
+
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/delete-student`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adminToken: globalToken, targetEmail: email })
+        });
+        const res = await req.json();
+        
+        if(res.success) {
+            alert(`✅ ${name} has been completely deleted from the database.`);
+            fetchDirectory(); 
+            loadAllPlacements(); 
+        } else {
+            alert("❌ Failed to delete student.");
+        }
+    } catch(e) {
+        alert("Network error.");
+    }
 }
 
 // 🛑 READ-ONLY QUICK VIEW MODAL
@@ -212,7 +234,12 @@ function populateReadOnlyModal(prf, apps) {
             if(s.includes('select') || s.includes('offer') || s.includes('placed')) bClass = 'badge-success'; 
             if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
             if(s.includes('pend') || s.includes('wait') || s.includes('short')) bClass = 'badge-warning'; 
-            return `<tr style="border-bottom: 1px solid #F1F5F9;"><td style="padding: 16px 24px;"><div style="font-weight: 800; color: #1E293B; font-size: 1rem;">${a.company}</div></td><td style="padding: 16px 24px;"><div style="font-weight: 600; color: #475569; font-size: 0.9rem;">${a.role}</div></td><td style="padding: 16px 24px; color: #64748B; font-size: 0.85rem; font-weight: 500;">${a.date_applied}</td><td style="padding: 16px 24px;"><span class="badge ${bClass}" style="font-size: 0.75rem; padding: 4px 10px;">${a.status}</span></td></tr>`; 
+            
+            const ctcBadge = (a.salary_package && a.salary_package !== '--') ? `<span style="display: inline-flex; align-items: center; gap: 4px; background: #DCFCE7; color: #166534; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-sack-dollar"></i> ${a.salary_package}</span>` : '';
+            const internBadge = (a.internship_period && a.internship_period !== '--') ? `<span style="display: inline-flex; align-items: center; gap: 4px; background: #E0E7FF; color: #3730A3; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-stopwatch"></i> ${a.internship_period}</span>` : '';
+            const extraDetails = (ctcBadge || internBadge) ? `<div style="display: flex; gap: 8px; margin-top: 6px;">${ctcBadge}${internBadge}</div>` : '';
+            
+            return `<tr style="border-bottom: 1px solid #F1F5F9;"><td style="padding: 16px 24px;"><div style="font-weight: 800; color: #1E293B; font-size: 1rem;">${a.company}</div></td><td style="padding: 16px 24px;"><div style="font-weight: 600; color: #475569; font-size: 0.9rem;">${a.role}</div>${extraDetails}</td><td style="padding: 16px 24px; color: #64748B; font-size: 0.85rem; font-weight: 500;">${a.date_applied}</td><td style="padding: 16px 24px;"><span class="badge ${bClass}" style="font-size: 0.75rem; padding: 4px 10px;">${a.status}</span></td></tr>`; 
         }).join('');
     } else { appBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 30px; color:var(--text-muted);">No applications logged.</td></tr>`; }
 }
@@ -302,8 +329,8 @@ function loginAsStudent() {
 
         switchTab('edit-list', editNav);
         
-        document.getElementById('edit-login-id').value = '';
-        document.getElementById('edit-login-pass').value = '';
+        if(document.getElementById('edit-login-id')) document.getElementById('edit-login-id').value = '';
+        if(document.getElementById('edit-login-pass')) document.getElementById('edit-login-pass').value = '';
     } else { alert("Invalid Login ID or Password! Access Denied."); }
 }
 
