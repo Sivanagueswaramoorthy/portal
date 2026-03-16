@@ -1,4 +1,3 @@
-// 🛑 FORCED LIVE SERVER
 const BASE_URL = 'https://portal-6crm.onrender.com';
 
 window.onload = () => {
@@ -13,12 +12,11 @@ window.onload = () => {
     );
 
     const savedToken = localStorage.getItem('bit_session_token');
-    const hrToken = localStorage.getItem('hr_session_token');
     const pcdpToken = localStorage.getItem('pcdp_session_token');
 
+    // Safe session restore
     if (pcdpToken) { window.location.href = 'pcdp_control.html'; return; }
-    if (hrToken) { window.location.href = 'hr.html'; return; } 
-    else if (savedToken) {
+    if (savedToken) {
         document.getElementById('g_id_signin').style.display = 'none';
         showError("Authenticating your secure session...", true);
         handleLogin({ credential: savedToken });
@@ -30,13 +28,6 @@ window.onload = () => {
             e.preventDefault(); 
             const email = document.getElementById('email').value.trim();
             const pass = document.getElementById('password').value.trim();
-            
-            if (email === 'pcdp@gmail.com' && pass === 'pcdp@123') {
-                localStorage.setItem('pcdp_session_token', 'pcdp_admin_authorized_token_7771');
-                showSuccess("PCDP Access Verified! Opening Control Center...");
-                setTimeout(() => { window.location.href = 'pcdp_control.html'; }, 500);
-                return;
-            }
 
             showError("Verifying Credentials. Please wait...", true);
 
@@ -51,15 +42,14 @@ window.onload = () => {
                 const data = await req.json();
 
                 if (data.success) {
-                    if (data.redirect === 'placement_portal.html') {
-                        localStorage.setItem('bit_session_token', data.token); 
-                        showSuccess("Coordinator Verified! Opening Placement Hub...");
-                        setTimeout(() => { window.location.href = data.redirect; }, 500);
+                    showSuccess(`Verified! Opening ${data.redirect}...`);
+                    
+                    if (data.redirect === 'pcdp_control.html') {
+                        localStorage.setItem('pcdp_session_token', data.token);
                     } else {
-                        localStorage.setItem('hr_session_token', data.token); 
-                        showSuccess("Trainer Verified! Opening Training Portal...");
-                        setTimeout(() => { window.location.href = data.redirect || 'hr.html'; }, 500);
+                        localStorage.setItem('bit_session_token', data.token); 
                     }
+                    setTimeout(() => { window.location.href = data.redirect; }, 500);
                 } else {
                     showError(data.message || "Invalid Email or Password.");
                 }
@@ -90,14 +80,12 @@ async function handleLogin(response) {
         const data = await req.json();
 
         if (data.success) {
-            localStorage.setItem('bit_session_token', globalToken);
-            
-            // 🛑 FIXED: Absolutely ALL Admins go to placement_portal.html
-            if (data.isAdmin) {
-                window.location.href = 'placement_portal.html';
+            if (data.redirect === 'pcdp_control.html') {
+                localStorage.setItem('pcdp_session_token', globalToken);
             } else {
-                window.location.href = 'student.html';
+                localStorage.setItem('bit_session_token', globalToken);
             }
+            window.location.href = data.redirect; // 🛑 STRICT ROUTING
         } else {
             localStorage.removeItem('bit_session_token');
             document.getElementById('g_id_signin').style.display = 'block';
@@ -112,6 +100,7 @@ async function handleLogin(response) {
 
 function showError(message, isWorking = false) {
     const errBox = document.getElementById('error-msg');
+    if(!errBox) return;
     errBox.style.display = 'flex';
     if (isWorking) {
         errBox.style.background = '#F8FAFC'; errBox.style.color = '#0F172A'; errBox.style.borderColor = '#E2E8F0';
@@ -124,6 +113,7 @@ function showError(message, isWorking = false) {
 
 function showSuccess(message) {
     const errBox = document.getElementById('error-msg');
+    if(!errBox) return;
     errBox.style.display = 'flex'; errBox.style.background = '#ECFDF5'; errBox.style.color = '#10B981'; errBox.style.borderColor = '#A7F3D0';
     errBox.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>${message}</span>`;
 }
