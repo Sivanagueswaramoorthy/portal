@@ -63,8 +63,13 @@ function renderMasterGrid(courses) {
     
     grid.innerHTML = courses.map(c => {
         const fallbackImg = 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
-        const imgUrl = (c.image_url && c.image_url.trim() !== "") ? c.image_url : fallbackImg;
-        // Prevents HTML buttons from breaking if course name has an apostrophe
+        
+        // 🛑 FIXED FALLBACK LOGIC: Check if it's a drive viewer link
+        let imgUrl = c.image_url;
+        if (!imgUrl || imgUrl.trim() === "" || imgUrl.includes("drive.google.com/file/d/")) {
+            imgUrl = fallbackImg; // Fallback if no valid direct image link
+        }
+        
         const safeName = (c.course_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
         
         return `
@@ -96,7 +101,6 @@ function renderMasterGrid(courses) {
     }).join('');
 }
 
-// Open the Edit Modal and populate it with existing data
 function openEditModal(id) {
     const course = masterCoursesData.find(c => c.id == id);
     
@@ -119,7 +123,6 @@ function openEditModal(id) {
     }
 }
 
-// Send the edited data to the server
 async function submitEditMasterCourse() {
     const id = document.getElementById('edit-c-id').value;
     const name = document.getElementById('edit-c-name').value;
@@ -156,7 +159,6 @@ async function submitEditMasterCourse() {
     if(btn) btn.innerHTML = 'Save Changes';
 }
 
-// Create new data
 async function submitNewMasterCourse() {
     const name = document.getElementById('c-name').value;
     const desc = document.getElementById('c-desc').value;
@@ -175,7 +177,6 @@ async function submitNewMasterCourse() {
             body: JSON.stringify({ token: adminToken, course_name: name, description: desc, total_levels: levels, category: cat, image_url: img })
         });
         
-        // Clear inputs
         document.getElementById('c-name').value = ''; 
         document.getElementById('c-desc').value = '';
         document.getElementById('c-levels').value = ''; 

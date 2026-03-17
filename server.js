@@ -42,7 +42,6 @@ const promisePool = dbPool.promise();
         await promisePool.query(`CREATE TABLE IF NOT EXISTS pcdp_master_courses (id INT AUTO_INCREMENT PRIMARY KEY, course_name VARCHAR(255), description TEXT, total_levels INT DEFAULT 1, category VARCHAR(100), image_url TEXT)`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS student_courses (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), semester INT, course_name VARCHAR(255), marks VARCHAR(50), grade VARCHAR(10))`);
         
-        // 🛑 THIS IS THE TABLE WHERE ASSIGNED PCDP COURSES ARE STORED
         await promisePool.query(`CREATE TABLE IF NOT EXISTS student_skills (id INT AUTO_INCREMENT PRIMARY KEY, student_email VARCHAR(255), skill_name VARCHAR(255), total_levels INT, completed_levels INT, category VARCHAR(100), image_url TEXT)`);
         
         await promisePool.query(`CREATE TABLE IF NOT EXISTS pcdp_courses (id INT AUTO_INCREMENT PRIMARY KEY, course_name VARCHAR(255) UNIQUE, total_levels INT DEFAULT 1, category VARCHAR(100), image_url TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)`);
@@ -68,7 +67,7 @@ const promisePool = dbPool.promise();
         await promisePool.query(`CREATE TABLE IF NOT EXISTS announcements (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), type VARCHAR(50), content TEXT, date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
         try { await promisePool.query(`ALTER TABLE announcements ADD COLUMN target_department VARCHAR(100) DEFAULT 'ALL'`); } catch(e){}
 
-        console.log("✅ Database Verified: PCDP Assignment Routes Enabled.");
+        console.log("✅ Database Verified: Skill Update/Delete Routes Enabled.");
     } catch (err) { console.error("❌ DB Init Error:", err.message); }
 })();
 
@@ -192,7 +191,7 @@ app.post('/api/auth', async (req, res) => {
 
 
 // ============================================================================
-// --- PCDP MASTER ROUTES (FIXED FOR ADMIN PORTAL) ---
+// --- PCDP MASTER ROUTES ---
 // ============================================================================
 
 app.post(['/api/pcdp/list', '/api/pcdp/master/courses', '/api/admin/pcdp-master-list', '/api/pcdp-master-list'], async (req, res) => {
@@ -244,8 +243,6 @@ app.post(['/api/pcdp/delete', '/api/pcdp/master/delete-course', '/api/pcdp/maste
     } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-
-// 🛑 NEW: UNIVERSAL PCDP ASSIGNMENT ROUTE (THIS FIXES THE BUG)
 app.post(['/api/admin/assign-pcdp', '/api/admin/assign-course', '/api/pcdp/assign', '/api/assign-skill'], async (req, res) => {
     try {
         let isAllowed = false;
@@ -257,13 +254,11 @@ app.post(['/api/admin/assign-pcdp', '/api/admin/assign-course', '/api/pcdp/assig
         if(!rawEmail) return res.json({ success: false, message: "Missing student email." });
         const email = rawEmail.toLowerCase();
 
-        // SCENARIO 1: If the frontend sends the course_id from the dropdown
         if (req.body.course_id) {
             const [courses] = await promisePool.query("SELECT * FROM pcdp_master_courses WHERE id = ?", [req.body.course_id]);
             if(courses.length === 0) return res.json({ success: false, message: "Course not found in master repository." });
             const c = courses[0];
             
-            // Prevent duplicate assignments
             const [existing] = await promisePool.query("SELECT id FROM student_skills WHERE student_email = ? AND skill_name = ?", [email, c.course_name]);
             if(existing.length > 0) return res.json({ success: false, message: "This course is already assigned to the student." });
 
@@ -271,7 +266,6 @@ app.post(['/api/admin/assign-pcdp', '/api/admin/assign-course', '/api/pcdp/assig
             return res.json({ success: true });
         }
 
-        // SCENARIO 2: If the frontend sends the manual course text
         if (req.body.course_name || req.body.skill_name) {
             const skillName = req.body.course_name || req.body.skill_name;
             const [existing] = await promisePool.query("SELECT id FROM student_skills WHERE student_email = ? AND skill_name = ?", [email, skillName]);
@@ -283,6 +277,23 @@ app.post(['/api/admin/assign-pcdp', '/api/admin/assign-course', '/api/pcdp/assig
 
         res.json({ success: false, message: "Invalid course data provided." });
     } catch (e) { console.error("Assign PCDP Error:", e); res.json({ success: false, message: e.message }); }
+});
+
+// 🛑 FIX: SKILL UPDATE AND DELETE ROUTES
+app.post('/api/admin/update-skill', async (req, res) => {
+    try {
+        await verifyAdmin(req.body);
+        await promisePool.query(`UPDATE student_skills SET completed_levels = ? WHERE id = ?`, [req.body.completed_levels, req.body.id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/admin/remove-skill', async (req, res) => {
+    try {
+        await verifyAdmin(req.body);
+        await promisePool.query("DELETE FROM student_skills WHERE id = ?", [req.body.id]);
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
 

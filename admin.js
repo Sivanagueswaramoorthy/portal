@@ -9,10 +9,8 @@ let targetStudentEmail = "";
 let originalValues = {}; 
 let gpaChartInstance = null;
 
-// 🛑 NEW: Stores the current student's skills to filter the dropdown later
 let currentStudentSkills = []; 
 
-// 🛑 ESCAPE HELPER
 const esc = (str) => { if (!str) return '--'; return String(str).replace(/'/g, "&#39;").replace(/"/g, '&quot;'); };
 
 window.onload = async () => {
@@ -121,7 +119,6 @@ async function loadStudentData(email) {
         const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) });
         const data = await req.json();
         if (data.success) {
-            // 🛑 SAVE THE SKILLS FOR FILTERING LATER
             currentStudentSkills = data.skills || []; 
             populateDashboard(data.profile, data.courses, data.skills, data.semGpas);
         } else { alert("Failed to fetch student data."); backToDirectory(); }
@@ -178,9 +175,43 @@ function populateDashboard(p, courses, skills, semGpas) {
             if(document.getElementById('act-progress')) document.getElementById('act-progress').innerText = skills.filter(s => s.completed_levels < s.total_levels).length;
             skillsContainer.innerHTML = skills.map(c => {
                 const total = c.total_levels || 1; const comp = c.completed_levels || 0; const pct = Math.round((comp / total) * 100);
-                const fallbackImg = 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80'; const imgUrl = (c.image_url && c.image_url.trim() !== "") ? c.image_url : fallbackImg;
+                
+                // FIXED FALLBACK IMAGE LOGIC
+                const fallbackImg = 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80'; 
+                let imgUrl = c.image_url;
+                if (!imgUrl || imgUrl.trim() === "" || imgUrl.includes("drive.google.com")) {
+                    imgUrl = fallbackImg; // Google Drive viewer links do not render as images
+                }
+                
                 let segmentsHtml = ''; for(let i=0; i<total; i++) { segmentsHtml += `<div style="flex: 1; border-radius: 4px; background: ${i < comp ? '#8B5CF6' : '#E2E8F0'}; height: 6px;"></div>`; }
-                return `<div class="skill-card"><div style="height: 140px; width: 100%; position: relative; flex-shrink: 0; border-radius: 12px 12px 0 0; overflow: hidden; background: var(--bg-app);"><img src="${imgUrl}" onerror="this.onerror=null; this.src='${fallbackImg}';" style="width: 100%; height: 100%; object-fit: cover;"><div style="position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.95); padding: 4px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 800; color: var(--purple); box-shadow: var(--shadow-sm); backdrop-filter: blur(4px);"><i class="fa-solid fa-medal"></i> ${c.category || 'General'}</div></div><div style="padding: 20px; flex: 1; display: flex; flex-direction: column;"><h4 style="margin: 0 0 12px 0; font-size: 1rem; color: var(--text-main); font-weight: 800; line-height: 1.3;">${c.skill_name}</h4><div style="display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 0.8rem; font-weight: 700; margin-bottom: 16px;"><span><i class="fa-solid fa-layer-group" style="opacity: 0.7;"></i> Levels: ${total}</span><span id="wrap-lvl-${c.id}" style="color: var(--primary);"><span id="val-lvl-${c.id}">${comp}</span> completed <i class="fa-solid fa-pen admin-table-edit" onclick="openProfileEdit('completed_levels', 'val-lvl-${c.id}', '40px', '${c.id}')"></i></span></div><div style="margin-top: auto;"><div style="display: flex; gap: 4px; height: 6px; margin-bottom: 8px;">${segmentsHtml}</div><div style="text-align: center; font-size: 0.7rem; color: var(--text-muted); font-weight: 600;">Overall Progress (${pct}%)</div></div></div></div>`;
+                
+                // ADDED DELETE BUTTON (Trash Can Icon)
+                return `
+                <div class="skill-card">
+                    <div style="height: 140px; width: 100%; position: relative; flex-shrink: 0; border-radius: 12px 12px 0 0; overflow: hidden; background: var(--bg-app);">
+                        <img src="${imgUrl}" onerror="this.onerror=null; this.src='${fallbackImg}';" style="width: 100%; height: 100%; object-fit: cover;">
+                        <div style="position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.95); padding: 4px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 800; color: var(--purple); box-shadow: var(--shadow-sm); backdrop-filter: blur(4px);">
+                            <i class="fa-solid fa-medal"></i> ${c.category || 'General'}
+                        </div>
+                    </div>
+                    <div style="padding: 20px; flex: 1; display: flex; flex-direction: column;">
+                        <h4 style="margin: 0 0 12px 0; font-size: 1rem; color: var(--text-main); font-weight: 800; line-height: 1.3;">${c.skill_name}</h4>
+                        <div style="display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 0.8rem; font-weight: 700; margin-bottom: 16px;">
+                            <span><i class="fa-solid fa-layer-group" style="opacity: 0.7;"></i> Levels: ${total}</span>
+                            <span id="wrap-lvl-${c.id}" style="color: var(--primary);">
+                                <span id="val-lvl-${c.id}">${comp}</span> completed 
+                                <i class="fa-solid fa-pen admin-table-edit" onclick="openProfileEdit('completed_levels', 'val-lvl-${c.id}', '40px', '${c.id}')"></i>
+                            </span>
+                        </div>
+                        <div style="margin-top: auto;">
+                            <div style="display: flex; gap: 4px; height: 6px; margin-bottom: 8px;">${segmentsHtml}</div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;">Overall Progress (${pct}%)</div>
+                                <i class="fa-solid fa-trash admin-table-del" title="Remove Course" style="color: var(--danger); font-size: 0.85rem;" onclick="removeAssignedSkill(${c.id}, '${esc(c.skill_name)}')"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
             }).join('');
         } else { 
             if(document.getElementById('act-total-skills')) document.getElementById('act-total-skills').innerText = "0"; 
@@ -219,18 +250,37 @@ function cancelProfileEdit(spanId, field, width, customId) {
     wrapper.innerHTML = `<span id="${spanId}">${originalValues[spanId]}</span><i class="fa-solid fa-pen admin-table-edit" onclick="openProfileEdit('${field}', '${spanId}', '${width}', '${customId}')"></i>`;
 }
 
+// 🛑 THIS FUNCTION NOW USES THE NEW BACKEND ROUTE TO UPDATE SKILLS
 async function saveProfileEdit(field, spanId, width, customId) {
     const val = document.getElementById(`in-${spanId}`).value; 
     const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement;
     wrapper.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
     try {
         if(field === 'completed_levels') {
-            await fetch(`${BASE_URL}/api/admin/update-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: customId, completed_levels: val }) });
+            await fetch(`${BASE_URL}/api/admin/update-skill`, { 
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ adminToken: globalToken, id: customId, completed_levels: val }) 
+            });
         } else {
-            await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, field: field, value: val }) });
+            await fetch(`${BASE_URL}/api/admin/update-field`, { 
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, field: field, value: val }) 
+            });
         }
-        loadStudentData(targetStudentEmail);
+        loadStudentData(targetStudentEmail); // Refresh immediately
     } catch(e) { cancelProfileEdit(spanId, field, width, customId); }
+}
+
+// 🛑 THIS FUNCTION DELETES A SKILL FROM A STUDENT
+async function removeAssignedSkill(id, skillName) {
+    if(!confirm(`Are you sure you want to remove "${skillName}" from this student's profile?`)) return;
+    try {
+        await fetch(`${BASE_URL}/api/admin/remove-skill`, { 
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ adminToken: globalToken, id: id }) 
+        });
+        loadStudentData(targetStudentEmail); // Refresh immediately
+    } catch(e) { alert("Failed to remove course."); }
 }
 
 function openGpaEdit(sem, currentVal) {
@@ -298,13 +348,11 @@ async function deleteAnnouncement(id) { if(!confirm("Delete this announcement?")
 
 window.masterPcdpCourses = [];
 
-// 🛑 Helper function to get courses the student DOES NOT have yet
 function getAvailableCourses() {
     const assignedSkillNames = currentStudentSkills.map(s => s.skill_name.toLowerCase());
     return window.masterPcdpCourses.filter(c => !assignedSkillNames.includes(c.course_name.toLowerCase()));
 }
 
-// Fetch courses from server
 async function loadMasterCoursesForDropdown() {
     try {
         const req = await fetch(`${BASE_URL}/api/pcdp/master/courses`, {
@@ -314,12 +362,11 @@ async function loadMasterCoursesForDropdown() {
         const data = await req.json();
         if (data.success) {
             window.masterPcdpCourses = data.courses;
-            renderCourseDropdown(getAvailableCourses()); // Render ONLY available courses
+            renderCourseDropdown(getAvailableCourses()); 
         }
     } catch(e) { console.error("Failed to load master courses"); }
 }
 
-// Render the premium UI cards
 function renderCourseDropdown(courses) {
     const listContainer = document.getElementById('pcdp-course-list');
     if(!listContainer) return;
@@ -330,7 +377,6 @@ function renderCourseDropdown(courses) {
     }
     
     listContainer.innerHTML = courses.map(c => {
-        // Icon logic based on category
         let iconHtml = '<i class="fa-solid fa-code"></i>';
         const cat = (c.category || '').toLowerCase();
         if(cat.includes('design') || cat.includes('ui')) iconHtml = '<i class="fa-solid fa-palette"></i>';
@@ -356,21 +402,15 @@ function renderCourseDropdown(courses) {
         </div>`;
     }).join('');
     
-    // Reset the hidden selection value when reloading
     document.getElementById('selected-pcdp-course-id').value = '';
 }
 
-// Handle the click selection
 function selectCourseOption(element, courseId) {
-    // 1. Remove 'selected' class from all options
     document.querySelectorAll('.course-option-item').forEach(el => el.classList.remove('selected'));
-    // 2. Add 'selected' class to the clicked one
     element.classList.add('selected');
-    // 3. Save the ID into the hidden input
     document.getElementById('selected-pcdp-course-id').value = courseId;
 }
 
-// Live Search Filter (searches ONLY within unassigned courses)
 function filterCourseDropdown() {
     const search = document.getElementById('course-search-input').value.toLowerCase();
     const availableCourses = getAvailableCourses();
@@ -381,7 +421,6 @@ function filterCourseDropdown() {
     renderCourseDropdown(filtered);
 }
 
-// Launch Searchable Modal
 function openAssignModal() {
     document.getElementById('course-search-input').value = '';
     document.getElementById('assign-course-modal').style.display = 'flex';
@@ -389,13 +428,11 @@ function openAssignModal() {
     if(!window.masterPcdpCourses || window.masterPcdpCourses.length === 0) {
         loadMasterCoursesForDropdown();
     } else {
-        renderCourseDropdown(getAvailableCourses()); // Render ONLY available courses
+        renderCourseDropdown(getAvailableCourses()); 
     }
 }
 
-// Submit Assignment to Backend
 async function submitCourseAssignment() {
-    // Grab the ID from our hidden input
     const courseId = document.getElementById('selected-pcdp-course-id').value;
     
     if(!courseId) return alert("Please click on a course from the list to select it.");
@@ -419,7 +456,6 @@ async function submitCourseAssignment() {
         
         if (res.success) {
             document.getElementById('assign-course-modal').style.display = 'none';
-            // Instantly refresh the specific student's profile!
             if(typeof loadStudentData === 'function') {
                 loadStudentData(targetStudentEmail);
             }
