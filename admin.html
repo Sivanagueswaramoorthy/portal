@@ -43,6 +43,7 @@
         <div class="nav-menu">
             <a class="nav-item active" id="nav-dash" onclick="switchTab('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> Dashboard</a>
             <a class="nav-item" id="nav-students" onclick="switchTab('students', this)"><i class="fa-solid fa-users"></i> Student Management</a>
+            <a class="nav-item" id="nav-mapping" onclick="switchTab('mapping', this)"><i class="fa-solid fa-users-between-lines"></i> Mentor Mapping</a>
             <a class="nav-item" id="nav-staff" onclick="switchTab('staff', this)"><i class="fa-solid fa-id-card"></i> Staff Directory</a>
             <a class="nav-item" id="nav-ann" onclick="switchTab('announcements', this)"><i class="fa-solid fa-bullhorn"></i> Announcements</a>
             <a class="nav-item" id="nav-dept" onclick="switchTab('departments', this)"><i class="fa-solid fa-sitemap"></i> Department Management</a>
@@ -173,7 +174,7 @@
                         <h1 class="page-title">Staff Directory</h1>
                         <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.85rem;">Manage faculty and administration accounts.</p>
                     </div>
-                    <button class="action-btn btn-primary"><i class="fa-solid fa-user-plus"></i> Add Staff Member</button>
+                    <button class="action-btn btn-primary" onclick="openStaffModal()"><i class="fa-solid fa-user-plus"></i> Add Staff Member</button>
                 </div>
 
                 <div class="card">
@@ -230,7 +231,7 @@
                         <h1 class="page-title">Department Management</h1>
                         <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.85rem;">Overview of academic departments and capacities.</p>
                     </div>
-                    <button class="action-btn btn-primary"><i class="fa-solid fa-plus"></i> Add Department</button>
+                    <button class="action-btn btn-primary" onclick="openDeptModal()"><i class="fa-solid fa-plus"></i> Add Department</button>
                 </div>
 
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
@@ -307,6 +308,98 @@
             </div>
 
         </div>
+        <div id="view-mapping" class="view-section">
+    <div class="flex-between" style="margin-bottom: 24px;">
+        <div>
+            <h1 class="page-title">Mentor & Batch Mapping</h1>
+            <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.85rem;">Allocate batches of up to 20 students to faculty mentors.</p>
+        </div>
+        <button class="action-btn btn-success" style="padding: 10px 20px; font-size: 0.95rem; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.2);" onclick="saveMentorMappings()">
+            <i class="fa-solid fa-floppy-disk"></i> Save Mappings
+        </button>
+    </div>
+
+    <div class="dash-grid" style="grid-template-columns: 380px 1fr; align-items: start; gap: 24px;">
+        
+        <div class="card" style="padding: 0; overflow: hidden; height: 650px; display: flex; flex-direction: column; border: 1px solid var(--border); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+            <div style="padding: 20px; border-bottom: 1px solid var(--border); background: white;">
+                <h3 style="font-size: 1rem; font-weight: 800; color: var(--text-main); margin: 0 0 12px 0;">Select Mentor</h3>
+                <div class="search-wrapper" style="width: 100%; max-width: 100%; margin: 0; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px;">
+                    <i class="fa-solid fa-search" style="color: #94A3B8;"></i>
+                    <input type="text" id="map-staff-search" style="width: 100%; border: none; background: transparent; padding: 10px; font-size: 0.85rem; outline: none;" placeholder="Search staff by name or dept..." oninput="renderMappingStaffList()">
+                </div>
+            </div>
+            <div id="mapping-staff-list" style="overflow-y: auto; flex: 1; background: #F8FAFC;">
+                </div>
+        </div>
+
+        <div class="card" style="height: 650px; display: flex; flex-direction: column; padding: 0; border: 1px solid var(--border); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); overflow: hidden;">
+            
+            <div id="mapping-header-empty" style="text-align: center; margin: auto; padding: 40px; color: var(--text-muted);">
+                <div style="font-size: 4rem; color: #E2E8F0; margin-bottom: 20px;"><i class="fa-solid fa-people-group"></i></div>
+                <h3 style="font-weight: 800; color: #475569; font-size: 1.2rem; margin-bottom: 8px;">No Mentor Selected</h3>
+                <p style="font-size: 0.9rem; max-width: 300px; margin: auto; line-height: 1.5;">Click on a faculty member from the left panel to view and manage their assigned student batch.</p>
+            </div>
+            
+            <div id="mapping-workspace" style="display: none; flex-direction: column; height: 100%;">
+                
+                <div style="background: white; padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <img id="map-active-img" src="" style="width: 56px; height: 56px; border-radius: 12px; border: 2px solid #EEF2FF; object-fit: cover;">
+                        <div>
+                            <h3 id="map-active-name" style="margin: 0 0 6px 0; font-size: 1.25rem; font-weight: 800; color: var(--text-main);">--</h3>
+                            <span id="map-active-dept" class="badge badge-primary" style="font-size: 0.75rem; background: #EEF2FF; color: #4F46E5;">--</span>
+                        </div>
+                    </div>
+                    <div style="text-align: right; background: #F8FAFC; padding: 12px 16px; border-radius: 10px; border: 1px solid #E2E8F0;">
+                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">Batch Capacity</div>
+                        <div style="display: flex; align-items: center; gap: 14px;">
+                            <div style="width: 160px; height: 10px; background: #E2E8F0; border-radius: 5px; overflow: hidden;">
+                                <div id="map-capacity-bar" style="height: 100%; background: var(--primary); width: 0%; transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.4s;"></div>
+                            </div>
+                            <span id="map-capacity-text" style="font-weight: 800; font-size: 1.1rem; color: var(--text-main); min-width: 50px;">0 / 20</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 70px 1fr; gap: 0; flex: 1; min-height: 0; background: #F8FAFC;">
+                    
+                    <div style="display: flex; flex-direction: column; border-right: 1px solid var(--border);">
+                        <div style="padding: 16px; background: white; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 800; font-size: 0.95rem; color: var(--text-main);">Unassigned Pool</span> 
+                            <span id="map-unassigned-count" class="badge" style="background: #E2E8F0; color: #475569;">0</span>
+                        </div>
+                        <div style="padding: 12px; background: white; border-bottom: 1px solid var(--border);">
+                            <div class="search-wrapper" style="width: 100%; max-width: 100%; margin: 0; background: #F8FAFC; border-radius: 6px; padding: 6px 12px;">
+                                <i class="fa-solid fa-search" style="color: #94A3B8; font-size: 0.8rem;"></i>
+                                <input type="text" id="map-student-search" style="width: 100%; border: none; background: transparent; padding: 4px; font-size: 0.8rem; outline: none;" placeholder="Search students..." oninput="renderMappingWorkspace()">
+                            </div>
+                        </div>
+                        <div id="map-unassigned-list" style="overflow-y: auto; flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px;"></div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 16px; background: #F8FAFC;">
+                        <button class="action-btn btn-primary" style="width: 48px; height: 48px; border-radius: 50%; justify-content: center; padding: 0; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);" onclick="assignSelected()" title="Assign Selected to Mentor">
+                            <i class="fa-solid fa-arrow-right" style="font-size: 1.1rem;"></i>
+                        </button>
+                        <button class="action-btn btn-outline" style="width: 48px; height: 48px; border-radius: 50%; justify-content: center; padding: 0; color: var(--danger); border-color: #FECACA; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.05);" onclick="unassignSelected()" title="Remove Selected from Batch">
+                            <i class="fa-solid fa-arrow-left" style="font-size: 1.1rem;"></i>
+                        </button>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; border-left: 1px solid var(--border); background: white;">
+                        <div style="padding: 16px; background: #EEF2FF; border-bottom: 1px solid #C7D2FE; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 800; font-size: 0.95rem; color: var(--primary);">Current Batch</span> 
+                            <span id="map-assigned-count" class="badge badge-primary">0</span>
+                        </div>
+                        <div id="map-assigned-list" style="overflow-y: auto; flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: #F8FAFC;"></div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
     </main>
 
     <div id="add-modal" class="modal-overlay"><div class="modal-content"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem;">Register Student</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('add-modal')"></i></div><input type="email" id="new-email" class="modal-input" placeholder="Google Email"><input type="text" id="new-name" class="modal-input" placeholder="Full Student Name"><input type="text" id="new-roll" class="modal-input" placeholder="Roll Number"><input type="text" id="new-dept" class="modal-input" placeholder="Department"><button class="action-btn btn-primary" style="width: 100%; margin-top: 8px;" onclick="submitNewStudent()">Save to Database</button></div></div>
@@ -380,6 +473,55 @@
             <textarea id="ann-content" class="modal-input" rows="4" placeholder="Type your message here... (Required)" style="margin-top: 12px;"></textarea>
             
             <button class="action-btn btn-primary" style="width: 100%; margin-top: 16px;" onclick="submitAnnouncement()">Post Announcement</button>
+        </div>
+    </div>
+    <div id="staff-modal" class="modal-overlay" style="display: none; align-items: center; justify-content: center; z-index: 9999;">
+        <div class="modal-content" style="width: 100%; max-width: 500px; background: white; padding: 24px; border-radius: 12px;">
+            <div class="flex-between" style="margin-bottom: 20px;">
+                <h2 id="staff-modal-title" style="margin:0; font-weight: 800; font-size: 1.15rem;">Add Staff Member</h2>
+                <i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('staff-modal')"></i>
+            </div>
+            <input type="hidden" id="staff-id">
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block;">Full Name</label>
+            <input type="text" id="staff-name" class="control-input modal-input" style="width: 100%; margin-bottom: 12px;">
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block;">Email Address</label>
+            <input type="email" id="staff-email" class="control-input modal-input" style="width: 100%; margin-bottom: 12px;">
+            <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                <div style="flex: 1;">
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block;">Role / Designation</label>
+                    <input type="text" id="staff-role" class="control-input modal-input" style="width: 100%;" placeholder="e.g. Professor">
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block;">Department</label>
+                    <input type="text" id="staff-dept" class="control-input modal-input" style="width: 100%;" placeholder="e.g. IT">
+                </div>
+            </div>
+            <button class="action-btn btn-primary" style="width: 100%; height: 44px; justify-content: center;" onclick="submitStaffForm()">Save Staff Member</button>
+        </div>
+    </div>
+
+    <div id="dept-modal" class="modal-overlay" style="display: none; align-items: center; justify-content: center; z-index: 9999;">
+        <div class="modal-content" style="width: 100%; max-width: 500px; background: white; padding: 24px; border-radius: 12px;">
+            <div class="flex-between" style="margin-bottom: 20px;">
+                <h2 id="dept-modal-title" style="margin:0; font-weight: 800; font-size: 1.15rem;">Add Department</h2>
+                <i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('dept-modal')"></i>
+            </div>
+            <input type="hidden" id="dept-id">
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block;">Department Name</label>
+            <input type="text" id="dept-name" class="control-input modal-input" style="width: 100%; margin-bottom: 12px;">
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block;">Department Code</label>
+            <input type="text" id="dept-code" class="control-input modal-input" style="width: 100%; margin-bottom: 12px;" placeholder="e.g. CSE">
+            <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                <div style="flex: 1;">
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block;">Student Capacity</label>
+                    <input type="number" id="dept-students" class="control-input modal-input" style="width: 100%;">
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: block;">Faculty Count</label>
+                    <input type="number" id="dept-faculty" class="control-input modal-input" style="width: 100%;">
+                </div>
+            </div>
+            <button class="action-btn btn-primary" style="width: 100%; height: 44px; justify-content: center;" onclick="submitDepartmentForm()">Save Department</button>
         </div>
     </div>
 
