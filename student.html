@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
 
-    <title>BIT Sathy | Portal</title>
+    <title>BIT Sathy | Student Portal</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -19,27 +19,18 @@
         .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; border-radius: 8px; }
         
         @media (max-width: 768px) {
-            /* Stack grids nicely */
             .dash-grid, .stats-grid, .skills-grid, .academics-grid { grid-template-columns: 1fr !important; gap: 15px; }
             div[style*="grid-template-columns: repeat(4, 1fr)"] { grid-template-columns: 1fr !important; }
             div[style*="grid-column: span 2"], div[style*="grid-column: span 1"] { grid-column: 1 / -1 !important; }
-            
-            /* Spacing adjustments */
             .view-section { padding: 15px 10px !important; }
             .card { padding: 16px !important; margin-bottom: 16px !important; }
             .stat-box { padding: 16px !important; }
-            
-            /* Text & Flex Adjustments */
             .page-title { font-size: 1.3rem !important; }
             .view-section .flex-between { flex-direction: column; align-items: flex-start !important; gap: 12px; }
             .view-section .flex-between > div { width: 100%; text-align: left; }
-            
-            /* Inputs and Buttons */
             .control-input, .modal-input, .search-wrapper input { width: 100% !important; box-sizing: border-box; }
             .search-wrapper { max-width: 100% !important; width: 100%; }
             .action-btn { width: 100%; justify-content: center; }
-            
-            /* Profile & Placements Card */
             .card[style*="background: linear-gradient"] { flex-direction: column !important; align-items: center !important; text-align: center; }
             .card[style*="background: linear-gradient"] > div { text-align: center !important; width: 100%; }
             .card[style*="background: linear-gradient"] .flex-center { justify-content: center; }
@@ -61,14 +52,14 @@
             <i class="fa-solid fa-xmark mobile-menu-btn" style="padding:0;" onclick="toggleSidebar()"></i>
         </div>
         <div class="nav-menu">
-            <a class="nav-item active" id="nav-dash" onclick="switchTab('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> Dashboard Overview</a>
-            <a class="nav-item" id="nav-announcements" onclick="switchTab('announcements', this); fetchStudentAnnouncements();"><i class="fa-solid fa-bullhorn"></i> Notice Board</a>
-            <a class="nav-item" id="nav-act" onclick="switchTab('activities', this)"><i class="fa-solid fa-rocket"></i> PCDP Activities</a>
+            <a class="nav-item active" id="nav-dash" onclick="switchTab('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> Dashboard</a>
+            <a class="nav-item" id="nav-notices" onclick="switchTab('notices', this)"><i class="fa-solid fa-bullhorn"></i> Notice Board</a>
             <a class="nav-item" id="nav-acad" onclick="switchTab('academics', this)"><i class="fa-solid fa-book-open"></i> Academic Records</a>
-            <a class="nav-item" id="nav-col-place" onclick="switchTab('college-placement', this)"><i class="fa-solid fa-building-user"></i> College Placement</a>
-            <a class="nav-item" id="nav-apply-companies" onclick="switchTab('apply-companies', this); fetchActiveDrives();"><i class="fa-solid fa-paper-plane"></i> Job Openings</a>
-            <a class="nav-item" id="nav-place" onclick="switchTab('placement', this)"><i class="fa-solid fa-briefcase"></i> My Placement Hub</a>
-            <a class="nav-item" id="nav-rewards" onclick="switchTab('rewards', this); fetchAllRewards();"><i class="fa-solid fa-gift"></i> Reward Points Board</a>
+            <a class="nav-item" id="nav-act" onclick="switchTab('activities', this)"><i class="fa-solid fa-rocket"></i> PCDP Activities</a>
+            <a class="nav-item" id="nav-place" onclick="switchTab('placement', this)"><i class="fa-solid fa-briefcase"></i> Placement Hub</a>
+            <a class="nav-item" id="nav-rewards" onclick="switchTab('rewards', this)"><i class="fa-solid fa-gift"></i> Rewards / Points</a>
+            <a class="nav-item" id="nav-leaves" onclick="switchTab('leaves', this)"><i class="fa-solid fa-calendar-minus"></i> Leaves</a>
+            <a class="nav-item" id="nav-profile" onclick="switchTab('profile', this)"><i class="fa-solid fa-user"></i> Profile</a>
         </div>
         <div class="nav-bottom">
             <a class="nav-item" style="color: var(--danger);" onclick="signOut()"><i class="fa-solid fa-power-off"></i> Secure Logout</a>
@@ -159,7 +150,7 @@
                 </div>
             </div>
 
-            <div id="view-announcements" class="view-section">
+            <div id="view-notices" class="view-section">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <div>
                         <h1 class="page-title">Official Notice Board</h1>
@@ -197,54 +188,6 @@
                     <h1 class="page-title">Academic Transcript</h1>
                 </div>
                 <div class="academics-grid" id="academics-container"></div>
-            </div>
-
-            <div id="view-college-placement" class="view-section">
-                <div class="flex-between" style="margin-bottom: 24px; align-items: center;">
-                    <div>
-                        <h1 class="page-title">College Placement Analytics</h1>
-                        <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.85rem;">Global recruitment drives and college-wide statistics.</p>
-                    </div>
-                </div>
-
-                <div class="stats-grid" style="margin-bottom: 24px;">
-                    <div class="stat-box">
-                        <div class="stat-title">Total Placed</div>
-                        <div class="stat-val" style="color: var(--success);"><span id="val-g-total">--</span></div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-title">Ongoing Drives</div>
-                        <div class="stat-val" style="color: var(--primary);"><span id="val-g-ongoing">--</span></div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-title">Highest CTC</div>
-                        <div class="stat-val" style="color: #B45309;"><div><span id="val-g-highest">--</span> <span style="font-size: 0.8rem; color: var(--text-muted);">LPA</span></div></div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-title">Average CTC</div>
-                        <div class="stat-val"><div><span id="val-g-avg">--</span> <span style="font-size: 0.8rem; color: var(--text-muted);">LPA</span></div></div>
-                    </div>
-                </div>
-
-                <div class="table-wrapper">
-                    <div class="flex-between" style="padding: 16px 24px; border-bottom: 1px solid var(--border); background: #F8FAFC;">
-                        <h3 style="font-size: 0.95rem; font-weight: 800; margin: 0; color: var(--text-main);">Campus Recruitment Drives</h3>
-                    </div>
-                    <table class="modern-table">
-                        <thead><tr><th>Company Name</th><th>Role Profile</th><th>Appeared</th><th>Selected</th><th>Salary Package</th></tr></thead>
-                        <tbody id="global-drives-tbody"></tbody>
-                    </table>
-                </div>
-            </div>
-            <div id="view-apply-companies" class="view-section">
-                <div class="flex-between" style="margin-bottom: 24px; align-items: center;">
-                    <div>
-                        <h1 class="page-title">Current Job Openings</h1>
-                        <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.85rem;">Browse and apply for active campus drives.</p>
-                    </div>
-                </div>
-                <div id="student-drives-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;">
-                    </div>
             </div>
 
             <div id="view-placement" class="view-section">
@@ -349,14 +292,14 @@
                     </div>
 
                     <div class="table-wrapper" style="margin-top: 24px;">
-                    <div class="flex-between" style="padding: 16px 24px; border-bottom: 1px solid var(--border); background: white;">
-                        <h3 style="font-size: 0.95rem; font-weight: 800; margin: 0; color: var(--text-main);">My Application Track Record</h3>
+                        <div class="flex-between" style="padding: 16px 24px; border-bottom: 1px solid var(--border); background: white;">
+                            <h3 style="font-size: 0.95rem; font-weight: 800; margin: 0; color: var(--text-main);">My Application Track Record</h3>
+                        </div>
+                        <table class="modern-table" style="background: white;">
+                            <thead><tr><th>Company Name</th><th>Role Profile</th><th>Date Applied</th><th>Status / Result</th><th>Action</th></tr></thead>
+                            <tbody id="student-apps-tbody"></tbody>
+                        </table>
                     </div>
-                    <table class="modern-table" style="background: white;">
-                        <thead><tr><th>Company Name</th><th>Role Profile</th><th>Date Applied</th><th>Status / Result</th><th>Action</th></tr></thead>
-                        <tbody id="student-apps-tbody"></tbody>
-                    </table>
-                </div>
                 </div>
             </div>
 
@@ -389,6 +332,120 @@
                             <tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading data...</td></tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <div id="view-leaves" class="view-section">
+                <div class="flex-between" style="margin-bottom: 24px;">
+                    <div>
+                        <h1 class="page-title">Leave Management</h1>
+                        <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.85rem;">Track your attendance exceptions and apply for new leaves.</p>
+                    </div>
+                    <button class="action-btn btn-primary"><i class="fa-solid fa-plus"></i> Apply for Leave</button>
+                </div>
+
+                <div class="stats-grid" style="margin-bottom: 24px;">
+                    <div class="stat-box">
+                        <div class="stat-title">Total Allowed</div>
+                        <div class="stat-val">12</div>
+                    </div>
+                    <div class="stat-box" style="background: var(--warning-light); border-color: transparent;">
+                        <div class="stat-title" style="color: #B45309;">Leaves Taken</div>
+                        <div class="stat-val" style="color: #B45309;">4</div>
+                    </div>
+                    <div class="stat-box" style="background: var(--success-light); border-color: transparent;">
+                        <div class="stat-title" style="color: var(--success);">Leaves Remaining</div>
+                        <div class="stat-val" style="color: var(--success);">8</div>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <div class="flex-between" style="padding: 16px 20px; border-bottom: 1px solid var(--border); background: white;">
+                        <h3 style="font-size: 0.95rem; font-weight: 800; margin: 0;">Leave History</h3>
+                    </div>
+                    <table class="modern-table">
+                        <thead>
+                            <tr>
+                                <th>Date(s)</th>
+                                <th>Reason</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="font-weight: 600; color: var(--text-main);">12 Feb 2026 - 13 Feb 2026</td>
+                                <td style="color: var(--text-muted);">Attending Web Development Hackathon</td>
+                                <td><span class="badge badge-primary">On Duty (OD)</span></td>
+                                <td><span class="badge badge-success">Approved</span></td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: 600; color: var(--text-main);">05 Jan 2026</td>
+                                <td style="color: var(--text-muted);">Medical Emergency</td>
+                                <td><span class="badge" style="background: #F1F5F9; color: #475569;">Sick Leave</span></td>
+                                <td><span class="badge badge-success">Approved</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="view-profile" class="view-section">
+                <div class="flex-between" style="margin-bottom: 24px;">
+                    <div>
+                        <h1 class="page-title">My Profile</h1>
+                        <p style="color: var(--text-muted); margin-top: 6px; font-size: 0.85rem;">Manage your personal information and account settings.</p>
+                    </div>
+                    <button class="action-btn btn-outline" style="color: var(--primary); border-color: var(--primary);"><i class="fa-solid fa-pen"></i> Edit Profile</button>
+                </div>
+
+                <div class="dash-grid" style="grid-template-columns: 1fr 2fr;">
+                    <div class="card" style="text-align: center; padding: 40px 20px;">
+                        <img src="https://ui-avatars.com/api/?name=Sivanagu&background=4F46E5&color=fff&size=120" style="border-radius: 50%; margin-bottom: 20px; border: 4px solid #EEF2FF;">
+                        <h2 style="font-size: 1.4rem; font-weight: 800; margin: 0 0 8px 0; color: var(--text-main);">Sivanagu E</h2>
+                        <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0 0 16px 0;">Information Technology</p>
+                        <span class="badge badge-success" style="font-size: 0.8rem; padding: 6px 12px;">Active Student</span>
+                        
+                        <div style="margin-top: 30px; border-top: 1px dashed var(--border); padding-top: 20px; display: flex; flex-direction: column; gap: 12px; text-align: left;">
+                            <div style="font-size: 0.85rem;"><i class="fa-brands fa-github" style="color: var(--text-muted); width: 20px;"></i> <a href="#" style="color: var(--primary); font-weight: 600; text-decoration: none;">GitHub Profile</a></div>
+                            <div style="font-size: 0.85rem;"><i class="fa-brands fa-linkedin" style="color: var(--text-muted); width: 20px;"></i> <a href="#" style="color: var(--primary); font-weight: 600; text-decoration: none;">LinkedIn Profile</a></div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="padding: 30px;">
+                        <h3 style="font-size: 1.1rem; font-weight: 800; margin: 0 0 24px 0; color: var(--text-main); border-bottom: 1px solid var(--border); padding-bottom: 12px;">Personal Details</h3>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Full Name</label>
+                                <div style="font-size: 1rem; font-weight: 600; color: var(--text-main); margin-top: 4px;">Sivanagu E</div>
+                            </div>
+                            <div>
+                                <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Roll Number</label>
+                                <div style="font-size: 1rem; font-weight: 600; color: var(--text-main); margin-top: 4px; font-family: monospace;">BIT-IT-001</div>
+                            </div>
+                            <div>
+                                <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Email Address</label>
+                                <div style="font-size: 1rem; font-weight: 600; color: var(--text-main); margin-top: 4px;">sivanagu@bitsathy.ac.in</div>
+                            </div>
+                            <div>
+                                <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Primary Interests</label>
+                                <div style="font-size: 1rem; font-weight: 600; color: var(--text-main); margin-top: 4px;">Python, Full Stack Dev</div>
+                            </div>
+                        </div>
+
+                        <h3 style="font-size: 1.1rem; font-weight: 800; margin: 32px 0 24px 0; color: var(--text-main); border-bottom: 1px solid var(--border); padding-bottom: 12px;">Contact Information</h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Phone Number</label>
+                                <div style="font-size: 1rem; font-weight: 600; color: var(--text-main); margin-top: 4px;">+91 98765 43210</div>
+                            </div>
+                            <div>
+                                <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Residential City</label>
+                                <div style="font-size: 1rem; font-weight: 600; color: var(--text-main); margin-top: 4px;">Tiruppur</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             

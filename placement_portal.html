@@ -61,32 +61,25 @@
     <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
     <aside class="sidebar" id="sidebar">
-        <div class="brand"><i class="fa-solid fa-building-columns"></i> <span>Placement Hub</span></div>
-        <div class="nav-menu" style="margin-top: 10px;">
-            <p style="font-size: 0.7rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin: 0 0 10px 16px;">Admin Menu</p>
-            
-            <a class="nav-item active" id="nav-dashboard" onclick="switchTab('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> Dashboard</a>
-            <a class="nav-item" id="nav-students" onclick="switchTab('students', this)"><i class="fa-solid fa-user-graduate"></i> Student Management</a>
-            <a class="nav-item" id="nav-analysis-list" onclick="switchTab('analysis-list', this)"><i class="fa-solid fa-microscope"></i> Student Analysis</a>
-            <a class="nav-item" id="nav-all-placements" onclick="switchTab('all-placements', this); loadAllPlacements();"><i class="fa-solid fa-graduation-cap"></i> Student Placements</a>
-            <a class="nav-item" id="nav-college-placement" onclick="switchTab('college-placement', this)"><i class="fa-solid fa-chart-line"></i> College Placement</a>
-            
-            <a class="nav-item" id="nav-student-login" onclick="switchTab('student-login', this)"><i class="fa-solid fa-user-lock"></i> Secure Profile Editor</a>
-            
-            <a class="nav-item editor-nav" id="nav-edit-list" onclick="switchTab('edit-list', this)" style="display: none; background: #FEF2F2; color: #B91C1C; margin-top: 8px;"><i class="fa-solid fa-user-pen"></i> Skill Editor List</a>
-            <a class="nav-item editor-nav" id="nav-edit-detail" onclick="switchTab('edit-detail', this)" style="display: none; background: #FEF2F2; color: #B91C1C;"><i class="fa-solid fa-sliders"></i> Editing Skills</a>
-
-            <a class="nav-item" id="nav-companies" onclick="switchTab('companies', this)" style="margin-top: 8px;"><i class="fa-solid fa-building"></i> Company Management</a>
-            <a class="nav-item" id="nav-drives" onclick="switchTab('drives', this)"><i class="fa-solid fa-briefcase"></i> Job / Internship Drives</a>
-            <a class="nav-item" id="nav-statistics" onclick="switchTab('statistics', this)"><i class="fa-solid fa-chart-simple"></i> Placement Statistics</a>
-            <a class="nav-item" id="nav-events" onclick="switchTab('events', this)"><i class="fa-solid fa-chalkboard-user"></i> Events / Training Mgmt</a>
-            <a class="nav-item" id="nav-announcements" onclick="switchTab('announcements', this)"><i class="fa-solid fa-bell"></i> Notifications / Updates</a>
-            <a class="nav-item" id="nav-eligibility" onclick="switchTab('eligibility', this)"><i class="fa-solid fa-sliders"></i> Eligibility Criteria</a>
-            <a class="nav-item" id="nav-settings" onclick="switchTab('settings', this)"><i class="fa-solid fa-gear"></i> Admin Settings</a>
-            
-        </div>
-        <div class="nav-bottom"><a class="nav-item" style="color: var(--danger);" onclick="signOut()"><i class="fa-solid fa-power-off"></i> Logout</a></div>
-    </aside>
+    <div class="brand flex-between">
+        <div class="flex-center"><i class="fa-solid fa-building-columns"></i> Placement Hub</div>
+        <i class="fa-solid fa-xmark mobile-menu-btn" style="padding:0;" onclick="toggleSidebar()"></i>
+    </div>
+    <div class="nav-menu">
+        <a class="nav-item active" id="nav-dash" onclick="switchTab('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> Dashboard</a>
+        <a class="nav-item" id="nav-students" onclick="switchTab('students', this)"><i class="fa-solid fa-user-graduate"></i> Student Management</a>
+        <a class="nav-item" id="nav-companies" onclick="switchTab('companies', this)"><i class="fa-solid fa-building"></i> Company Management</a>
+        <a class="nav-item" id="nav-drives" onclick="switchTab('drives', this)"><i class="fa-solid fa-briefcase"></i> Job / Internship Drives</a>
+        <a class="nav-item" id="nav-apps" onclick="switchTab('applications', this)"><i class="fa-solid fa-file-signature"></i> Applications</a>
+        <a class="nav-item" id="nav-stats" onclick="switchTab('statistics', this)"><i class="fa-solid fa-chart-simple"></i> Placement Statistics</a>
+        <a class="nav-item" id="nav-eligibility" onclick="switchTab('eligibility', this)"><i class="fa-solid fa-sliders"></i> Eligibility Criteria</a>
+        <a class="nav-item" id="nav-notifications" onclick="switchTab('notifications', this)"><i class="fa-solid fa-bell"></i> Notifications</a>
+        <a class="nav-item" id="nav-settings" onclick="switchTab('settings', this)"><i class="fa-solid fa-gear"></i> Settings</a>
+    </div>
+    <div class="nav-bottom">
+        <a class="nav-item" style="color: var(--danger);" onclick="signOut()"><i class="fa-solid fa-power-off"></i> Secure Logout</a>
+    </div>
+</aside>
 
     <main class="main-content">
         <header class="top-header">

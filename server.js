@@ -61,7 +61,11 @@ const promisePool = dbPool.promise();
         await promisePool.query(`CREATE TABLE IF NOT EXISTS announcements (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), type VARCHAR(50), content TEXT, date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
         try { await promisePool.query(`ALTER TABLE announcements ADD COLUMN target_department VARCHAR(100) DEFAULT 'ALL'`); } catch(e){}
 
-        console.log("✅ Database Verified: Strict Skill Update & Delete Routes Enabled.");
+        // 🛑 NEW: STAFF & DEPARTMENT TABLES
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS staff_directory (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), email VARCHAR(255), role VARCHAR(100), dept VARCHAR(100))`);
+        await promisePool.query(`CREATE TABLE IF NOT EXISTS departments (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), code VARCHAR(50), students INT DEFAULT 0, faculty INT DEFAULT 0, icon VARCHAR(100), color VARCHAR(50), bg VARCHAR(50))`);
+
+        console.log("✅ Database Verified: Staff & Departments Tables Ready.");
     } catch (err) { console.error("❌ DB Init Error:", err.message); }
 })();
 
@@ -159,7 +163,6 @@ app.post('/api/auth', async (req, res) => {
     } catch (error) { res.json({ success: false, message: `Login Error: ${error.message}` }); }
 });
 
-
 // ============================================================================
 // --- PCDP MASTER ROUTES ---
 // ============================================================================
@@ -236,31 +239,21 @@ app.post(['/api/admin/assign-pcdp', '/api/admin/assign-course', '/api/pcdp/assig
     } catch (e) { console.error("Assign PCDP Error:", e); res.json({ success: false, message: e.message }); }
 });
 
-// 🛑 FULLY VALIDATED SKILL UPDATE
 app.post('/api/admin/update-skill', async (req, res) => {
     try {
         await verifyAdmin(req.body);
         const { id, completed_levels } = req.body;
-        
         if(!id) return res.json({ success: false, message: "Missing Skill ID" });
-        
-        // Ensure student doesn't exceed maximum levels (Backend check)
         const [skill] = await promisePool.query("SELECT total_levels FROM student_skills WHERE id = ?", [id]);
         if(skill.length === 0) return res.json({ success: false, message: "Skill not found." });
-        
         const maxLevels = Number(skill[0].total_levels);
         const compLevels = Number(completed_levels);
-        
-        if (compLevels > maxLevels || compLevels < 0) {
-            return res.json({ success: false, message: `Completed levels (${compLevels}) must be between 0 and ${maxLevels}.` });
-        }
-        
+        if (compLevels > maxLevels || compLevels < 0) { return res.json({ success: false, message: `Completed levels (${compLevels}) must be between 0 and ${maxLevels}.` }); }
         await promisePool.query(`UPDATE student_skills SET completed_levels = ? WHERE id = ?`, [compLevels, id]);
         res.json({ success: true });
     } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
-// 🛑 REMOVE SKILL FROM STUDENT
 app.post('/api/admin/remove-skill', async (req, res) => {
     try {
         await verifyAdmin(req.body);
@@ -303,6 +296,54 @@ app.post('/api/admin/all-applications', async (req, res) => { try { await verify
 app.post('/api/admin/update-app-status', async (req, res) => { try { await verifyAdmin(req.body); await promisePool.query(`UPDATE placement_apps SET status = ? WHERE id = ?`, [req.body.status, req.body.app_id]); res.json({ success: true }); } catch (e) { res.json({ success: false, message: e.message }); } });
 app.post('/api/admin/mark-placed', async (req, res) => { try { await verifyAdmin(req.body); await promisePool.query(`UPDATE placement_apps SET status = ?, salary_package = ?, internship_period = ?, call_letter_url = ? WHERE id = ?`, [req.body.status, req.body.package, req.body.internship, req.body.offer_link, req.body.app_id]); if(req.body.status === 'Placed' || req.body.status === 'Selected') { const [app] = await promisePool.query(`SELECT student_email, company, role FROM placement_apps WHERE id = ?`, [req.body.app_id]); if(app.length > 0) { await promisePool.query(`INSERT INTO placement_student_profile (student_email, offer_company, offer_role, offer_ctc, status) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE offer_company = ?, offer_role = ?, offer_ctc = ?, status = ?`, [app[0].student_email, app[0].company, app[0].role, req.body.package, req.body.status, app[0].company, app[0].role, req.body.package, req.body.status]); } } res.json({ success: true }); } catch (e) { res.json({ success: false, message: e.message }); } });
 app.post('/api/admin/drive-applicants', async (req, res) => { try { await verifyAdmin(req.body); const [rows] = await promisePool.query(`SELECT pa.id as app_id, pa.student_email, pa.status, pa.date_applied, sp.full_name, sp.department, sp.roll_no, psp.resume_url FROM placement_apps pa JOIN student_profile sp ON pa.student_email = sp.email LEFT JOIN placement_student_profile psp ON pa.student_email = psp.student_email WHERE pa.company = ? AND pa.role = ? ORDER BY pa.id DESC`, [req.body.company, req.body.role]); res.json({ success: true, applicants: rows }); } catch (e) { res.json({ success: false, message: e.message }); } });
+
+
+// ============================================================================
+// 🛑 NEW: STAFF & DEPARTMENT ROUTES (CRUD)
+// ============================================================================
+
+// STAFF ROUTES
+app.post('/api/admin/staff/list', async (req, res) => {
+    try { await verifyAdmin(req.body); const [rows] = await promisePool.query("SELECT * FROM staff_directory ORDER BY id DESC"); res.json({ success: true, staff: rows }); } 
+    catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/admin/staff/add', async (req, res) => {
+    try { await verifyAdmin(req.body); await promisePool.query("INSERT INTO staff_directory (name, email, role, dept) VALUES (?, ?, ?, ?)", [req.body.name, req.body.email, req.body.role, req.body.dept]); res.json({ success: true }); } 
+    catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/admin/staff/edit', async (req, res) => {
+    try { await verifyAdmin(req.body); await promisePool.query("UPDATE staff_directory SET name=?, email=?, role=?, dept=? WHERE id=?", [req.body.name, req.body.email, req.body.role, req.body.dept, req.body.id]); res.json({ success: true }); } 
+    catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/admin/staff/delete', async (req, res) => {
+    try { await verifyAdmin(req.body); await promisePool.query("DELETE FROM staff_directory WHERE id=?", [req.body.id]); res.json({ success: true }); } 
+    catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+// DEPARTMENT ROUTES
+app.post('/api/admin/departments/list', async (req, res) => {
+    try { await verifyAdmin(req.body); const [rows] = await promisePool.query("SELECT * FROM departments ORDER BY id DESC"); res.json({ success: true, departments: rows }); } 
+    catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/admin/departments/add', async (req, res) => {
+    try { await verifyAdmin(req.body); await promisePool.query("INSERT INTO departments (name, code, students, faculty, icon, color, bg) VALUES (?, ?, ?, ?, ?, ?, ?)", [req.body.name, req.body.code, req.body.students, req.body.faculty, req.body.icon, req.body.color, req.body.bg]); res.json({ success: true }); } 
+    catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/admin/departments/edit', async (req, res) => {
+    try { await verifyAdmin(req.body); await promisePool.query("UPDATE departments SET name=?, code=?, students=?, faculty=? WHERE id=?", [req.body.name, req.body.code, req.body.students, req.body.faculty, req.body.id]); res.json({ success: true }); } 
+    catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/admin/departments/delete', async (req, res) => {
+    try { await verifyAdmin(req.body); await promisePool.query("DELETE FROM departments WHERE id=?", [req.body.id]); res.json({ success: true }); } 
+    catch (e) { res.json({ success: false, message: e.message }); }
+});
+
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 BACKEND READY ON PORT ${PORT}`));

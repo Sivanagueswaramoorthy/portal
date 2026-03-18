@@ -8,8 +8,18 @@ let allStudentsList = [];
 let targetStudentEmail = ""; 
 let originalValues = {}; 
 let gpaChartInstance = null;
-
 let currentStudentSkills = []; 
+
+// UI State Managers for new tabs (Mocking DB until backend is updated)
+let staffDirectoryList = [
+    { id: 1, name: 'Dr. Smith', email: 'smith.faculty@bitsathy.ac.in', role: 'Professor', dept: 'Information Technology' },
+    { id: 2, name: 'Prof. Johnson', email: 'johnson@bitsathy.ac.in', role: 'Asst. Professor', dept: 'Computer Science' }
+];
+
+let departmentsList = [
+    { id: 1, name: 'Information Technology', code: 'IT', students: 240, faculty: 18, icon: 'fa-laptop-code', color: '#4F46E5', bg: '#EEF2FF' },
+    { id: 2, name: 'Computer Science', code: 'CSE', students: 320, faculty: 24, icon: 'fa-microchip', color: '#16A34A', bg: '#DCFCE7' }
+];
 
 const esc = (str) => { if (!str) return '--'; return String(str).replace(/'/g, "&#39;").replace(/"/g, '&quot;'); };
 
@@ -29,6 +39,9 @@ window.onload = async () => {
         document.getElementById('headerImage').src = data.profile.picture || `https://ui-avatars.com/api/?name=Admin&background=4F46E5&color=fff`;
 
         fetchDirectory();
+        fetchAdminAnnouncements();
+        renderStaffDirectory();
+        renderDepartments();
     } catch (e) { 
         console.error("Dashboard Load Warning: Backend sleeping.", e);
     }
@@ -51,7 +64,7 @@ function closeModal(modalId) { const modal = document.getElementById(modalId); i
 
 
 // ==============================================================================
-// --- DIRECTORY & STUDENT PROFILES ---
+// --- DIRECTORY & STUDENT PROFILES (CRUD) ---
 // ==============================================================================
 
 async function fetchDirectory() {
@@ -76,12 +89,14 @@ function renderDirectory(students) {
     if(!tbody) return;
     if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
     tbody.innerHTML = students.map(s => {
-        return `<tr class="dir-row" onclick="loadStudentData('${esc(s.email)}')">
-            <td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td>
-            <td style="color: var(--text-muted);">${s.email}</td>
-            <td style="font-family: monospace;">${s.roll_no || '--'}</td>
+        return `<tr class="dir-row">
+            <td style="font-weight:600; color: var(--text-main); cursor: pointer;" onclick="loadStudentData('${esc(s.email)}')"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td>
+            <td style="color: var(--text-muted); cursor: pointer;" onclick="loadStudentData('${esc(s.email)}')">${s.email}</td>
+            <td style="font-family: monospace; cursor: pointer;" onclick="loadStudentData('${esc(s.email)}')">${s.roll_no || '--'}</td>
             <td><span class="badge badge-primary">${s.department || '--'}</span></td>
-            <td style="text-align: right; color: var(--text-muted);"><i class="fa-solid fa-chevron-right"></i></td>
+            <td style="text-align: right;">
+                <button class="action-icon cancel" style="padding: 6px; border: 1px solid var(--danger); border-radius: 6px;" onclick="deleteStudent('${esc(s.email)}', '${esc(s.full_name)}')"><i class="fa-solid fa-trash" style="color: var(--danger);"></i></button>
+            </td>
         </tr>`;
     }).join('');
 }
@@ -92,14 +107,47 @@ function filterDirectory() {
     renderDirectory(filtered);
 }
 
+// Create Student
+async function submitNewStudent() {
+    const email = document.getElementById('new-email').value.trim();
+    const name = document.getElementById('new-name').value.trim();
+    const roll = document.getElementById('new-roll').value.trim();
+    const dept = document.getElementById('new-dept').value.trim();
+
+    if(!email || !name) return alert("Email and Student Name are required.");
+    
+    // Simulate Backend Creation (Fallback to manual UI update if endpoint missing)
+    try {
+        await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email, field: 'full_name', value: name }) });
+        await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email, field: 'roll_no', value: roll }) });
+        await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email, field: 'department', value: dept }) });
+        
+        closeModal('add-modal');
+        document.getElementById('new-email').value = ''; document.getElementById('new-name').value = '';
+        fetchDirectory();
+        alert("Student registered successfully.");
+    } catch (e) { alert("Network Error: Could not add student."); }
+}
+
+// Delete Student
+async function deleteStudent(email, name) {
+    if(!confirm(`⚠️ WARNING: Are you sure you want to completely delete ${name} (${email})?\n\nThis will erase their profile, academic records, and skills.`)) return;
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/delete-student`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) });
+        const res = await req.json();
+        if(res.success) { fetchDirectory(); } else { alert("Failed to delete student."); }
+    } catch(e) { alert("Network error while trying to delete."); }
+}
+
 function backToDirectory() {
     document.querySelectorAll('.admin-global').forEach(e => e.style.display = 'flex');
     document.querySelectorAll('.student-nav').forEach(e => e.style.display = 'none');
-    switchTab('directory', document.getElementById('nav-dir'));
+    switchTab('students', document.getElementById('nav-students'));
     targetStudentEmail = "";
     currentStudentSkills = []; 
 }
 
+// Load Specific Student Data into Dashboard
 async function loadStudentData(email) {
     targetStudentEmail = email;
     document.querySelectorAll('.admin-global').forEach(e => e.style.display = 'none');
@@ -121,7 +169,6 @@ async function loadStudentData(email) {
 function renderChart(courses, semGpas) {
     const ctx = document.getElementById('gpaChart');
     if(!ctx) return;
-    
     let labels = []; let dataPoints = []; let gpaMap = {}; 
     if(semGpas) semGpas.forEach(g => gpaMap[g.semester] = g.gpa);
 
@@ -146,7 +193,6 @@ function renderChart(courses, semGpas) {
 function processImageUrl(url) {
     if (!url || url.trim() === "") return 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
     let finalUrl = url.trim();
-    // Auto-convert Google Drive view links to direct image links!
     const driveMatch = finalUrl.match(/drive\.google\.com\/file\/d\/([^\/]+)/);
     if (driveMatch && driveMatch[1]) { return `https://drive.google.com/uc?id=${driveMatch[1]}`; }
     return finalUrl;
@@ -177,13 +223,10 @@ function populateDashboard(p, courses, skills, semGpas) {
             if(document.getElementById('act-progress')) document.getElementById('act-progress').innerText = skills.filter(s => s.completed_levels < s.total_levels).length;
             skillsContainer.innerHTML = skills.map(c => {
                 const total = Number(c.total_levels) || 1; const comp = Number(c.completed_levels) || 0; const pct = Math.round((comp / total) * 100);
-                
                 const imgUrl = processImageUrl(c.image_url);
                 const fallbackImg = 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80'; 
-                
                 let segmentsHtml = ''; for(let i=0; i<total; i++) { segmentsHtml += `<div style="flex: 1; border-radius: 4px; background: ${i < comp ? '#8B5CF6' : '#E2E8F0'}; height: 6px;"></div>`; }
                 
-                // 🛑 Note the total parameter passed in openProfileEdit
                 return `
                 <div class="skill-card">
                     <div style="height: 140px; width: 100%; position: relative; flex-shrink: 0; border-radius: 12px 12px 0 0; overflow: hidden; background: var(--bg-app);">
@@ -235,7 +278,7 @@ function populateDashboard(p, courses, skills, semGpas) {
 }
 
 // ==============================================================================
-// --- INLINE EDITING LOGIC (WITH STRICT UX VALIDATION) ---
+// --- INLINE EDITING LOGIC ---
 // ==============================================================================
 
 function openProfileEdit(field, spanId, width, customId, totalLevels) {
@@ -248,11 +291,9 @@ function cancelProfileEdit(spanId, field, width, customId, totalLevels) {
     wrapper.innerHTML = `<span id="${spanId}">${originalValues[spanId]}</span><i class="fa-solid fa-pen admin-table-edit" onclick="openProfileEdit('${field}', '${spanId}', '${width}', '${customId}', '${totalLevels}')"></i>`;
 }
 
-// 🛑 UPDATED: Blocks impossible levels (e.g. 15 completed levels out of 10 total)
 async function saveProfileEdit(field, spanId, width, customId, totalLevels) {
     const val = document.getElementById(`in-${spanId}`).value; 
     
-    // 🛑 VALIDATION LOGIC
     if (field === 'completed_levels' && totalLevels) {
         if (Number(val) > Number(totalLevels)) {
             alert(`❌ Invalid Input!\n\nYou entered ${val}, but the maximum levels for this course is ${totalLevels}.`);
@@ -283,7 +324,6 @@ async function saveProfileEdit(field, spanId, width, customId, totalLevels) {
     }
 }
 
-// 🛑 REMOVE SKILL FROM STUDENT
 async function removeAssignedSkill(id, skillName) {
     if(!confirm(`Are you sure you want to completely remove "${skillName}" from this student's profile?`)) return;
     try {
@@ -319,7 +359,6 @@ async function deleteCourse(id) { if(!confirm("Delete subject record?")) return;
 // =========================================================
 // 🛑 ANNOUNCEMENTS LOGIC
 // =========================================================
-// ... (The rest of the file remains exactly as provided before for announcements and course assignments)
 async function fetchAdminAnnouncements() {
     const feed = document.getElementById('admin-ann-feed');
     if(!feed) return;
@@ -349,6 +388,10 @@ async function submitAnnouncement() {
 }
 async function deleteAnnouncement(id) { if(!confirm("Delete this announcement?")) return; await fetch(`${BASE_URL}/api/admin/delete-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); fetchAdminAnnouncements(); }
 
+
+// =========================================================
+// 🛑 PCDP COURSE ASSIGNMENT
+// =========================================================
 window.masterPcdpCourses = [];
 
 function getAvailableCourses() {
@@ -427,3 +470,125 @@ async function submitCourseAssignment() {
     btn.innerHTML = originalText;
     btn.disabled = false;
 }
+
+// =========================================================
+// 🛑 STAFF DIRECTORY (CRUD UI State Manager)
+// =========================================================
+function renderStaffDirectory() {
+    const tbody = document.querySelector('#view-staff tbody');
+    if(!tbody) return;
+    if(staffDirectoryList.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No staff found.</td></tr>`; return; }
+    
+    tbody.innerHTML = staffDirectoryList.map(staff => `
+        <tr id="staff-row-${staff.id}">
+            <td style="font-weight:600; color: var(--text-main);">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(staff.name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;">
+                    <div id="staff-name-${staff.id}">${staff.name}</div>
+                </div>
+            </td>
+            <td style="color: var(--text-muted);" id="staff-email-${staff.id}">${staff.email}</td>
+            <td><span class="badge" style="background: #FEF3C7; color: #92400E;" id="staff-role-${staff.id}">${staff.role}</span></td>
+            <td id="staff-dept-${staff.id}">${staff.dept}</td>
+            <td>
+                <div style="display: flex; gap: 8px;">
+                    <i class="fa-solid fa-pen admin-table-edit" onclick="editStaff(${staff.id})"></i>
+                    <i class="fa-solid fa-trash admin-table-del" style="color: var(--danger);" onclick="deleteStaff(${staff.id})"></i>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function addStaff() {
+    const newStaff = { id: Date.now(), name: 'New Faculty', email: 'faculty@bitsathy.ac.in', role: 'Professor', dept: 'IT' };
+    staffDirectoryList.push(newStaff);
+    renderStaffDirectory();
+}
+
+function deleteStaff(id) {
+    if(!confirm("Are you sure you want to remove this staff member?")) return;
+    staffDirectoryList = staffDirectoryList.filter(s => s.id !== id);
+    renderStaffDirectory();
+}
+
+function editStaff(id) {
+    const staff = staffDirectoryList.find(s => s.id === id);
+    if(!staff) return;
+    const nameStr = prompt("Update Name:", staff.name) || staff.name;
+    const emailStr = prompt("Update Email:", staff.email) || staff.email;
+    const roleStr = prompt("Update Role:", staff.role) || staff.role;
+    
+    staff.name = nameStr; staff.email = emailStr; staff.role = roleStr;
+    renderStaffDirectory();
+}
+
+// Hooking up the "Add Staff Member" button in HTML
+document.addEventListener('DOMContentLoaded', () => {
+    const addStaffBtn = document.querySelector('#view-staff .btn-primary');
+    if(addStaffBtn) addStaffBtn.onclick = addStaff;
+});
+
+
+// =========================================================
+// 🛑 DEPARTMENT MANAGEMENT (CRUD UI State Manager)
+// =========================================================
+function renderDepartments() {
+    const grid = document.querySelector('#view-departments > div:nth-of-type(2)');
+    if(!grid) return;
+    grid.innerHTML = departmentsList.map(dept => `
+        <div class="card" style="padding: 24px; display: flex; flex-direction: column;">
+            <div class="flex-between" style="align-items: flex-start; margin-bottom: 16px;">
+                <div style="background: ${dept.bg}; color: ${dept.color}; width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                    <i class="fa-solid ${dept.icon}"></i>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <i class="fa-solid fa-pen" style="color: var(--primary); cursor: pointer; padding: 4px;" onclick="editDepartment(${dept.id})"></i>
+                    <i class="fa-solid fa-trash" style="color: var(--danger); cursor: pointer; padding: 4px;" onclick="deleteDepartment(${dept.id})"></i>
+                </div>
+            </div>
+            <h3 style="font-size: 1.2rem; font-weight: 800; color: var(--text-main); margin: 0 0 4px 0;">${dept.name}</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0 0 20px 0;">Dept. Code: ${dept.code}</p>
+            
+            <div style="background: #F8FAFC; border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; border: 1px solid var(--border); margin-top: auto;">
+                <div style="text-align: center;">
+                    <div style="font-size: 1.2rem; font-weight: 800; color: var(--primary);">${dept.students}</div>
+                    <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Students</div>
+                </div>
+                <div style="width: 1px; background: var(--border);"></div>
+                <div style="text-align: center;">
+                    <div style="font-size: 1.2rem; font-weight: 800; color: var(--success);">${dept.faculty}</div>
+                    <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Faculty</div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function addDepartment() {
+    const newDept = { id: Date.now(), name: 'New Department', code: 'NEW', students: 0, faculty: 0, icon: 'fa-building', color: '#CA8A04', bg: '#FEF9C3' };
+    departmentsList.push(newDept);
+    renderDepartments();
+}
+
+function editDepartment(id) {
+    const dept = departmentsList.find(d => d.id === id);
+    if(!dept) return;
+    dept.name = prompt("Update Department Name:", dept.name) || dept.name;
+    dept.code = prompt("Update Code:", dept.code) || dept.code;
+    dept.students = prompt("Update Student Capacity:", dept.students) || dept.students;
+    dept.faculty = prompt("Update Faculty Count:", dept.faculty) || dept.faculty;
+    renderDepartments();
+}
+
+function deleteDepartment(id) {
+    if(!confirm("Are you sure you want to delete this department block?")) return;
+    departmentsList = departmentsList.filter(d => d.id !== id);
+    renderDepartments();
+}
+
+// Hooking up the "Add Department" button in HTML
+document.addEventListener('DOMContentLoaded', () => {
+    const addDeptBtn = document.querySelector('#view-departments .btn-primary');
+    if(addDeptBtn) addDeptBtn.onclick = addDepartment;
+});

@@ -18,21 +18,23 @@
     <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
     <aside class="sidebar" id="sidebar">
-        <div class="brand flex-between">
-            <div class="flex-center"><i class="fa-solid fa-code"></i> BIT Sathy IT</div>
-            <i class="fa-solid fa-xmark mobile-menu-btn" style="padding:0;" onclick="toggleSidebar()"></i>
-        </div>
-        <div class="nav-menu">
-            <a class="nav-item active" style="background: var(--purple-light); color: var(--purple);">
-                <i class="fa-solid fa-layer-group"></i> Global Repository
-            </a>
-        </div>
-        <div class="nav-bottom">
-            <a class="nav-item" style="color: var(--danger);" onclick="signOut()">
-                <i class="fa-solid fa-power-off"></i> Secure Logout
-            </a>
-        </div>
-    </aside>
+    <div class="brand flex-between">
+        <div class="flex-center"><i class="fa-solid fa-code"></i> BIT Sathy IT</div>
+        <i class="fa-solid fa-xmark mobile-menu-btn" style="padding:0;" onclick="toggleSidebar()"></i>
+    </div>
+    <div class="nav-menu">
+        <a class="nav-item active" id="nav-dash" onclick="switchTab('dashboard', this)"><i class="fa-solid fa-chart-pie"></i> Dashboard</a>
+        <a class="nav-item" id="nav-repo" onclick="switchTab('repository', this)"><i class="fa-solid fa-layer-group"></i> Course Repository</a>
+        <a class="nav-item" id="nav-create" onclick="switchTab('create', this)"><i class="fa-solid fa-plus-circle"></i> Create Course</a>
+        <a class="nav-item" id="nav-assign" onclick="switchTab('assign', this)"><i class="fa-solid fa-user-plus"></i> Assign Courses</a>
+        <a class="nav-item" id="nav-progress" onclick="switchTab('progress', this)"><i class="fa-solid fa-chart-bar"></i> Student Progress</a>
+        <a class="nav-item" id="nav-levels" onclick="switchTab('levels', this)"><i class="fa-solid fa-list-ol"></i> Levels / Modules</a>
+        <a class="nav-item" id="nav-reports" onclick="switchTab('reports', this)"><i class="fa-solid fa-file-lines"></i> Reports</a>
+    </div>
+    <div class="nav-bottom">
+        <a class="nav-item" style="color: var(--danger);" onclick="signOut()"><i class="fa-solid fa-power-off"></i> Secure Logout</a>
+    </div>
+</aside>
 
     <main class="main-content">
         <header class="top-header">
