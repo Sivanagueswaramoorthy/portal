@@ -14,6 +14,7 @@ process.on('unhandledRejection', err => console.error('Unhandled Rejection:', er
 const CLIENT_ID = "159246343111-o9bv4lgk1hmmvdkef0qnq0ih9qefjhmj.apps.googleusercontent.com";
 const googleClient = new OAuth2Client(CLIENT_ID);
 
+// 🛑 DATABASE CONNECTION
 const dbPool = mysql.createPool({
     host: 'mysql-32a5e69e-sivanagu7771-74ba.d.aivencloud.com',
     port: 17949, 
@@ -26,6 +27,7 @@ const dbPool = mysql.createPool({
 });
 const promisePool = dbPool.promise();
 
+// 🛑 AUTOMATIC DATABASE INITIALIZATION
 (async function initializeDatabase() {
     try {
         await promisePool.query(`CREATE TABLE IF NOT EXISTS student_profile (email VARCHAR(255) PRIMARY KEY, full_name VARCHAR(255), roll_no VARCHAR(50), department VARCHAR(100))`);
@@ -36,7 +38,7 @@ const promisePool = dbPool.promise();
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN arrears VARCHAR(10) DEFAULT '0'`); } catch(e){}
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN leaves VARCHAR(10) DEFAULT '0'`); } catch(e){}
         
-        // 🛑 NEW: MENTOR ID COLUMN FOR MAPPING
+        // MENTOR MAPPING COLUMN
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN mentor_id INT DEFAULT NULL`); } catch(e){}
         
         await promisePool.query(`CREATE TABLE IF NOT EXISTS pcdp_master_courses (id INT AUTO_INCREMENT PRIMARY KEY, course_name VARCHAR(255), description TEXT, total_levels INT DEFAULT 1, category VARCHAR(100), image_url TEXT)`);
@@ -61,7 +63,7 @@ const promisePool = dbPool.promise();
         await promisePool.query(`CREATE TABLE IF NOT EXISTS announcements (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), type VARCHAR(50), content TEXT, date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
         try { await promisePool.query(`ALTER TABLE announcements ADD COLUMN target_department VARCHAR(100) DEFAULT 'ALL'`); } catch(e){}
 
-        // 🛑 NEW: STAFF & DEPARTMENT TABLES
+        // STAFF & DEPARTMENT TABLES
         await promisePool.query(`CREATE TABLE IF NOT EXISTS staff_directory (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), email VARCHAR(255), role VARCHAR(100), dept VARCHAR(100))`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS departments (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), code VARCHAR(50), students INT DEFAULT 0, faculty INT DEFAULT 0, icon VARCHAR(100), color VARCHAR(50), bg VARCHAR(50))`);
 
@@ -69,6 +71,9 @@ const promisePool = dbPool.promise();
     } catch (err) { console.error("❌ DB Init Error:", err.message); }
 })();
 
+// ============================================================================
+// --- UTILITIES & MIDDLEWARE ---
+// ============================================================================
 function getDepartmentFromEmail(email) {
     let department = 'Not Assigned';
     try {
@@ -102,6 +107,9 @@ async function verifyPCDP(reqBody) {
     throw new Error("Unauthorized PCDP Access");
 }
 
+// ============================================================================
+// --- AUTHENTICATION ROUTES ---
+// ============================================================================
 app.post('/api/hr/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -163,6 +171,7 @@ app.post('/api/auth', async (req, res) => {
     } catch (error) { res.json({ success: false, message: `Login Error: ${error.message}` }); }
 });
 
+
 // ============================================================================
 // --- PCDP MASTER ROUTES ---
 // ============================================================================
@@ -189,6 +198,7 @@ app.post(['/api/admin/assign-pcdp', '/api/admin/assign-course', '/api/pcdp/assig
 app.post('/api/admin/update-skill', async (req, res) => { try { await verifyAdmin(req.body); const { id, completed_levels } = req.body; if(!id) return res.json({ success: false, message: "Missing ID" }); const [skill] = await promisePool.query("SELECT total_levels FROM student_skills WHERE id = ?", [id]); if(skill.length === 0) return res.json({ success: false, message: "Not found." }); const max = Number(skill[0].total_levels); const comp = Number(completed_levels); if (comp > max || comp < 0) return res.json({ success: false, message: "Invalid level." }); await promisePool.query(`UPDATE student_skills SET completed_levels = ? WHERE id = ?`, [comp, id]); res.json({ success: true }); } catch (e) { res.json({ success: false, message: e.message }); } });
 app.post('/api/admin/remove-skill', async (req, res) => { try { await verifyAdmin(req.body); await promisePool.query("DELETE FROM student_skills WHERE id = ?", [req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false, message: e.message }); } });
 
+
 // ============================================================================
 // --- STUDENT GLOBAL ROUTES ---
 // ============================================================================
@@ -197,13 +207,16 @@ app.post('/api/student/all-rewards', async (req, res) => { try { await googleCli
 app.post('/api/student/set-primary', async (req, res) => { try { const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); const email = ticket.getPayload().email.toLowerCase(); await promisePool.query(`INSERT INTO placement_student_profile (student_email, offer_company, offer_role, offer_ctc, status) VALUES (?, ?, ?, ?, 'Placed') ON DUPLICATE KEY UPDATE offer_company = ?, offer_role = ?, offer_ctc = ?, status = 'Placed'`, [email, req.body.company, req.body.role, req.body.ctc, req.body.company, req.body.role, req.body.ctc]); res.json({ success: true }); } catch (e) { res.json({ success: false, message: "Session Expired" }); } });
 app.post('/api/student/apply-drive', async (req, res) => { try { const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); const email = ticket.getPayload().email.toLowerCase(); const [existing] = await promisePool.query("SELECT id FROM placement_apps WHERE student_email=? AND company=? AND role=?", [email, req.body.company, req.body.role]); if(existing.length > 0) return res.json({ success: false, message: "Already applied!" }); const dateStr = new Date().toLocaleDateString('en-GB'); await promisePool.query("INSERT INTO placement_apps (student_email, company, role, date_applied, status) VALUES (?, ?, ?, ?, 'Applied')", [email, req.body.company, req.body.role, dateStr]); res.json({ success: true }); } catch(e) { res.json({ success: false, message: "Session expired" }); } });
 
+
 // ============================================================================
-// 🛑 ADMIN DIRECTORY & MENTOR MAPPING ROUTES (FIXED)
+// 🛑 ADMIN DIRECTORY & MENTOR MAPPING ROUTES 
 // ============================================================================
 app.post('/api/admin/list', async (req, res) => { 
     try { 
-        await verifyAdmin(req.body); 
-        // 🛑 FIX: Selected sp.mentor_id here so the frontend receives it properly
+        let isAllowed = false; try { await verifyAdmin(req.body); isAllowed = true; } catch(e) {}
+        try { if(!isAllowed) { await verifyPCDP(req.body); isAllowed = true; } } catch(e) {}
+        if(!isAllowed) throw new Error("Unauthorized");
+
         const [rows] = await promisePool.query(`SELECT sp.email, sp.full_name, sp.roll_no, sp.department, sp.cgpa, sp.mentor_id, psp.offer_company, psp.status, psp.resume_url FROM student_profile sp LEFT JOIN placement_student_profile psp ON LOWER(sp.email) = LOWER(psp.student_email) ORDER BY sp.full_name ASC`); 
         res.json({ success: true, students: rows }); 
     } catch (e) { res.json({ success: false, message: e.message }); } 
@@ -214,13 +227,11 @@ app.post('/api/admin/save-mentors', async (req, res) => {
         await verifyAdmin(req.body);
         const { staffId, studentEmails, unassignedEmails } = req.body;
         
-        // Assign selected students to this mentor
         if (studentEmails && studentEmails.length > 0) {
             const placeholders = studentEmails.map(() => '?').join(',');
             await promisePool.query(`UPDATE student_profile SET mentor_id = ? WHERE email IN (${placeholders})`, [staffId, ...studentEmails]);
         }
 
-        // Remove unassigned students from this mentor
         if (unassignedEmails && unassignedEmails.length > 0) {
             const placeholders = unassignedEmails.map(() => '?').join(',');
             await promisePool.query(`UPDATE student_profile SET mentor_id = NULL WHERE email IN (${placeholders})`, [...unassignedEmails]);
@@ -233,7 +244,22 @@ app.post('/api/admin/save-mentors', async (req, res) => {
     }
 });
 
-app.post('/api/admin/student-data', async (req, res) => { try { await verifyAdmin(req.body); const rawEmail = req.body.targetEmail || req.body.email; if(!rawEmail) throw new Error("Email not provided"); const email = rawEmail.toLowerCase(); const [profile] = await promisePool.query("SELECT * FROM student_profile WHERE LOWER(email) = ?", [email]); const [courses] = await promisePool.query("SELECT * FROM student_courses WHERE student_email = ? ORDER BY semester ASC", [email]); const [skills] = await promisePool.query("SELECT * FROM student_skills WHERE student_email = ?", [email]); const [semGpas] = await promisePool.query("SELECT semester, gpa FROM student_sem_gpa WHERE student_email = ?", [email]); const [placeProfile] = await promisePool.query("SELECT * FROM placement_student_profile WHERE student_email = ?", [email]); const [placeApps] = await promisePool.query("SELECT * FROM placement_apps WHERE student_email = ? ORDER BY id DESC", [email]); res.json({ success: true, profile: profile[0], courses, skills, semGpas, placeProfile: placeProfile[0], placeApps }); } catch (e) { res.json({ success: false, message: e.message }); } });
+app.post('/api/admin/student-data', async (req, res) => { 
+    try { 
+        let isAllowed = false; try { await verifyAdmin(req.body); isAllowed = true; } catch(e) {}
+        try { if(!isAllowed) { await verifyPCDP(req.body); isAllowed = true; } } catch(e) {}
+        if(!isAllowed) throw new Error("Unauthorized");
+
+        const rawEmail = req.body.targetEmail || req.body.email; if(!rawEmail) throw new Error("Email not provided"); const email = rawEmail.toLowerCase(); 
+        const [profile] = await promisePool.query("SELECT * FROM student_profile WHERE LOWER(email) = ?", [email]); 
+        const [courses] = await promisePool.query("SELECT * FROM student_courses WHERE student_email = ? ORDER BY semester ASC", [email]); 
+        const [skills] = await promisePool.query("SELECT * FROM student_skills WHERE student_email = ?", [email]); 
+        const [semGpas] = await promisePool.query("SELECT semester, gpa FROM student_sem_gpa WHERE student_email = ?", [email]); 
+        const [placeProfile] = await promisePool.query("SELECT * FROM placement_student_profile WHERE student_email = ?", [email]); 
+        const [placeApps] = await promisePool.query("SELECT * FROM placement_apps WHERE student_email = ? ORDER BY id DESC", [email]); 
+        res.json({ success: true, profile: profile[0], courses, skills, semGpas, placeProfile: placeProfile[0], placeApps }); 
+    } catch (e) { res.json({ success: false, message: e.message }); } 
+});
 
 // Admin Deletes/Updates
 app.post('/api/admin/delete-student', async (req, res) => { try { await verifyAdmin(req.body); const rawEmail = req.body.targetEmail || req.body.email; if(!rawEmail) return res.json({ success: false, message: "No email" }); const targetEmail = rawEmail.toLowerCase(); await promisePool.query("DELETE FROM student_profile WHERE LOWER(email) = ?", [targetEmail]); await promisePool.query("DELETE FROM student_courses WHERE LOWER(student_email) = ?", [targetEmail]); await promisePool.query("DELETE FROM student_skills WHERE LOWER(student_email) = ?", [targetEmail]); await promisePool.query("DELETE FROM student_sem_gpa WHERE LOWER(student_email) = ?", [targetEmail]); await promisePool.query("DELETE FROM placement_student_profile WHERE LOWER(student_email) = ?", [targetEmail]); await promisePool.query("DELETE FROM placement_apps WHERE LOWER(student_email) = ?", [targetEmail]); res.json({ success: true }); } catch (e) { res.json({ success: false, message: e.message }); } });

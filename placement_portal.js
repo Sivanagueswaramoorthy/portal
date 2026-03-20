@@ -1,873 +1,375 @@
+let adminToken = localStorage.getItem('pcdp_session_token');
+let masterCoursesData = []; 
+let allStudentsList = [];
+let targetStudentEmail = "";
+let currentStudentSkills = [];
+let originalValues = {}; 
+
 const BASE_URL = 'https://portal-6crm.onrender.com';
 
-let globalToken = localStorage.getItem('bit_session_token'); 
-if (globalToken) { globalToken = globalToken.replace(/['"]+/g, ''); } 
-else { window.location.href = 'index.html'; }
+if (!adminToken) window.location.href = 'index.html';
 
-let allStudentsList = [];
-let targetStudentEmail = ""; 
-let originalValues = {}; 
-window.currentDriveApplicants = [];
-window.allGlobalPlacements = []; 
-window.globalDrivesList = [];
+const esc = (str) => { if (!str) return '--'; return String(str).replace(/'/g, "&#39;").replace(/"/g, '&quot;'); };
 
-// 🛑 ANTI-BREAK ESCAPER
-const esc = (str) => {
-    if (!str) return '--';
-    return String(str).replace(/'/g, "&#39;").replace(/"/g, '&quot;');
+window.onload = async () => { 
+    injectPremiumStyles(); // Setup Toasts
+    loadMasterCourses(); 
+    fetchStudents(); // Load directory data immediately
 };
 
-window.onload = async () => {
-    try {
-        const req = await fetch(`${BASE_URL}/api/auth`, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ token: globalToken }) 
-        });
+// ==============================================================================
+// 🛑 PREMIUM TOAST NOTIFICATION SYSTEM
+// ==============================================================================
+function injectPremiumStyles() {
+    const style = document.createElement('style');
+    style.innerHTML = `
+        .toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 12px; z-index: 999999; }
+        .toast-box { min-width: 320px; max-width: 400px; background: white; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); display: flex; align-items: flex-start; padding: 16px; gap: 14px; transform: translateX(120%); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); border-left: 4px solid var(--primary); }
+        .toast-box.show { transform: translateX(0); }
+        .toast-box.success { border-left-color: #10B981; }
+        .toast-box.error { border-left-color: #EF4444; }
+        .toast-box.warning { border-left-color: #F59E0B; }
+        .toast-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 2px; }
+        .toast-box.success .toast-icon { color: #10B981; }
+        .toast-box.error .toast-icon { color: #EF4444; }
+        .toast-box.warning .toast-icon { color: #F59E0B; }
+        .toast-content { flex: 1; }
+        .toast-title { font-weight: 800; color: #0F172A; font-size: 0.95rem; margin-bottom: 4px; }
+        .toast-msg { color: #64748B; font-size: 0.85rem; line-height: 1.4; }
+        .toast-close { color: #94A3B8; cursor: pointer; transition: 0.2s; font-size: 1.1rem; }
+        .toast-close:hover { color: #0F172A; }
         
-        if (!req.ok) {
-            console.warn("Backend is starting up. Reloading...");
-            setTimeout(() => window.location.reload(), 3000);
-            return;
-        }
-        
-        const data = await req.json();
-        
-        if (!data.success || (!data.isAdmin && !data.isPlacementAdmin && !data.isStaffAdmin)) { 
-            alert(`Access Denied: This portal is restricted to Administrators only.`);
-            localStorage.removeItem('bit_session_token'); 
-            window.location.href = 'index.html'; 
-            return; 
-        }
+        /* Select UI for assignments */
+        .course-option-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: white; border: 1px solid #E2E8F0; border-radius: 12px; cursor: pointer; transition: all 0.2s ease; }
+        .course-option-item:hover { border-color: #C084FC; background: #FAF5FF; transform: translateY(-1px); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+        .course-option-item.selected { border-color: #7E22CE; background: #F3E8FF; box-shadow: 0 0 0 1px #7E22CE; }
+        .course-option-item .check-icon { display: none; color: #7E22CE; font-size: 1.2rem; }
+        .course-option-item.selected .check-icon { display: block; }
+    `;
+    document.head.appendChild(style);
+}
 
-        if(document.getElementById('headerName')) document.getElementById('headerName').innerText = data.profile.full_name || 'Admin';
-        if(document.getElementById('headerEmail')) document.getElementById('headerEmail').innerText = data.profile.email || '';
-        if(document.getElementById('headerImage')) document.getElementById('headerImage').src = data.profile.picture || `https://ui-avatars.com/api/?name=Admin&background=4F46E5&color=fff`;
+function showToast(title, message, type = 'success') {
+    let container = document.getElementById('toast-container');
+    if(!container) { container = document.createElement('div'); container.id = 'toast-container'; container.className = 'toast-container'; document.body.appendChild(container); }
+    const toast = document.createElement('div'); toast.className = `toast-box ${type}`;
+    let icon = 'fa-circle-check'; if(type === 'error') icon = 'fa-circle-xmark'; if(type === 'warning') icon = 'fa-triangle-exclamation';
+    toast.innerHTML = `<i class="fa-solid ${icon} toast-icon"></i><div class="toast-content"><div class="toast-title">${title}</div><div class="toast-msg">${message}</div></div><i class="fa-solid fa-xmark toast-close" onclick="this.parentElement.remove()"></i>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 400); }, 4500);
+}
 
-        // Inject the EXCEL EXPORT Button into the Statistics Tab
-        const statsHeader = document.querySelector('#view-college-placement .flex-between');
-        if (statsHeader && !document.getElementById('btn-export-excel')) {
-            statsHeader.innerHTML += `<button id="btn-export-excel" class="action-btn btn-success" onclick="openExportModal()" style="padding: 10px 16px; font-size: 0.85rem;"><i class="fa-solid fa-file-excel"></i> Export Student Data (CSV)</button>`;
-        }
-
-        // Safe Execution wrappers
-        try { populateGlobalPlacement(data.globalStats, data.globalDrives); } catch(e){}
-        try { await fetchDirectory(); } catch(e){}
-        try { loadAnnouncements(); } catch(e){}
-        try { loadAllPlacements(); } catch(e){}
-        try { loadActiveDrives(); } catch(e){}
-
-    } catch (e) { 
-        console.error("Dashboard Load Warning: Backend sleeping.", e);
-    }
-};
-
-function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebar-overlay').classList.toggle('show'); }
+// ==============================================================================
+// 🛑 NAVIGATION
+// ==============================================================================
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar'); 
+    const overlay = document.getElementById('sidebar-overlay');
+    sidebar.classList.toggle('open');
+    if (sidebar.classList.contains('open')) { overlay.classList.add('show'); } else { overlay.classList.remove('show'); }
+}
 
 function switchTab(tabId, element) { 
-    if (tabId !== 'edit-list' && tabId !== 'edit-detail' && tabId !== 'student-login') {
-        if(document.getElementById('nav-student-login')) document.getElementById('nav-student-login').style.display = 'flex';
-        if(document.getElementById('nav-edit-list')) document.getElementById('nav-edit-list').style.display = 'none';
-        if(document.getElementById('nav-edit-detail')) document.getElementById('nav-edit-detail').style.display = 'none';
-        if(document.getElementById('edit-login-id')) document.getElementById('edit-login-id').value = '';
-        if(document.getElementById('edit-login-pass')) document.getElementById('edit-login-pass').value = '';
-    }
-
     document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active')); 
     if(element) element.classList.add('active'); 
-    
     document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active')); 
-    
     const targetView = document.getElementById('view-' + tabId);
     if(targetView) targetView.classList.add('active'); 
-    
-    const titles = {
-        'dashboard': 'Dashboard Overview', 'students': 'Student Management', 'companies': 'Company Management',
-        'drives': 'Job / Internship Drives', 'applications': 'Applications Management', 'statistics': 'Placement Statistics',
-        'events': 'Events / Training', 'announcements': 'Notifications / Updates', 'eligibility': 'Eligibility Criteria', 'settings': 'Admin Settings',
-        'analysis-list': 'Student Analysis Dashboard', 'analysis-detail': 'Student Profile Analysis', 'college-placement': 'College Placement Stats'
-    };
-    if(titles[tabId] && document.getElementById('top-title-bar')) document.getElementById('top-title-bar').innerText = titles[tabId];
-
-    // Safely trigger data refreshes
-    try {
-        if (tabId === 'dashboard') updateDashboardOverview();
-        if (tabId === 'students' || tabId === 'edit-list' || tabId === 'analysis-list') fetchDirectory();
-        if (tabId === 'companies' || tabId === 'drives') loadActiveDrives();
-        if (tabId === 'applications' || tabId === 'all-placements') loadAllPlacements();
-        if (tabId === 'statistics' || tabId === 'college-placement') refreshGlobalPlacementData();
-        if (tabId === 'announcements') loadAnnouncements();
-    } catch(e) {}
-
     if(window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('show'); } 
 }
 
-function signOut() { localStorage.removeItem('bit_session_token'); window.location.href = 'index.html'; }
+function signOut() { localStorage.removeItem('pcdp_session_token'); window.location.href = 'index.html'; }
+function openModal(modalId) { const modal = document.getElementById(modalId); if(modal) modal.style.display = 'flex'; }
+function closeModal(modalId) { const modal = document.getElementById(modalId); if(modal) modal.style.display = 'none'; }
 
-// --- DASHBOARD UPDATER ---
-function updateDashboardOverview() {
-    if(document.getElementById('dash-total-students')) document.getElementById('dash-total-students').innerText = allStudentsList.length || '0';
-    const placed = allStudentsList.filter(s => s.status === 'Placed' || s.status === 'Selected').length;
-    if(document.getElementById('dash-placed-students')) document.getElementById('dash-placed-students').innerText = placed || '0';
-    
-    const tbody = document.getElementById('dash-recent-apps-tbody');
-    if(tbody) {
-        if(window.allGlobalPlacements && window.allGlobalPlacements.length > 0) {
-            const recent = window.allGlobalPlacements.slice(0, 5);
-            tbody.innerHTML = recent.map(a => {
-                let bClass = 'badge-primary'; let s = (a.status || '').toLowerCase(); 
-                if(s.includes('select') || s.includes('plac')) bClass = 'badge-success'; 
-                if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
-                if(s.includes('pend') || s.includes('short')) bClass = 'badge-warning'; 
-                return `<tr><td style="font-weight:600; font-size:0.85rem;">${a.full_name}</td><td style="font-size:0.85rem;">${a.company}</td><td><span class="badge ${bClass}" style="font-size:0.7rem;">${a.status}</span></td></tr>`;
-            }).join('');
-        } else {
-            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 20px; color:var(--text-muted); font-size:0.85rem;">No recent applications.</td></tr>`;
-        }
-    }
+// ==============================================================================
+// 🛑 DASHBOARD & GLOBAL REPOSITORY
+// ==============================================================================
+function processImageUrl(url) {
+    if (!url || url.trim() === "") return 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';
+    let finalUrl = url.trim();
+    const driveMatch = finalUrl.match(/drive\.google\.com\/file\/d\/([^\/]+)/);
+    if (driveMatch && driveMatch[1]) { return `https://drive.google.com/uc?id=${driveMatch[1]}`; }
+    return finalUrl;
 }
 
-// --- 1. STUDENT MANAGEMENT DB ---
-async function fetchDirectory() {
-    const listBody = document.getElementById('student-list-tbody');
-    if(listBody) listBody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>`;
-    
+async function loadMasterCourses() {
+    document.getElementById('pcdp-courses-grid').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px;"><i class="fa-solid fa-spinner fa-spin fa-2x" style="color: #7E22CE;"></i></div>`;
     try {
-        const req = await fetch(`${BASE_URL}/api/admin/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken }) });
+        const req = await fetch(`${BASE_URL}/api/pcdp/master/courses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken }) });
         const data = await req.json();
-        
+        if (data.success) { 
+            masterCoursesData = data.courses; 
+            renderMasterGrid(masterCoursesData); 
+            if(document.getElementById('stat-courses')) document.getElementById('stat-courses').innerText = masterCoursesData.length;
+        } else { signOut(); }
+    } catch(e) { document.getElementById('pcdp-courses-grid').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px; color: #EF4444;">Network Error. Backend might be sleeping.</div>`; }
+}
+
+function renderMasterGrid(courses) {
+    const grid = document.getElementById('pcdp-courses-grid');
+    if(courses.length === 0) { grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px; border: 1px dashed #CBD5E1; background: white; color: #64748B; border-radius: 12px;">No global courses created yet.<br><br>Click "Create Master Course" to begin.</div>`; return; }
+    
+    grid.innerHTML = courses.map(c => {
+        const imgUrl = processImageUrl(c.image_url);
+        return `
+        <div class="skill-card" style="padding: 0; display: flex; flex-direction: column; height: 100%; min-height: 380px; border: 1px solid #E2E8F0; border-radius: 12px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: all 0.2s ease;">
+            <div style="height: 160px; width: 100%; position: relative; flex-shrink: 0; border-radius: 12px 12px 0 0; overflow: hidden; background: #F8FAFC;">
+                <img src="${imgUrl}" onerror="this.src='https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s ease;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                <div style="position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.95); padding: 4px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 800; color: #7E22CE; box-shadow: 0 2px 4px rgba(0,0,0,0.05); backdrop-filter: blur(4px);"><i class="fa-solid fa-medal"></i> ${esc(c.category) || 'General'}</div>
+            </div>
+            <div style="padding: 20px; flex: 1; display: flex; flex-direction: column;">
+                <h4 style="margin: 0 0 8px 0; font-size: 1.1rem; color: #0F172A; font-weight: 800; line-height: 1.3;">${esc(c.course_name)}</h4>
+                <p style="font-size: 0.8rem; color: #64748B; margin-bottom: 20px; line-height: 1.6; flex: 1;">${esc(c.description) || 'No description provided.'}</p>
+                <div style="background: #F8FAFC; padding: 12px; border-radius: 8px; border: 1px solid #E2E8F0; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: 700; color: #64748B;">
+                        <span><i class="fa-solid fa-layer-group" style="color: #7E22CE; opacity: 0.8; margin-right: 4px;"></i> Max Levels</span>
+                        <span style="color: #0F172A; font-size: 1.1rem; font-weight: 800;">${c.total_levels}</span>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="openEditModal(${c.id})" class="action-btn btn-outline" style="flex: 1; justify-content: center; color: #7E22CE; border-color: #E9D5FF; padding: 10px;"><i class="fa-solid fa-pen"></i> Edit</button>
+                    <button onclick="deleteMasterCourse(${c.id})" class="action-btn btn-outline" style="justify-content: center; color: #EF4444; border-color: #FECACA; padding: 10px 14px;"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function openEditModal(id) {
+    const course = masterCoursesData.find(c => c.id == id);
+    if(!course) return;
+    document.getElementById('edit-c-id').value = course.id;
+    document.getElementById('edit-c-name').value = course.course_name || '';
+    document.getElementById('edit-c-desc').value = course.description || '';
+    document.getElementById('edit-c-levels').value = course.total_levels || 1;
+    document.getElementById('edit-c-cat').value = course.category || '';
+    document.getElementById('edit-c-img').value = course.image_url || '';
+    openModal('edit-course-modal');
+}
+
+async function submitEditMasterCourse() {
+    const btn = document.querySelector('#edit-course-modal .btn-success');
+    if(btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    try {
+        await fetch(`${BASE_URL}/api/pcdp/master/edit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, id: document.getElementById('edit-c-id').value, course_name: document.getElementById('edit-c-name').value, description: document.getElementById('edit-c-desc').value, total_levels: document.getElementById('edit-c-levels').value, category: document.getElementById('edit-c-cat').value, image_url: document.getElementById('edit-c-img').value }) });
+        closeModal('edit-course-modal'); loadMasterCourses(); showToast("Updated", "Master course modified.", "success");
+    } catch(e) { showToast("Error", "Could not update course.", "error"); } 
+    if(btn) btn.innerHTML = 'Save Changes';
+}
+
+async function submitNewMasterCourse() {
+    const name = document.getElementById('c-name').value;
+    const desc = document.getElementById('c-desc').value;
+    const levels = document.getElementById('c-levels').value;
+    const cat = document.getElementById('c-cat').value;
+    const img = document.getElementById('c-img').value;
+    
+    if(!name || !levels) return showToast("Missing Fields", "Course Title and Max Levels are required.", "warning");
+
+    const btn = document.querySelector('#add-course-modal .btn-primary');
+    if(btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+
+    try {
+        await fetch(`${BASE_URL}/api/pcdp/master/add`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, course_name: name, description: desc, total_levels: levels, category: cat, image_url: img }) });
+        document.getElementById('c-name').value = ''; document.getElementById('c-desc').value = ''; document.getElementById('c-levels').value = ''; document.getElementById('c-cat').value = ''; document.getElementById('c-img').value = '';
+        closeModal('add-course-modal'); loadMasterCourses(); showToast("Created", "New master course published.", "success");
+    } catch(e) { showToast("Error", "Could not add course.", "error"); }
+    if(btn) btn.innerHTML = 'Save to Global Hub';
+}
+
+async function deleteMasterCourse(id) {
+    if(!confirm("Are you sure you want to delete this master course?\n\n(Note: This will not remove it from students who already have it assigned in their personal profiles.)")) return;
+    try { await fetch(`${BASE_URL}/api/pcdp/master/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, id: id }) }); loadMasterCourses(); showToast("Deleted", "Master course removed.", "success"); } catch(e) {}
+}
+
+
+// ==============================================================================
+// 🛑 STUDENT PROGRESS & SKILL MANAGEMENT
+// ==============================================================================
+async function fetchStudents() {
+    const tbody = document.getElementById('student-progress-tbody');
+    if(!tbody) return;
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken }) });
+        const data = await req.json();
         if (data.success) {
             allStudentsList = data.students;
-            const deptSelect = document.getElementById('deptFilter');
-            const deptEditSelect = document.getElementById('deptEditFilter');
-            const deptAnalysisSelect = document.getElementById('deptAnalysisFilter');
-            
-            const depts = [...new Set(allStudentsList.map(s => s.department).filter(d => d))];
-            
-            let allYears = new Set();
-            allStudentsList.forEach(s => {
-                const yMatch = (s.email || '').split('@')[0].match(/\d{2}$/);
-                if(yMatch) allYears.add(yMatch[0]);
-            });
-            const years = [...allYears].sort();
-
-            let deptOpts = '<option value="ALL">All Departments</option>' + depts.map(d => `<option value="${d}">${d}</option>`).join('');
-            let yearOpts = '<option value="ALL">All Batch Years</option>' + years.map(y => `<option value="${y}">Batch '${y}</option>`).join('');
-            
-            if(deptSelect) deptSelect.innerHTML = deptOpts;
-            if(deptEditSelect) deptEditSelect.innerHTML = deptOpts;
-            if(deptAnalysisSelect) deptAnalysisSelect.innerHTML = deptOpts;
-            
-            if(document.getElementById('yearEditFilter')) document.getElementById('yearEditFilter').innerHTML = yearOpts;
-            if(document.getElementById('yearAnalysisFilter')) document.getElementById('yearAnalysisFilter').innerHTML = yearOpts;
-            
-            renderTable(allStudentsList);
-            if(document.getElementById('analysis-list-tbody')) renderAnalysisTable(allStudentsList);
-            if(document.getElementById('edit-student-list-tbody')) renderEditTable(allStudentsList);
-            updateDashboardOverview();
-        } else {
-            console.error("Backend Error Msg:", data.message);
-            if(listBody) listBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger);">Backend Error: ${data.message || 'Token Issue'}</td></tr>`;
-        }
-    } catch(e) { 
-        console.error("Fetch Directory Catch Error:", e);
-        if(listBody) listBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger);">Network Error. Backend offline.</td></tr>`;
-    }
+            if(document.getElementById('stat-students')) document.getElementById('stat-students').innerText = allStudentsList.length;
+            renderProgressTable(allStudentsList);
+        } else { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #EF4444;">Failed to load students.</td></tr>`; }
+    } catch(e) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #EF4444;">Network Error.</td></tr>`; }
 }
 
-function renderTable(students) {
-    const tbody = document.getElementById('student-list-tbody');
+function renderProgressTable(students) {
+    const tbody = document.getElementById('student-progress-tbody');
     if(!tbody) return;
-    if(!students || students.length === 0) { tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
-    tbody.innerHTML = students.map(s => {
-        const resumeLink = (s.resume_url && s.resume_url !== '--' && s.resume_url.trim() !== '') ? `<a href="${s.resume_url}" target="_blank" class="action-btn btn-outline" style="padding: 4px 8px; font-size: 0.75rem; border-color: var(--primary); color: var(--primary); text-decoration: none;"><i class="fa-solid fa-file-pdf"></i> View</a>` : `<span style="font-size: 0.75rem; color: var(--text-muted); background: #f1f5f9; padding: 4px 8px; border-radius: 4px;">Not Uploaded</span>`;
-        const cgpa = s.cgpa ? parseFloat(s.cgpa).toFixed(2) : '--';
-
-        return `<tr class="dir-row">
-            <td style="font-weight:600; color: var(--text-main); cursor: pointer;" onclick="openReadOnlyDetail('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}<div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${s.email}</div></div></div></td>
-            <td style="font-family: monospace;">${s.roll_no || '--'}</td>
-            <td><span class="badge badge-primary">${s.department || '--'}</span></td>
-            <td style="font-weight: 700; color: var(--primary);">${cgpa}</td>
-            <td>${resumeLink}</td>
-            <td>
-                <div style="display: flex; gap: 8px;">
-                    <button class="action-btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--primary); color: var(--primary);" onclick="openReadOnlyDetail('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')"><i class="fa-solid fa-eye"></i> View</button>
-                    <button class="action-btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; border-color: var(--danger); color: var(--danger);" onclick="deleteStudent('${esc(s.email)}', '${esc(s.full_name)}')"><i class="fa-solid fa-trash"></i></button>
+    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px; color: #94A3B8;">No students found.</td></tr>`; return; }
+    
+    tbody.innerHTML = students.map(s => `
+        <tr class="dir-row" style="transition: 0.2s;" onmouseover="this.style.background='#F8FAFC'" onmouseout="this.style.background='white'">
+            <td style="font-weight:600; color: #0F172A; cursor: pointer;" onclick="openManageSkillsModal('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 36px; height: 36px; border-radius: 8px;">
+                    <div>${esc(s.full_name)}<div style="font-size:0.75rem; color:#64748B; font-weight:400; font-family:monospace; margin-top:2px;">${esc(s.roll_no)}</div></div>
                 </div>
             </td>
-        </tr>`;
-    }).join('');
+            <td><span class="badge" style="background:#F3E8FF; color:#7E22CE;">${esc(s.department)}</span></td>
+            <td><span style="font-size:0.8rem; color:#64748B;"><i class="fa-solid fa-chart-bar" style="margin-right:4px;"></i> Click Manage to view</span></td>
+            <td style="text-align: right;">
+                <button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color: #7E22CE; color: #7E22CE;" onclick="openManageSkillsModal('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')">
+                    <i class="fa-solid fa-sliders"></i> Manage Skills
+                </button>
+            </td>
+        </tr>
+    `).join('');
 }
 
-function filterStudents() {
-    const search = document.getElementById('searchStudent').value.toLowerCase(); const dept = document.getElementById('deptFilter').value;
-    const filtered = allStudentsList.filter(s => { const matchesSearch = ((s.full_name||'').toLowerCase().includes(search)) || ((s.email||'').toLowerCase().includes(search)) || ((s.roll_no||'').toLowerCase().includes(search)); const matchesDept = dept === "ALL" || s.department === dept; return matchesSearch && matchesDept; });
-    renderTable(filtered);
+function filterProgressStudents() {
+    const search = document.getElementById('search-student').value.toLowerCase();
+    const filtered = allStudentsList.filter(s => ((s.full_name||'').toLowerCase().includes(search)) || ((s.roll_no||'').toLowerCase().includes(search)));
+    renderProgressTable(filtered);
 }
 
-async function deleteStudent(email, name) {
-    if(!confirm(`⚠️ CRITICAL WARNING: Are you sure you want to completely delete ${name} (${email})?\n\nThis will erase their profile, academic records, skills, and ALL placement applications. This CANNOT be undone.`)) return;
-
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/delete-student`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ adminToken: globalToken, targetEmail: email })
-        });
-        const res = await req.json();
-        
-        if(res.success) {
-            alert(`✅ ${name} has been deleted.`);
-            fetchDirectory(); 
-            loadAllPlacements(); 
-        } else { alert("❌ Failed to delete student: " + (res.message || "Server error.")); }
-    } catch(e) { alert("Network error while trying to delete."); }
-}
-
-// 🛑 READ-ONLY QUICK VIEW MODAL
-async function openReadOnlyDetail(email, name, roll_no, department) {
-    if(document.getElementById('student-detail-modal')) document.getElementById('student-detail-modal').style.display = 'flex'; 
-    if(document.getElementById('ro-modal-content-body')) document.getElementById('ro-modal-content-body').style.display = 'none'; 
-    if(document.getElementById('ro-modal-loading')) document.getElementById('ro-modal-loading').style.display = 'block'; 
-    if(document.getElementById('ro-detail-name')) document.getElementById('ro-detail-name').innerText = name; 
-    if(document.getElementById('ro-detail-sub')) document.getElementById('ro-detail-sub').innerText = `${roll_no || 'No Roll No'} | ${department || 'No Dept'}`; 
-    if(document.getElementById('ro-detail-img')) document.getElementById('ro-detail-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff`;
-
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) });
-        const data = await req.json();
-        if (data.success) { 
-            populateReadOnlyModal(data.placeProfile || {}, data.placeApps || []); 
-            if(document.getElementById('ro-modal-loading')) document.getElementById('ro-modal-loading').style.display = 'none'; 
-            if(document.getElementById('ro-modal-content-body')) document.getElementById('ro-modal-content-body').style.display = 'block'; 
-        } else { alert("Failed to fetch placement data."); document.getElementById('student-detail-modal').style.display = 'none'; }
-    } catch(e) { alert("Network error."); document.getElementById('student-detail-modal').style.display = 'none'; }
-}
-
-function populateReadOnlyModal(prf, apps) {
-    if(document.getElementById('ro-p-role')) document.getElementById('ro-p-role').innerText = prf.offer_role || '--'; 
-    if(document.getElementById('ro-p-comp')) document.getElementById('ro-p-comp').innerText = prf.offer_company || '--'; 
-    if(document.getElementById('ro-p-ctc')) document.getElementById('ro-p-ctc').innerText = prf.offer_ctc || '--'; 
-    if(document.getElementById('ro-p-status')) document.getElementById('ro-p-status').innerText = prf.status || 'Unplaced'; 
-    if(document.getElementById('ro-p-assess')) document.getElementById('ro-p-assess').innerText = prf.assessments || '0'; 
-    if(document.getElementById('ro-p-int')) document.getElementById('ro-p-int').innerText = prf.interviews || '0'; 
-    if(document.getElementById('ro-p-off')) document.getElementById('ro-p-off').innerText = prf.offers || '0';
-
-    if(document.getElementById('ro-t-dsa')) document.getElementById('ro-t-dsa').innerText = prf.tech_dsa || '0'; 
-    if(document.getElementById('ro-bar-t-dsa')) document.getElementById('ro-bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
-    if(document.getElementById('ro-t-oop')) document.getElementById('ro-t-oop').innerText = prf.tech_oop || '0'; 
-    if(document.getElementById('ro-bar-t-oop')) document.getElementById('ro-bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
-    if(document.getElementById('ro-t-core')) document.getElementById('ro-t-core').innerText = prf.tech_core || '0'; 
-    if(document.getElementById('ro-bar-t-core')) document.getElementById('ro-bar-t-core').style.width = `${prf.tech_core || 0}%`; 
-    if(document.getElementById('ro-a-quant')) document.getElementById('ro-a-quant').innerText = prf.apt_quant || '0'; 
-    if(document.getElementById('ro-bar-a-quant')) document.getElementById('ro-bar-a-quant').style.width = `${prf.apt_quant || 0}%`; 
-    if(document.getElementById('ro-a-log')) document.getElementById('ro-a-log').innerText = prf.apt_logical || '0'; 
-    if(document.getElementById('ro-bar-a-log')) document.getElementById('ro-bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
-    if(document.getElementById('ro-a-hr')) document.getElementById('ro-a-hr').innerText = prf.apt_hr || '0'; 
-    if(document.getElementById('ro-bar-a-hr')) document.getElementById('ro-bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
-
-    const appBody = document.getElementById('ro-student-apps-tbody');
-    if(!appBody) return;
-    if (apps && apps.length > 0) {
-        appBody.innerHTML = apps.map(a => { 
-            let bClass = 'badge-primary'; let s = (a.status || '').toLowerCase(); 
-            if(s.includes('select') || s.includes('offer') || s.includes('placed')) bClass = 'badge-success'; 
-            if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
-            if(s.includes('pend') || s.includes('wait') || s.includes('short')) bClass = 'badge-warning'; 
-            
-            const ctcBadge = (a.salary_package && a.salary_package !== '--') ? `<span style="display: inline-flex; align-items: center; gap: 4px; background: #DCFCE7; color: #166534; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-sack-dollar"></i> ${a.salary_package}</span>` : '';
-            const internBadge = (a.internship_period && a.internship_period !== '--') ? `<span style="display: inline-flex; align-items: center; gap: 4px; background: #E0E7FF; color: #3730A3; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 700;"><i class="fa-solid fa-stopwatch"></i> ${a.internship_period}</span>` : '';
-            const extraDetails = (ctcBadge || internBadge) ? `<div style="display: flex; gap: 8px; margin-top: 6px;">${ctcBadge}${internBadge}</div>` : '';
-            
-            return `<tr style="border-bottom: 1px solid #F1F5F9;"><td style="padding: 16px 24px;"><div style="font-weight: 800; color: #1E293B; font-size: 1rem;">${a.company}</div></td><td style="padding: 16px 24px;"><div style="font-weight: 600; color: #475569; font-size: 0.9rem;">${a.role}</div>${extraDetails}</td><td style="padding: 16px 24px; color: #64748B; font-size: 0.85rem; font-weight: 500;">${a.date_applied}</td><td style="padding: 16px 24px;"><span class="badge ${bClass}" style="font-size: 0.75rem; padding: 4px 10px;">${a.status}</span></td></tr>`; 
-        }).join('');
-    } else { appBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 30px; color:var(--text-muted);">No applications logged.</td></tr>`; }
-}
-
-
-// --- 2. STUDENT ANALYSIS LIST (FULL PAGE RO) ---
-function renderAnalysisTable(students) {
-    const tbody = document.getElementById('analysis-list-tbody');
-    if(!tbody) return;
-    if(!students || students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students match filter.</td></tr>`; return; }
-    tbody.innerHTML = students.map(s => {
-        const yMatch = (s.email||'').split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
-        return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: var(--primary);">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color: #4F46E5; color: #4F46E5;" onclick="openAnalysisDetail('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')">Full Analysis <i class="fa-solid fa-arrow-right" style="margin-left: 6px;"></i></button></td></tr>`;
-    }).join('');
-}
-
-function filterAnalysisStudents() {
-    const search = document.getElementById('searchAnalysis').value.toLowerCase(); 
-    const dept = document.getElementById('deptAnalysisFilter').value;
-    const yearFilter = document.getElementById('yearAnalysisFilter').value;
-
-    const filtered = allStudentsList.filter(s => { 
-        const matchesSearch = ((s.full_name||'').toLowerCase().includes(search)) || ((s.email||'').toLowerCase().includes(search)); 
-        const matchesDept = dept === "ALL" || s.department === dept; 
-        const yMatch = (s.email||'').split('@')[0].match(/\d{2}$/);
-        const yExtracted = yMatch ? yMatch[0] : '';
-        const matchesYear = yearFilter === "ALL" || yExtracted === yearFilter;
-        return matchesSearch && matchesDept && matchesYear; 
-    });
-    renderAnalysisTable(filtered);
-}
-
-// 🛑 FULL PAGE ANALYSIS DASHBOARD
-async function openAnalysisDetail(email, name, roll_no, department) {
-    switchTab('analysis-detail', document.getElementById('nav-analysis-list'));
-    if(document.getElementById('ana-modal-content-body')) document.getElementById('ana-modal-content-body').style.display = 'none'; 
-    if(document.getElementById('ana-modal-loading')) document.getElementById('ana-modal-loading').style.display = 'block'; 
-    if(document.getElementById('ana-detail-name')) document.getElementById('ana-detail-name').innerText = name; 
-    if(document.getElementById('ana-detail-sub')) document.getElementById('ana-detail-sub').innerText = `${roll_no || 'No Roll No'} | ${department || 'No Dept'}`; 
-    if(document.getElementById('ana-detail-img')) document.getElementById('ana-detail-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff`;
-
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) });
-        const data = await req.json();
-        if (data.success) { 
-            populateAnalysisModal(data.placeProfile || {}, data.placeApps || []); 
-            if(document.getElementById('ana-modal-loading')) document.getElementById('ana-modal-loading').style.display = 'none'; 
-            if(document.getElementById('ana-modal-content-body')) document.getElementById('ana-modal-content-body').style.display = 'block'; 
-        } else { alert("Failed to fetch placement data."); switchTab('analysis-list', document.getElementById('nav-analysis-list')); }
-    } catch(e) { alert("Network error."); switchTab('analysis-list', document.getElementById('nav-analysis-list')); }
-}
-
-function populateAnalysisModal(prf, apps) {
-    if(document.getElementById('ana-p-role')) document.getElementById('ana-p-role').innerText = prf.offer_role || '--'; 
-    if(document.getElementById('ana-p-comp')) document.getElementById('ana-p-comp').innerText = prf.offer_company || '--'; 
-    if(document.getElementById('ana-p-ctc')) document.getElementById('ana-p-ctc').innerText = prf.offer_ctc || '--'; 
-    if(document.getElementById('ana-p-status')) document.getElementById('ana-p-status').innerText = prf.status || 'Unplaced'; 
-    if(document.getElementById('ana-p-assess')) document.getElementById('ana-p-assess').innerText = prf.assessments || '0'; 
-    if(document.getElementById('ana-p-int')) document.getElementById('ana-p-int').innerText = prf.interviews || '0'; 
-    if(document.getElementById('ana-p-off')) document.getElementById('ana-p-off').innerText = prf.offers || '0';
-
-    if(document.getElementById('ana-t-dsa')) document.getElementById('ana-t-dsa').innerText = prf.tech_dsa || '0'; 
-    if(document.getElementById('ana-bar-t-dsa')) document.getElementById('ana-bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
-    if(document.getElementById('ana-t-oop')) document.getElementById('ana-t-oop').innerText = prf.tech_oop || '0'; 
-    if(document.getElementById('ana-bar-t-oop')) document.getElementById('ana-bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
-    if(document.getElementById('ana-t-core')) document.getElementById('ana-t-core').innerText = prf.tech_core || '0'; 
-    if(document.getElementById('ana-bar-t-core')) document.getElementById('ana-bar-t-core').style.width = `${prf.tech_core || 0}%`; 
-    if(document.getElementById('ana-a-quant')) document.getElementById('ana-a-quant').innerText = prf.apt_quant || '0'; 
-    if(document.getElementById('ana-bar-a-quant')) document.getElementById('ana-bar-a-quant').style.width = `${prf.apt_quant || 0}%`; 
-    if(document.getElementById('ana-a-log')) document.getElementById('ana-a-log').innerText = prf.apt_logical || '0'; 
-    if(document.getElementById('ana-bar-a-log')) document.getElementById('ana-bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
-    if(document.getElementById('ana-a-hr')) document.getElementById('ana-a-hr').innerText = prf.apt_hr || '0'; 
-    if(document.getElementById('ana-bar-a-hr')) document.getElementById('ana-bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
-
-    const appBody = document.getElementById('ana-student-apps-tbody');
-    if(!appBody) return;
-    if (apps && apps.length > 0) {
-        appBody.innerHTML = apps.map(a => { 
-            let bClass = 'badge-primary'; let s = (a.status||'').toLowerCase(); 
-            if(s.includes('select') || s.includes('offer') || s.includes('placed')) bClass = 'badge-success'; 
-            if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
-            if(s.includes('pend') || s.includes('wait') || s.includes('short')) bClass = 'badge-warning'; 
-            return `<tr style="border-bottom: 1px solid #F1F5F9;"><td style="padding: 16px 24px; font-weight: 800; color: #1E293B;">${a.company}</td><td style="padding: 16px 24px; font-weight: 600; color: #475569;">${a.role}</td><td style="padding: 16px 24px; color: #64748B;">${a.date_applied}</td><td style="padding: 16px 24px;"><span class="badge ${bClass}" style="font-size: 0.75rem; padding: 4px 10px;">${a.status}</span></td></tr>`; 
-        }).join('');
-    } else { appBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 40px; color:var(--text-muted);">No applications logged.</td></tr>`; }
-}
-
-
-// --- 3. STUDENT LOGIN & SECURE EDITING GATEWAY ---
-function loginAsStudent() {
-    const loginId = document.getElementById('edit-login-id').value.trim();
-    const password = document.getElementById('edit-login-pass').value.trim();
-    
-    if(loginId === "1234" && password === "1234") {
-        if(document.getElementById('nav-student-login')) document.getElementById('nav-student-login').style.display = 'none';
-        
-        const editNav = document.getElementById('nav-edit-list');
-        const detailNav = document.getElementById('nav-edit-detail');
-        if(editNav) editNav.style.display = 'flex';
-
-        switchTab('edit-list', editNav);
-        
-        if(document.getElementById('edit-login-id')) document.getElementById('edit-login-id').value = '';
-        if(document.getElementById('edit-login-pass')) document.getElementById('edit-login-pass').value = '';
-    } else { alert("Invalid Login ID or Password! Access Denied."); }
-}
-
-function lockEditor() {
-    if(document.getElementById('nav-student-login')) document.getElementById('nav-student-login').style.display = 'flex';
-    if(document.getElementById('nav-edit-list')) document.getElementById('nav-edit-list').style.display = 'none';
-    if(document.getElementById('nav-edit-detail')) document.getElementById('nav-edit-detail').style.display = 'none';
-    switchTab('student-login', document.getElementById('nav-student-login'));
-}
-
-function renderEditTable(students) {
-    const tbody = document.getElementById('edit-student-list-tbody');
-    if(!tbody) return;
-    if(!students || students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No students found.</td></tr>`; return; }
-    tbody.innerHTML = students.map(s => {
-        const yMatch = (s.email||'').split('@')[0].match(/\d{2}$/); const year = yMatch ? yMatch[0] : '--';
-        return `<tr class="dir-row"><td style="font-weight:600; color: var(--text-main);"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px;"><div>${s.full_name}</div></div></td><td style="color: var(--text-muted); font-size: 0.9rem;">${s.email}</td><td><span class="badge badge-primary">${s.department || '--'}</span></td><td style="font-weight: 700; color: #B91C1C;">Batch '${year}</td><td style="text-align: right;"><button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color:#B91C1C; color:#B91C1C;" onclick="openEditableStudentDetail('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')">Edit Skills <i class="fa-solid fa-pen" style="margin-left: 6px;"></i></button></td></tr>`;
-    }).join('');
-}
-
-function filterEditStudents() {
-    const search = document.getElementById('searchEditStudent').value.toLowerCase(); 
-    const dept = document.getElementById('deptEditFilter').value;
-    const yearFilter = document.getElementById('yearEditFilter').value;
-
-    const filtered = allStudentsList.filter(s => { 
-        const matchesSearch = ((s.full_name||'').toLowerCase().includes(search)) || ((s.email||'').toLowerCase().includes(search)); 
-        const matchesDept = dept === "ALL" || s.department === dept; 
-        const yMatch = (s.email||'').split('@')[0].match(/\d{2}$/);
-        const yExtracted = yMatch ? yMatch[0] : '';
-        const matchesYear = yearFilter === "ALL" || yExtracted === yearFilter;
-        return matchesSearch && matchesDept && matchesYear; 
-    });
-    renderEditTable(filtered);
-}
-
-// 🛑 FULL PAGE EDITABLE PROFILE (SKILLS ONLY)
-async function openEditableStudentDetail(email, name, roll_no, department) {
+// 🛑 THE SKILL EDITOR MODAL
+async function openManageSkillsModal(email, name, roll, dept) {
     targetStudentEmail = email;
-    if(document.getElementById('nav-edit-detail')) document.getElementById('nav-edit-detail').style.display = 'flex';
-    switchTab('edit-detail', document.getElementById('nav-edit-detail'));
+    document.getElementById('ms-student-name').innerText = name;
+    document.getElementById('ms-student-roll').innerText = roll || 'No Roll';
+    document.getElementById('ms-student-dept').innerText = dept || 'No Dept';
+    document.getElementById('ms-student-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=7E22CE&color=fff&bold=true`;
     
-    if(document.getElementById('edit-modal-content-body')) document.getElementById('edit-modal-content-body').style.display = 'none';
-    if(document.getElementById('edit-modal-loading')) document.getElementById('edit-modal-loading').style.display = 'block';
-
-    if (name) {
-        if(document.getElementById('edit-detail-name')) document.getElementById('edit-detail-name').innerText = name;
-        if(document.getElementById('edit-detail-sub')) document.getElementById('edit-detail-sub').innerText = `${roll_no || 'No Roll No'} | ${department || 'No Dept'}`;
-        if(document.getElementById('edit-detail-img')) document.getElementById('edit-detail-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4F46E5&color=fff`;
-    }
+    document.getElementById('ms-skills-container').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px; color: #7E22CE;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>`;
+    openModal('manage-skills-modal');
 
     try {
-        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) });
+        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: email }) });
         const data = await req.json();
         if (data.success) { 
-            populateEditorPerformance(data.placeProfile || {}, data.placeApps || []); 
-            if(document.getElementById('edit-modal-loading')) document.getElementById('edit-modal-loading').style.display = 'none';
-            if(document.getElementById('edit-modal-content-body')) document.getElementById('edit-modal-content-body').style.display = 'block';
-        } else { alert("Failed to fetch placement data."); switchTab('edit-list', document.getElementById('nav-edit-list')); }
-    } catch(e) { alert("Network error."); switchTab('edit-list', document.getElementById('nav-edit-list')); }
+            currentStudentSkills = data.skills || []; 
+            renderStudentSkills(currentStudentSkills); 
+        } else { showToast("Error", "Failed to fetch student data.", "error"); closeModal('manage-skills-modal'); }
+    } catch(e) { showToast("Network Error", "Could not load data.", "error"); closeModal('manage-skills-modal'); }
 }
 
-function populateEditorPerformance(prf, apps) {
-    if(document.getElementById('val-p-role')) document.getElementById('val-p-role').innerText = prf.offer_role || '--'; 
-    if(document.getElementById('val-p-comp')) document.getElementById('val-p-comp').innerText = prf.offer_company || '--'; 
-    if(document.getElementById('val-p-ctc')) document.getElementById('val-p-ctc').innerText = prf.offer_ctc || '--'; 
-    if(document.getElementById('val-p-status')) document.getElementById('val-p-status').innerText = prf.status || 'Unplaced'; 
-    if(document.getElementById('val-p-assess')) document.getElementById('val-p-assess').innerText = prf.assessments || '0'; 
-    if(document.getElementById('val-p-int')) document.getElementById('val-p-int').innerText = prf.interviews || '0'; 
-    if(document.getElementById('val-p-off')) document.getElementById('val-p-off').innerText = prf.offers || '0';
-    
-    if(document.getElementById('val-t-dsa')) document.getElementById('val-t-dsa').innerText = prf.tech_dsa || '0'; 
-    if(document.getElementById('bar-t-dsa')) document.getElementById('bar-t-dsa').style.width = `${prf.tech_dsa || 0}%`; 
-    if(document.getElementById('val-t-oop')) document.getElementById('val-t-oop').innerText = prf.tech_oop || '0'; 
-    if(document.getElementById('bar-t-oop')) document.getElementById('bar-t-oop').style.width = `${prf.tech_oop || 0}%`; 
-    if(document.getElementById('val-t-core')) document.getElementById('val-t-core').innerText = prf.tech_core || '0'; 
-    if(document.getElementById('bar-t-core')) document.getElementById('bar-t-core').style.width = `${prf.tech_core || 0}%`; 
-    if(document.getElementById('val-a-quant')) document.getElementById('val-a-quant').innerText = prf.apt_quant || '0'; 
-    if(document.getElementById('bar-a-quant')) document.getElementById('bar-a-quant').style.width = `${prf.apt_quant || 0}%`; 
-    if(document.getElementById('val-a-log')) document.getElementById('val-a-log').innerText = prf.apt_logical || '0'; 
-    if(document.getElementById('bar-a-log')) document.getElementById('bar-a-log').style.width = `${prf.apt_logical || 0}%`; 
-    if(document.getElementById('val-a-hr')) document.getElementById('val-a-hr').innerText = prf.apt_hr || '0'; 
-    if(document.getElementById('bar-a-hr')) document.getElementById('bar-a-hr').style.width = `${prf.apt_hr || 0}%`;
+function renderStudentSkills(skills) {
+    const container = document.getElementById('ms-skills-container');
+    if(!container) return;
 
-    const appBody = document.getElementById('edit-student-apps-tbody');
-    if(!appBody) return;
-    if (apps && apps.length > 0) {
-        appBody.innerHTML = apps.map(a => { 
-            let bClass = 'badge-primary'; let s = (a.status||'').toLowerCase(); 
-            if(s.includes('select') || s.includes('offer') || s.includes('placed')) bClass = 'badge-success'; 
-            if(s.includes('clear') || s.includes('reject')) bClass = 'badge-danger'; 
-            if(s.includes('pend') || s.includes('wait') || s.includes('short')) bClass = 'badge-warning'; 
-            return `<tr style="border-bottom: 1px solid #F1F5F9;"><td style="padding: 16px 24px; font-weight: 800; color: #1E293B;">${a.company}</td><td style="padding: 16px 24px; font-weight: 600; color: #475569;">${a.role}</td><td style="padding: 16px 24px; color: #64748B;">${a.date_applied}</td><td style="padding: 16px 24px;"><span class="badge ${bClass}" style="font-size: 0.75rem; padding: 4px 10px;">${a.status}</span></td></tr>`; 
-        }).join('');
-    } else { appBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 30px; color:var(--text-muted);">No applications logged.</td></tr>`; }
-}
-
-function openPlacementProfileEdit(field, spanId, width) {
-    const span = document.getElementById(spanId); originalValues[spanId] = span.innerText.trim();
-    span.parentElement.innerHTML = `<div class="flex-center" style="width: 100%;"><input type="text" id="in-${spanId}" class="inline-input" style="width: ${width}; color: var(--text-main);" value="${originalValues[spanId]}"><i class="fa-solid fa-check action-icon save" style="width:28px; height:28px;" onclick="savePlacementProfileEdit('${field}', '${spanId}', '${width}')"></i><i class="fa-solid fa-xmark action-icon cancel" style="width:28px; height:28px;" onclick="cancelPlacementProfileEdit('${spanId}', '${field}', '${width}')"></i></div>`;
-}
-function cancelPlacementProfileEdit(spanId, field, width) {
-    const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement;
-    wrapper.innerHTML = `<span id="${spanId}">${originalValues[spanId]}</span><i class="fa-solid fa-pen admin-table-edit" onclick="openPlacementProfileEdit('${field}', '${spanId}', '${width}')"></i>`;
-}
-async function savePlacementProfileEdit(field, spanId, width) {
-    const val = document.getElementById(`in-${spanId}`).value; 
-    const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement;
-    wrapper.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    try {
-        await fetch(`${BASE_URL}/api/admin/update-placement-profile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, field: field, value: val }) });
-        wrapper.innerHTML = `<span id="${spanId}">${val}</span><i class="fa-solid fa-pen admin-table-edit" onclick="openPlacementProfileEdit('${field}', '${spanId}', '${width}')"></i>`;
-        const barId = spanId.replace('val-', 'bar-'); const bar = document.getElementById(barId); if(bar) bar.style.width = `${val}%`;
-    } catch(e) { cancelPlacementProfileEdit(spanId, field, width); }
-}
-
-
-// --- COLLEGE PLACEMENT STATS ---
-async function refreshGlobalPlacementData() {
-    try {
-        const req = await fetch(`${BASE_URL}/api/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
-        const data = await req.json();
-        if (data.success) { populateGlobalPlacement(data.globalStats, data.globalDrives); }
-    } catch(e) {}
-}
-
-function populateGlobalPlacement(gStats, gDrives) {
-    gStats = gStats || {};
-    if(document.getElementById('wrap-g-total')) document.getElementById('wrap-g-total').innerHTML = `<span id="val-g-total">${gStats.total_placed || '0'}</span><i class="fa-solid fa-pen admin-table-edit" onclick="openGlobalStatEdit('total_placed', 'val-g-total', '90px')"></i>`;
-    if(document.getElementById('wrap-g-ongoing')) document.getElementById('wrap-g-ongoing').innerHTML = `<span id="val-g-ongoing">${gStats.ongoing_drives || '0'}</span><i class="fa-solid fa-pen admin-table-edit" onclick="openGlobalStatEdit('ongoing_drives', 'val-g-ongoing', '90px')"></i>`;
-    if(document.getElementById('wrap-g-highest')) document.getElementById('wrap-g-highest').innerHTML = `<div><span id="val-g-highest">${gStats.highest_ctc || '0'}</span> <span style="font-size: 0.8rem; color: var(--text-muted);">LPA</span></div><i class="fa-solid fa-pen admin-table-edit" onclick="openGlobalStatEdit('highest_ctc', 'val-g-highest', '90px')"></i>`;
-    if(document.getElementById('wrap-g-avg')) document.getElementById('wrap-g-avg').innerHTML = `<div><span id="val-g-avg">${gStats.avg_ctc || '0'}</span> <span style="font-size: 0.8rem; color: var(--text-muted);">LPA</span></div><i class="fa-solid fa-pen admin-table-edit" onclick="openGlobalStatEdit('avg_ctc', 'val-g-avg', '90px')"></i>`;
-    
-    if(document.getElementById('dash-highest-pkg')) document.getElementById('dash-highest-pkg').innerText = `${gStats.highest_ctc || '0'} LPA`;
-
-    const drvBody = document.getElementById('global-drives-tbody');
-    if(!drvBody) return;
-    if (gDrives && gDrives.length > 0) {
-        drvBody.innerHTML = gDrives.map(d => `<tr id="row-drv-${d.id}"><td style="font-weight: 700; color: var(--text-main);">${d.company}</td><td>${d.role}</td><td style="font-family: monospace;">${d.appeared}</td><td><span class="badge badge-success">${d.selected}</span></td><td style="font-weight: 700; color: var(--primary);">${d.ctc}</td><td style="text-align:right; white-space:nowrap;"><i class="fa-solid fa-pen admin-table-edit" onclick="editDriveRow(${d.id})"></i><i class="fa-solid fa-trash admin-table-del" onclick="deleteGlobalDrive(${d.id})"></i></td></tr>`).join('');
-    } else { drvBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:var(--text-muted);">No campus drives recorded.</td></tr>`; }
-}
-function cancelGlobalStatEdit() { refreshGlobalPlacementData(); }
-function openGlobalStatEdit(field, spanId, width) {
-    const span = document.getElementById(spanId); originalValues[spanId] = span.innerText.trim(); const wrapId = spanId.replace('val-', 'wrap-');
-    document.getElementById(wrapId).innerHTML = `<div class="flex-center"><input type="text" id="in-${spanId}" class="inline-input" style="width: ${width}; padding: 4px;" value="${originalValues[spanId]}"><i class="fa-solid fa-check action-icon save" style="width:28px; height:28px;" onclick="saveGlobalStat('${field}', '${spanId}', '${width}')"></i><i class="fa-solid fa-xmark action-icon cancel" style="width:28px; height:28px;" onclick="cancelGlobalStatEdit()"></i></div>`;
-}
-async function saveGlobalStat(field, spanId, width) {
-    const val = document.getElementById(`in-${spanId}`).value; const wrapId = spanId.replace('val-', 'wrap-');
-    document.getElementById(wrapId).innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    try { await fetch(`${BASE_URL}/api/admin/update-global-stat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, field: field, value: val }) }); } catch(e) {}
-    refreshGlobalPlacementData(); 
-}
-function editDriveRow(id) {
-    const tr = document.getElementById(`row-drv-${id}`); const comp = tr.children[0].innerText; const role = tr.children[1].innerText; const app = tr.children[2].innerText; const sel = tr.children[3].innerText; const ctc = tr.children[4].innerText;
-    tr.innerHTML = `<td><input type="text" id="e-drv-c-${id}" class="inline-input" style="width: 100%;" value="${comp}"></td><td><input type="text" id="e-drv-r-${id}" class="inline-input" style="width: 100%;" value="${role}"></td><td><input type="number" id="e-drv-a-${id}" class="inline-input" style="width: 60px;" value="${app}"></td><td><input type="number" id="e-drv-s-${id}" class="inline-input" style="width: 60px;" value="${sel}"></td><td><input type="text" id="e-drv-ctc-${id}" class="inline-input" style="width: 80px;" value="${ctc}"></td><td style="text-align:right; white-space: nowrap;"><i class="fa-solid fa-check action-icon save" onclick="saveDriveRow(${id})"></i><i class="fa-solid fa-xmark action-icon cancel" onclick="refreshGlobalPlacementData()"></i></td>`;
-}
-async function saveDriveRow(id) {
-    const tr = document.getElementById(`row-drv-${id}`); tr.lastElementChild.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    const updates = [{ field: 'company', value: document.getElementById(`e-drv-c-${id}`).value }, { field: 'role', value: document.getElementById(`e-drv-r-${id}`).value }, { field: 'appeared', value: document.getElementById(`e-drv-a-${id}`).value }, { field: 'selected', value: document.getElementById(`e-drv-s-${id}`).value }, { field: 'ctc', value: document.getElementById(`e-drv-ctc-${id}`).value }];
-    for (let u of updates) { await fetch(`${BASE_URL}/api/admin/update-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id, field: u.field, value: u.value }) }); }
-    refreshGlobalPlacementData(); 
-}
-async function deleteGlobalDrive(id) { if(!confirm("Delete this completed drive record?")) return; await fetch(`${BASE_URL}/api/admin/delete-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); refreshGlobalPlacementData(); }
-async function submitGlobalDrive() {
-    const btn = document.querySelector('#add-global-drive-modal .btn-primary'); const ogText = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
-    try { await fetch(`${BASE_URL}/api/admin/add-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, company: document.getElementById('g-drv-comp').value, role: document.getElementById('g-drv-role').value, appeared: document.getElementById('g-drv-app').value, selected: document.getElementById('g-drv-sel').value, ctc: document.getElementById('g-drv-ctc').value }) }); } catch(e) {}
-    document.getElementById('add-global-drive-modal').style.display='none'; btn.innerHTML = ogText;
-    document.getElementById('g-drv-comp').value = ''; document.getElementById('g-drv-role').value = ''; document.getElementById('g-drv-app').value = ''; document.getElementById('g-drv-sel').value = ''; document.getElementById('g-drv-ctc').value = '';
-    refreshGlobalPlacementData(); 
-}
-
-// 🛑 ACTIVE JOB DRIVES & COMPANY MANAGEMENT (Fully Restored)
-async function loadActiveDrives() {
-    const feed = document.getElementById('active-drives-feed');
-    if(!feed) return;
-    feed.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading Drives...</div>`;
-    try {
-        const req = await fetch(`${BASE_URL}/api/drives/active-list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) });
-        const data = await req.json();
-        if (data.success) {
-            window.globalDrivesList = data.drives;
-            if(document.getElementById('dash-active-drives')) document.getElementById('dash-active-drives').innerText = data.drives.length;
-            
-            // Populates the Company Management Table
-            renderCompaniesTable(data.drives);
-
-            if(data.drives.length === 0) { feed.innerHTML = `<div class="card" style="text-align:center; padding: 40px; color:var(--text-muted);">No active drives posted yet.</div>`; return; }
-
-            feed.innerHTML = data.drives.map(d => {
-                let isExpired = false; let displayDate = d.deadline;
-                if(d.deadline && d.deadline.includes('-')) {
-                    const deadDate = new Date(d.deadline); displayDate = deadDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); deadDate.setHours(23, 59, 59, 999); if(deadDate < new Date()) isExpired = true;
-                }
-                const expiredBadge = isExpired ? `<span class="badge badge-danger" style="margin-left: 8px;">Expired</span>` : '';
-                const ctcBadge = d.ctc && d.ctc !== 'Not Disclosed' ? `<span style="font-weight: 800; color: var(--success); font-size: 1.1rem;">${d.ctc}</span>` : `<span style="font-weight: 800; color: var(--success); font-size: 1.1rem;">Not Disclosed</span>`;
-
-                return `
-                <div class="drive-card" style="opacity: ${isExpired ? '0.7' : '1'};">
-                    <div class="flex-between" style="align-items: flex-start;">
-                        <div>
-                            <h3 style="margin: 0 0 8px 0; font-size: 1.2rem; color: var(--text-main); font-weight: 800;">${esc(d.company_name)}</h3>
-                            <span class="badge badge-primary" style="background:#EEF2FF; color:#4F46E5;">${esc(d.role)}</span>
-                            ${expiredBadge}
-                            <div style="margin-top: 12px; font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase;">Batch '${d.target_year !== 'ALL' ? d.target_year : 'ALL'}</div>
-                        </div>
-                        <div style="text-align: right;">
-                            ${ctcBadge}
-                            <div style="font-size: 0.8rem; color: ${isExpired ? 'var(--danger)' : 'var(--text-muted)'}; margin-top: 4px;">Deadline: ${displayDate}</div>
-                        </div>
-                    </div>
-                    <div class="flex-between" style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 20px;">
-                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);"><i class="fa-solid fa-graduation-cap"></i> Eligibility: ${esc(d.eligibility)}</span>
-                        <div style="display: flex; gap: 8px;">
-                            <button class="action-btn btn-outline" style="font-size: 0.8rem; padding: 6px 12px;" onclick="viewDriveApplicants('${esc(d.company_name)}', '${esc(d.role)}')">View Apps</button>
-                            <button class="action-icon cancel" style="padding: 6px; border: 1px solid var(--danger); border-radius: 6px;" onclick="deleteActiveDrive(${d.id})"><i class="fa-solid fa-trash" style="font-size: 0.9rem;"></i></button>
-                        </div>
-                    </div>
-                </div>`;
-            }).join('');
-        }
-    } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error loading drives</div>`; }
-}
-
-async function submitActiveDrive() {
-    const compInput = document.getElementById('ad-comp');
-    const roleInput = document.getElementById('ad-role');
-    const deadInput = document.getElementById('ad-dead');
-
-    const comp = compInput.value.trim();
-    const role = roleInput.value.trim();
-    const ctc = document.getElementById('ad-ctc').value.trim();
-    const elig = document.getElementById('ad-elig').value.trim();
-    const desc = document.getElementById('ad-desc').value.trim();
-    const dead = deadInput.value;
-    const targetYr = document.getElementById('ad-year').value;
-
-    // Reset Box Colors
-    compInput.style.border = '1px solid var(--border)';
-    roleInput.style.border = '1px solid var(--border)';
-    deadInput.style.border = '1px solid var(--border)';
-
-    // 🛑 RED HIGHLIGHTER IF FIELDS ARE EMPTY
-    if(!comp || !role || !dead) {
-        if(!comp) compInput.style.border = '2px solid red';
-        if(!role) roleInput.style.border = '2px solid red';
-        if(!dead) deadInput.style.border = '2px solid red';
-        alert("❌ Please fill in the required fields (Company, Role, and Deadline) highlighted in red.");
+    if(skills.length === 0) {
+        container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color:#94A3B8; border: 1px dashed #CBD5E1; border-radius: 12px; background: white;"><i class="fa-solid fa-folder-open" style="font-size: 2rem; color: #E2E8F0; margin-bottom: 12px;"></i><br>No PCDP courses assigned to this student yet.</div>`;
         return;
     }
 
-    const btn = document.querySelector('#add-active-drive-modal .btn-primary');
-    const ogText = btn.innerHTML;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Posting...';
-
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/add-active-drive`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ adminToken: globalToken, company_name: comp, role: role, ctc: ctc, eligibility: elig, description: desc, deadline: dead, target_year: targetYr })
-        });
-        const res = await req.json();
-        if(res.success) {
-            document.getElementById('add-active-drive-modal').style.display = 'none';
-            compInput.value = ''; roleInput.value = ''; document.getElementById('ad-ctc').value = ''; document.getElementById('ad-elig').value = ''; document.getElementById('ad-desc').value = ''; deadInput.value = '';
-            loadActiveDrives();
-        } else { alert("Failed to post drive: " + res.message); }
-    } catch(e) { alert("Network Error"); }
-    btn.innerHTML = ogText;
-}
-
-async function deleteActiveDrive(id) {
-    if(!confirm("⚠️ Delete this active drive?\n\nThis will instantly remove the drive from the portal AND delete all student applications associated with it!")) return;
-    try {
-        await fetch(`${BASE_URL}/api/admin/delete-active-drive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) });
-        loadActiveDrives(); loadAllPlacements();
-    } catch(e) { alert("Failed to delete drive"); }
-}
-
-function renderCompaniesTable(drives) {
-    const tbody = document.getElementById('companies-list-tbody');
-    if(!tbody) return;
-    if(!drives || drives.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No companies found.</td></tr>`; return; }
-
-    tbody.innerHTML = drives.map(d => {
-        let isExpired = false;
-        if(d.deadline && d.deadline.includes('-')) { const deadDate = new Date(d.deadline); deadDate.setHours(23, 59, 59, 999); if(deadDate < new Date()) isExpired = true; }
-        const stat = isExpired ? `<span class="badge badge-warning">Closed</span>` : `<span class="badge badge-success">Active</span>`;
-
-        return `<tr><td style="font-weight: 800; color: var(--text-main);">${esc(d.company_name)}</td><td style="color: var(--text-muted);">${esc(d.role)}</td><td style="font-weight: 700; color: var(--success);">${esc(d.ctc)}</td><td>Remote / Campus</td><td>${stat}</td></tr>`;
-    }).join('');
-}
-
-// --- STUDENT PLACEMENTS (ALL APPS) BOARD ---
-async function loadAllPlacements() {
-    const tbody = document.getElementById('all-placements-tbody');
-    if(!tbody) return;
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading all applications...</td></tr>`;
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/all-applications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken }) });
-        const data = await req.json();
-        if (data.success) {
-            window.allGlobalPlacements = data.applications;
-            const filterDropdown = document.getElementById('placementCompanyFilter');
-            const companies = [...new Set(data.applications.map(a => a.company).filter(c => c))];
-            if(filterDropdown) {
-                filterDropdown.innerHTML = '<option value="ALL">All Companies</option>';
-                companies.forEach(c => { filterDropdown.innerHTML += `<option value="${c}">${c}</option>`; });
-            }
-            renderAllPlacementsTable();
-            updateDashboardOverview();
-        } else {
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Failed to load placements.</td></tr>`;
-        }
-    } catch(e) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Network Error.</td></tr>`; }
-}
-function renderAllPlacementsTable() {
-    const tbody = document.getElementById('all-placements-tbody');
-    if(!tbody) return;
-    const selectedComp = document.getElementById('placementCompanyFilter').value;
-    const filteredApps = selectedComp === 'ALL' ? window.allGlobalPlacements : window.allGlobalPlacements.filter(a => a.company === selectedComp);
-    if(filteredApps.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No applications found.</td></tr>`; return; }
-
-    tbody.innerHTML = filteredApps.map(a => {
-        return `<tr><td style="font-weight:600; color: var(--text-main);"><div style="font-size:0.95rem;">${a.full_name}</div><div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${a.student_email}</div></td><td><span class="badge badge-primary" style="background:#EEF2FF; color:#4F46E5;">${a.department || '--'}</span></td><td><div style="font-weight:700; color:var(--text-main);">${a.company}</div><div style="font-size:0.8rem; color:var(--text-muted);">${a.role}</div></td><td style="font-size:0.85rem;">${a.date_applied}</td><td><select onchange="handlePlacementStatusChange(${a.app_id}, this)" class="control-input" style="padding: 6px; font-size: 0.8rem; width: 140px; border-color: var(--border); font-weight: 600; color: var(--text-main);"><option value="Applied" ${a.status === 'Applied' ? 'selected' : ''}>Applied (Pending)</option><option value="Shortlisted" ${a.status === 'Shortlisted' ? 'selected' : ''}>Shortlisted</option><option value="Interview" ${a.status === 'Interview' ? 'selected' : ''}>In Interview</option><option value="Selected" ${a.status === 'Selected' ? 'selected' : ''}>Selected / Placed</option><option value="Rejected" ${a.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select></td></tr>`;
-    }).join('');
-}
-function handlePlacementStatusChange(appId, selectElement) {
-    const newStatus = selectElement.value;
-    if(newStatus === 'Placed' || newStatus === 'Selected') { document.getElementById('placed-app-id').value = appId; document.getElementById('placed-status-val').value = newStatus; document.getElementById('mark-placed-modal').style.display = 'flex'; } else { updateApplicationStatus(appId, newStatus); }
-}
-async function updateApplicationStatus(appId, newStatus) {
-    try { await fetch(`${BASE_URL}/api/admin/update-app-status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, app_id: appId, status: newStatus }) }); loadAllPlacements(); } catch(e) { }
-}
-async function submitPlacedDetails() {
-    const appId = document.getElementById('placed-app-id').value; const status = document.getElementById('placed-status-val').value; const pack = document.getElementById('placed-package').value || '--'; const intern = document.getElementById('placed-internship').value || '--'; const link = document.getElementById('placed-offer-link').value || '';
-    const btn = document.querySelector('#mark-placed-modal .btn-success'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
-    try { await fetch(`${BASE_URL}/api/admin/mark-placed`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, app_id: appId, status: status, package: pack, internship: intern, offer_link: link }) }); } catch(e) { }
-    document.getElementById('mark-placed-modal').style.display = 'none'; btn.innerHTML = 'Save Placement Record'; loadAllPlacements(); 
-}
-
-// 🛑 EXPORT TO EXCEL (CSV)
-function openExportModal() {
-    const modalHtml = `
-    <div id="export-excel-modal" class="modal-overlay" style="display: flex; align-items: center; justify-content: center; z-index: 99999;">
-        <div class="modal-content" style="width: 100%; max-width: 500px; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
-            <div class="flex-between" style="margin-bottom: 20px;">
-                <h2 style="margin:0; font-weight: 800; font-size: 1.15rem; color: var(--text-main);">Export Placement Data</h2>
-                <i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted); font-size: 1.2rem;" onclick="document.getElementById('export-excel-modal').remove()"></i>
+    container.innerHTML = skills.map(c => {
+        const total = Number(c.total_levels) || 1; const comp = Number(c.completed_levels) || 0; const pct = Math.round((comp / total) * 100);
+        const imgUrl = processImageUrl(c.image_url);
+        let segmentsHtml = ''; for(let i=0; i<total; i++) { segmentsHtml += `<div style="flex: 1; border-radius: 4px; background: ${i < comp ? '#A855F7' : '#E2E8F0'}; height: 6px;"></div>`; }
+        return `
+        <div class="card" style="padding: 0; overflow: hidden; border: 1px solid #E2E8F0; display: flex; flex-direction: column;">
+            <div style="height: 120px; width: 100%; position: relative; background: #F8FAFC;">
+                <img src="${imgUrl}" onerror="this.src='https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';" style="width: 100%; height: 100%; object-fit: cover;">
             </div>
-            
-            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 6px;">Filter by Department</label>
-            <select id="exp-dept" class="control-input" style="width: 100%; margin-bottom: 12px; cursor: pointer;">
-                <option value="ALL">All Departments</option>
-                ${[...new Set(window.allGlobalPlacements.map(a => a.department).filter(Boolean))].map(d => `<option value="${d}">${d}</option>`).join('')}
-            </select>
-
-            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 6px;">Filter by Company</label>
-            <select id="exp-comp" class="control-input" style="width: 100%; margin-bottom: 12px; cursor: pointer;">
-                <option value="ALL">All Companies</option>
-                ${[...new Set(window.allGlobalPlacements.map(a => a.company).filter(Boolean))].map(c => `<option value="${c}">${c}</option>`).join('')}
-            </select>
-
-            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 6px;">Filter by Batch Year</label>
-            <select id="exp-year" class="control-input" style="width: 100%; margin-bottom: 12px; cursor: pointer;">
-                <option value="ALL">All Batch Years</option>
-                <option value="24">Batch 2024</option>
-                <option value="25">Batch 2025</option>
-                <option value="26">Batch 2026</option>
-            </select>
-
-            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 6px;">Minimum Salary Package (LPA)</label>
-            <input type="number" id="exp-sal" class="control-input" style="width: 100%; margin-bottom: 24px;" placeholder="e.g. 5 for 5 LPA and above" value="0">
-
-            <button class="action-btn btn-success" style="width: 100%; justify-content: center; padding: 12px; font-size: 1rem;" onclick="executeExcelExport()"><i class="fa-solid fa-download"></i> Generate Excel File</button>
-        </div>
-    </div>`;
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-}
-
-function executeExcelExport() {
-    const dept = document.getElementById('exp-dept').value;
-    const comp = document.getElementById('exp-comp').value;
-    const year = document.getElementById('exp-year').value;
-
-    let filtered = window.allGlobalPlacements || [];
-
-    if(dept !== 'ALL') filtered = filtered.filter(a => a.department === dept);
-    if(comp !== 'ALL') filtered = filtered.filter(a => a.company === comp);
-    if(year !== 'ALL') {
-        filtered = filtered.filter(a => {
-            const yMatch = (a.student_email||'').split('@')[0].match(/\d{2}$/);
-            return yMatch && yMatch[0] === year;
-        });
-    }
-    
-    if(filtered.length === 0) return alert("❌ No data matches your selected filters!");
-
-    // Build CSV Content
-    let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Student Name,Email Address,Department,Company,Role,Date Applied,Current Status\n";
-    
-    filtered.forEach(row => {
-        const safeName = esc(row.full_name).replace(/,/g, '');
-        const safeEmail = esc(row.student_email);
-        const safeDept = esc(row.department).replace(/,/g, '');
-        const safeComp = esc(row.company).replace(/,/g, '');
-        const safeRole = esc(row.role).replace(/,/g, '');
-        const safeDate = esc(row.date_applied);
-        const safeStatus = esc(row.status);
-        
-        csvContent += `${safeName},${safeEmail},${safeDept},${safeComp},${safeRole},${safeDate},${safeStatus}\n`;
-    });
-
-    // Trigger Download
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Placement_Report_${year}_${comp}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    document.getElementById('export-excel-modal').remove();
-}
-
-// 🛑 MODAL APPLICANTS LIST 
-async function viewDriveApplicants(company, role) {
-    document.getElementById('app-modal-title').innerText = `Applicants: ${company} - ${role}`;
-    document.getElementById('view-applicants-modal').style.display = 'flex';
-    document.getElementById('applicants-tbody').innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>`;
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/drive-applicants`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, company: company, role: role }) });
-        const data = await req.json();
-        if(data.success) {
-            window.currentDriveApplicants = data.applicants; 
-            const filterDropdown = document.getElementById('app-dept-filter');
-            const depts = [...new Set(data.applicants.map(a => a.department).filter(d => d && d !== 'Not Assigned'))];
-            filterDropdown.innerHTML = '<option value="ALL">All Departments</option>';
-            depts.forEach(d => { filterDropdown.innerHTML += `<option value="${d}">${d}</option>`; });
-            renderApplicantsTable();
-        } else { document.getElementById('applicants-tbody').innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">Failed to load applicants.</td></tr>`; }
-    } catch(e) { document.getElementById('applicants-tbody').innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error loading.</td></tr>`; }
-}
-
-function renderApplicantsTable() {
-    const tbody = document.getElementById('applicants-tbody');
-    const selectedDept = document.getElementById('app-dept-filter').value;
-    const filteredApps = selectedDept === 'ALL' ? window.currentDriveApplicants : window.currentDriveApplicants.filter(a => a.department === selectedDept);
-    if(!filteredApps || filteredApps.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No applicants found for this department.</td></tr>`; return; }
-    tbody.innerHTML = filteredApps.map(a => {
-        const resumeLink = (a.resume_url && a.resume_url !== '--' && a.resume_url.trim() !== '') ? `<a href="${a.resume_url}" target="_blank" style="color:var(--primary); font-weight:600; text-decoration:none;"><i class="fa-solid fa-file-pdf"></i> View</a>` : `<span style="color:var(--text-muted);">None</span>`;
-        return `<tr><td style="font-weight:600; color: var(--text-main);"><div style="font-size:0.95rem;">${a.full_name}</div><div style="font-size:0.75rem; color:var(--text-muted); font-weight:400;">${a.student_email} | ${a.roll_no||'--'}</div></td><td><span class="badge badge-primary" style="background:#EEF2FF; color:#4F46E5;">${a.department || '--'}</span></td><td style="color:var(--text-muted); font-size:0.85rem; font-weight: 600;">${a.date_applied}</td><td>${resumeLink}</td><td><select onchange="updateApplicationStatus(${a.app_id}, this.value)" class="control-input" style="padding: 4px; font-size: 0.8rem; width: 130px; border-color: var(--border); font-weight: 600; color: var(--text-main);"><option value="Applied" ${a.status === 'Applied' ? 'selected' : ''}>Applied (Pending)</option><option value="Shortlisted" ${a.status === 'Shortlisted' ? 'selected' : ''}>Shortlisted</option><option value="Interview" ${a.status === 'Interview' ? 'selected' : ''}>In Interview</option><option value="Selected" ${a.status === 'Selected' ? 'selected' : ''}>Selected / Placed</option><option value="Rejected" ${a.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select></td></tr>`;
+            <div style="padding: 16px; flex: 1; display: flex; flex-direction: column;">
+                <h4 style="margin: 0 0 12px 0; font-size: 0.95rem; color: #0F172A; font-weight: 800;">${esc(c.skill_name)}</h4>
+                <div style="display: flex; justify-content: space-between; align-items: center; color: #64748B; font-size: 0.8rem; font-weight: 700; margin-bottom: 12px;">
+                    <span>Max: ${total}</span>
+                    <span id="wrap-lvl-${c.id}" style="color: #7E22CE;">
+                        <span id="val-lvl-${c.id}">${comp}</span> done 
+                        <i class="fa-solid fa-pen admin-table-edit" style="color: #7E22CE;" onclick="openProfileEdit('completed_levels', 'val-lvl-${c.id}', '40px', '${c.id}', '${total}')"></i>
+                    </span>
+                </div>
+                <div style="display: flex; gap: 4px; height: 6px; margin-bottom: 12px;">${segmentsHtml}</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto;">
+                    <div style="font-size: 0.75rem; color: #64748B; font-weight: 600;">${pct}% Complete</div>
+                    <button class="action-icon cancel" style="padding: 4px 8px; border: 1px solid #FECACA; border-radius: 6px; background: #FEF2F2;" onclick="removeAssignedSkill(${c.id}, '${esc(c.skill_name)}')"><i class="fa-solid fa-trash" style="color: #EF4444; font-size: 0.8rem;"></i></button>
+                </div>
+            </div>
+        </div>`;
     }).join('');
 }
 
-// --- ANNOUNCEMENTS LOGIC ---
-async function loadAnnouncements() {
-    const feed = document.getElementById('announcement-feed'); 
-    if(!feed) return;
-    feed.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</div>`;
-    try {
-        const req = await fetch(`${BASE_URL}/api/announcements/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: globalToken }) }); const data = await req.json();
-        if (data.success) {
-            if(data.announcements.length === 0) { feed.innerHTML = `<div class="card" style="text-align:center; padding: 40px; color:var(--text-muted);">No announcements posted yet.</div>`; return; }
-            feed.innerHTML = data.announcements.map(ann => {
-                let dateStr = new Date(ann.date_posted).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-                let targetLabel = ann.target_department || 'ALL'; let deptBadge = targetLabel === 'ALL' ? `<span class="badge" style="background: #E2E8F0; color: #475569; margin-right: 10px;"><i class="fa-solid fa-globe"></i> Global</span>` : `<span class="badge" style="background: var(--purple-light); color: var(--purple); margin-right: 10px;"><i class="fa-solid fa-bullseye"></i> ${targetLabel}</span>`;
-                
-                let icon = 'fa-bullhorn'; let color = 'var(--primary)';
-                if(ann.type === 'Placement Drive') { icon = 'fa-briefcase'; color = 'var(--success)'; }
-                else if (ann.type === 'Training Event') { icon = 'fa-chalkboard-user'; color = '#CA8A04'; }
 
-                return `<div class="card" style="display: flex; gap: 20px; align-items: flex-start; padding: 24px; position: relative;"><button class="action-icon cancel" style="position: absolute; top: 16px; right: 16px;" onclick="deleteAnnouncement(${ann.id})"><i class="fa-solid fa-trash"></i></button><div style="background: ${color}20; color: ${color}; width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;"><i class="fa-solid ${icon}"></i></div><div style="flex: 1; padding-right: 40px;"><h3 style="margin: 0 0 8px 0; font-size: 1.1rem; color: var(--text-main); font-weight: 800;">${esc(ann.title)}</h3><div style="margin-bottom: 12px;"><span class="badge" style="background:${color}10; color:${color}; border: 1px solid ${color}; margin-right: 10px;">${esc(ann.type)}</span>${deptBadge}<span style="font-size: 0.8rem; color: var(--text-muted);"><i class="fa-regular fa-clock"></i> ${dateStr}</span></div><p style="margin: 0; color: var(--text-muted); line-height: 1.6; font-size: 0.95rem; white-space: pre-wrap;">${esc(ann.content)}</p></div></div>`;
-            }).join('');
-        }
-    } catch(e) { feed.innerHTML = `<div class="card" style="color:var(--danger); text-align:center;">Network Error</div>`; }
+// 🛑 INLINE SKILL EDITS
+function openProfileEdit(field, spanId, width, customId, totalLevels) {
+    const span = document.getElementById(spanId); originalValues[spanId] = span.innerText.trim();
+    span.parentElement.innerHTML = `<div class="flex-center" style="width: 100%; gap:4px;"><input type="number" id="in-${spanId}" class="search-wrapper" style="width: ${width}; padding:4px 8px; margin:0; border: 1px solid #7E22CE; border-radius: 6px; outline:none;" value="${originalValues[spanId]}"><i class="fa-solid fa-check action-icon save" style="width:28px; height:28px; color: #7E22CE;" onclick="saveProfileEdit('${field}', '${spanId}', '${width}', '${customId}', '${totalLevels}')"></i><i class="fa-solid fa-xmark action-icon cancel" style="width:28px; height:28px;" onclick="cancelProfileEdit('${spanId}', '${field}', '${width}', '${customId}', '${totalLevels}')"></i></div>`;
 }
-async function submitPlacementAnnouncement() {
-    const titleInput = document.getElementById('ann-title'); const contentInput = document.getElementById('ann-content'); const deptInput = document.getElementById('ann-target-dept'); const typeInput = document.getElementById('ann-type');
-    if(!titleInput || !contentInput) return;
-    const title = titleInput.value.trim(); const content = contentInput.value.trim(); const targetDept = deptInput ? deptInput.value : 'ALL'; const type = typeInput ? typeInput.value : 'Announcement';
-    if(!title || !content) return alert("Please enter both an Announcement Title and Content.");
-    const btn = document.querySelector('#add-ann-modal .btn-primary'); const originalBtnText = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Posting...';
-    try { await fetch(`${BASE_URL}/api/admin/add-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, title: title, type: type, content: content, target_department: targetDept }) }); } catch(e) {} 
-    document.getElementById('add-ann-modal').style.display = 'none'; titleInput.value = ''; contentInput.value = ''; if(deptInput) deptInput.value = 'ALL'; btn.innerHTML = originalBtnText; loadAnnouncements(); 
+function cancelProfileEdit(spanId, field, width, customId, totalLevels) {
+    const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement;
+    wrapper.innerHTML = `<span id="${spanId}">${originalValues[spanId]}</span><i class="fa-solid fa-pen admin-table-edit" style="color: #7E22CE;" onclick="openProfileEdit('${field}', '${spanId}', '${width}', '${customId}', '${totalLevels}')"></i>`;
 }
-async function deleteAnnouncement(id) { if(!confirm("Delete this announcement?")) return; await fetch(`${BASE_URL}/api/admin/delete-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); loadAnnouncements(); }
+async function saveProfileEdit(field, spanId, width, customId, totalLevels) {
+    const val = document.getElementById(`in-${spanId}`).value; 
+    if (field === 'completed_levels' && totalLevels) {
+        if (Number(val) > Number(totalLevels)) { showToast("Invalid Input", `Max levels is ${totalLevels}.`, "error"); cancelProfileEdit(spanId, field, width, customId, totalLevels); return; }
+        if (Number(val) < 0) { showToast("Invalid Input", "Levels cannot be negative.", "error"); cancelProfileEdit(spanId, field, width, customId, totalLevels); return; }
+    }
+    const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement; wrapper.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: #7E22CE;"></i>`;
+    try {
+        await fetch(`${BASE_URL}/api/admin/update-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: adminToken, id: customId, completed_levels: val }) }); 
+        
+        // Soft refresh the skills panel
+        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: targetStudentEmail }) });
+        const data = await req.json();
+        currentStudentSkills = data.skills || []; renderStudentSkills(currentStudentSkills);
+        showToast("Skill Updated", "Progress saved successfully.", "success");
+    } catch(e) { cancelProfileEdit(spanId, field, width, customId, totalLevels); showToast("Update Failed", "Could not save changes.", "error"); }
+}
+
+async function removeAssignedSkill(id, skillName) {
+    if(!confirm(`Are you sure you want to completely remove "${skillName}" from this student's profile?`)) return;
+    try { 
+        await fetch(`${BASE_URL}/api/admin/remove-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: adminToken, id: id }) }); 
+        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: targetStudentEmail }) });
+        const data = await req.json();
+        currentStudentSkills = data.skills || []; renderStudentSkills(currentStudentSkills);
+        showToast("Removed", "Course removed from student.", "success");
+    } catch(e) { showToast("Error", "Could not remove skill.", "error"); }
+}
+
+
+// ==============================================================================
+// 🛑 ASSIGN COURSES FROM MASTER REPOSITORY
+// ==============================================================================
+function getAvailableCourses() { const assignedSkillNames = currentStudentSkills.map(s => s.skill_name.toLowerCase()); return window.masterCoursesData.filter(c => !assignedSkillNames.includes(c.course_name.toLowerCase())); }
+
+function renderCourseDropdown(courses) {
+    const listContainer = document.getElementById('pcdp-course-list'); if(!listContainer) return;
+    if (!courses || courses.length === 0) { listContainer.innerHTML = `<div style="text-align: center; padding: 30px; background: #F8FAFC; border-radius: 12px; border: 1px dashed #CBD5E1; color: #64748B; font-size: 0.9rem;">No matching courses available to assign.</div>`; return; }
+    listContainer.innerHTML = courses.map(c => {
+        let iconHtml = '<i class="fa-solid fa-code"></i>'; const cat = (c.category || '').toLowerCase();
+        if(cat.includes('design') || cat.includes('ui')) iconHtml = '<i class="fa-solid fa-palette"></i>'; else if(cat.includes('data') || cat.includes('ai') || cat.includes('machine')) iconHtml = '<i class="fa-solid fa-brain"></i>'; else if(cat.includes('cloud') || cat.includes('devops')) iconHtml = '<i class="fa-solid fa-cloud"></i>';
+        return `<div class="course-option-item" onclick="selectCourseOption(this, '${c.id}')"><div style="display: flex; align-items: center; gap: 14px;"><div style="background: #F3E8FF; width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #7E22CE; font-size: 1.1rem;">${iconHtml}</div><div><div style="font-weight: 700; color: #0F172A; font-size: 0.95rem; margin-bottom: 3px;">${esc(c.course_name)}</div><div style="display: flex; gap: 8px; align-items: center;"><span class="badge" style="background: #F1F5F9; color: #475569; border: none; padding: 2px 6px; font-size: 0.65rem;">${c.total_levels} Levels</span><span style="font-size: 0.75rem; color: #64748B; font-weight: 600;">${esc(c.category || 'General')}</span></div></div></div><i class="fa-solid fa-circle-check check-icon"></i></div>`;
+    }).join(''); document.getElementById('selected-pcdp-course-id').value = '';
+}
+
+function selectCourseOption(element, courseId) { document.querySelectorAll('.course-option-item').forEach(el => el.classList.remove('selected')); element.classList.add('selected'); document.getElementById('selected-pcdp-course-id').value = courseId; }
+function filterCourseDropdown() { const search = document.getElementById('course-search-input').value.toLowerCase(); const availableCourses = getAvailableCourses(); const filtered = availableCourses.filter(c => c.course_name.toLowerCase().includes(search) || (c.category && c.category.toLowerCase().includes(search))); renderCourseDropdown(filtered); }
+
+function openAssignModal() { 
+    document.getElementById('course-search-input').value = ''; 
+    document.getElementById('assign-course-modal').style.display = 'flex'; 
+    renderCourseDropdown(getAvailableCourses()); 
+}
+
+async function submitCourseAssignment() {
+    const courseId = document.getElementById('selected-pcdp-course-id').value; 
+    if(!courseId) return showToast("Selection Required", "Please select a course to assign.", "warning"); 
+    if(!targetStudentEmail) return;
+    const btn = document.getElementById('btn-assign-course'); const originalText = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Assigning...'; btn.disabled = true;
+    try { 
+        const req = await fetch(`${BASE_URL}/api/admin/assign-pcdp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: targetStudentEmail, course_id: courseId }) });
+        const res = await req.json(); 
+        if (res.success) { 
+            document.getElementById('assign-course-modal').style.display = 'none'; 
+            showToast("Success", "Course assigned to student.", "success"); 
+            // Soft refresh
+            const reqData = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: targetStudentEmail }) });
+            const data = await reqData.json();
+            currentStudentSkills = data.skills || []; renderStudentSkills(currentStudentSkills);
+        } else { showToast("Error", res.message, "error"); } 
+    } catch(e) { showToast("Error", "Network error assigning course.", "error"); } 
+    btn.innerHTML = originalText; btn.disabled = false;
+}
