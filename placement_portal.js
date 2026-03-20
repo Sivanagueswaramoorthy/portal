@@ -65,25 +65,36 @@ function showToast(title, message, type = 'success') {
 }
 
 // ==============================================================================
-// 🛑 NAVIGATION (SAFE TAB SWITCHING)
+// 🛑 NAVIGATION (SAFE TAB SWITCHING BOUND TO WINDOW)
 // ==============================================================================
-function toggleSidebar() {
+window.toggleSidebar = function() {
     const sidebar = document.getElementById('sidebar'); const overlay = document.getElementById('sidebar-overlay');
     sidebar.classList.toggle('open');
     if (sidebar.classList.contains('open')) { overlay.classList.add('show'); } else { overlay.classList.remove('show'); }
 }
 
-function switchTab(tabId, element) { 
+window.switchTab = function(tabId, element) { 
     try {
+        // Reset all nav items
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active')); 
         if(element) element.classList.add('active'); 
         
-        document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active')); 
+        // Hide all views, strictly using classList to bypass caching issues
+        document.querySelectorAll('.view-section').forEach(view => {
+            view.classList.remove('active');
+        }); 
+        
+        // Show target
         const targetView = document.getElementById('view-' + tabId);
-        if(targetView) targetView.classList.add('active'); 
+        if(targetView) {
+            targetView.classList.add('active'); 
+        } else {
+            console.warn(`View #view-${tabId} not found.`);
+        }
         
         if(window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('show'); } 
 
+        // Trigger specific logic for Assignment workspace
         if(tabId === 'assign') {
             if(typeof renderAssignStudentList === 'function') renderAssignStudentList();
             if(typeof renderAssignCourseList === 'function') renderAssignCourseList();
@@ -91,9 +102,9 @@ function switchTab(tabId, element) {
     } catch(e) { console.error("Tab switch error:", e); }
 }
 
-function signOut() { localStorage.removeItem('pcdp_session_token'); window.location.href = 'index.html'; }
-function openModal(modalId) { const modal = document.getElementById(modalId); if(modal) modal.style.display = 'flex'; }
-function closeModal(modalId) { const modal = document.getElementById(modalId); if(modal) modal.style.display = 'none'; }
+window.signOut = function() { localStorage.removeItem('pcdp_session_token'); window.location.href = 'index.html'; }
+window.openModal = function(modalId) { const modal = document.getElementById(modalId); if(modal) modal.style.display = 'flex'; }
+window.closeModal = function(modalId) { const modal = document.getElementById(modalId); if(modal) modal.style.display = 'none'; }
 
 
 // ==============================================================================
@@ -174,7 +185,7 @@ function renderLevelsTable(courses) {
 }
 
 // 🛑 CREATE & EDIT MASTER COURSES
-async function submitPageCreateCourse() {
+window.submitPageCreateCourse = async function() {
     const name = document.getElementById('page-c-name').value.trim();
     const desc = document.getElementById('page-c-desc').value.trim();
     const levels = document.getElementById('page-c-levels').value;
@@ -200,7 +211,7 @@ async function submitPageCreateCourse() {
     btn.innerHTML = 'Save to Global Repository'; btn.disabled = false;
 }
 
-function openEditModal(id) {
+window.openEditModal = function(id) {
     const course = masterCoursesData.find(c => c.id == id);
     if(!course) return;
     document.getElementById('edit-c-id').value = course.id;
@@ -212,7 +223,7 @@ function openEditModal(id) {
     openModal('edit-course-modal');
 }
 
-async function submitEditMasterCourse() {
+window.submitEditMasterCourse = async function() {
     const btn = document.querySelector('#edit-course-modal .btn-success');
     if(btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
     try {
@@ -222,7 +233,7 @@ async function submitEditMasterCourse() {
     if(btn) btn.innerHTML = 'Save Changes';
 }
 
-async function deleteMasterCourse(id) {
+window.deleteMasterCourse = async function(id) {
     if(!confirm("Are you sure you want to delete this master course?\n\n(Note: This will not remove it from students who already have it assigned in their personal profiles.)")) return;
     try { await fetch(`${BASE_URL}/api/pcdp/master/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, id: id }) }); loadMasterCourses(); showToast("Deleted", "Master course removed.", "success"); } catch(e) {}
 }
@@ -270,14 +281,14 @@ function renderProgressTable(students) {
     `).join('');
 }
 
-function filterProgressStudents() {
+window.filterProgressStudents = function() {
     const search = document.getElementById('search-student').value.toLowerCase();
     const filtered = allStudentsList.filter(s => ((s.full_name||'').toLowerCase().includes(search)) || ((s.roll_no||'').toLowerCase().includes(search)));
     renderProgressTable(filtered);
 }
 
 // 🛑 THE SKILL EDITOR MODAL
-async function openManageSkillsModal(email, name, roll, dept) {
+window.openManageSkillsModal = async function(email, name, roll, dept) {
     targetStudentEmail = email;
     document.getElementById('ms-student-name').innerText = name;
     document.getElementById('ms-student-roll').innerText = roll || 'No Roll';
@@ -336,15 +347,15 @@ function renderStudentSkills(skills) {
 
 
 // 🛑 INLINE SKILL EDITS
-function openProfileEdit(field, spanId, width, customId, totalLevels) {
+window.openProfileEdit = function(field, spanId, width, customId, totalLevels) {
     const span = document.getElementById(spanId); originalValues[spanId] = span.innerText.trim();
-    span.parentElement.innerHTML = `<div class="flex-center" style="width: 100%; gap:4px;"><input type="number" id="in-${spanId}" class="search-wrapper" style="width: ${width}; padding:4px 8px; margin:0; border: 1px solid #7E22CE; border-radius: 6px; outline:none;" value="${originalValues[spanId]}"><i class="fa-solid fa-check action-icon save" style="width:28px; height:28px; color: #7E22CE;" onclick="saveProfileEdit('${field}', '${spanId}', '${width}', '${customId}', '${totalLevels}')"></i><i class="fa-solid fa-xmark action-icon cancel" style="width:28px; height:28px;" onclick="cancelProfileEdit('${spanId}', '${field}', '${width}', '${customId}', '${totalLevels}')"></i></div>`;
+    span.parentElement.innerHTML = `<div class="flex-center" style="width: 100%; gap:4px;"><input type="number" id="in-${spanId}" class="control-input" style="width: ${width}; padding:4px 8px; margin:0; border: 1px solid #7E22CE; outline:none;" value="${originalValues[spanId]}"><i class="fa-solid fa-check action-icon save" style="width:28px; height:28px; color: #7E22CE;" onclick="saveProfileEdit('${field}', '${spanId}', '${width}', '${customId}', '${totalLevels}')"></i><i class="fa-solid fa-xmark action-icon cancel" style="width:28px; height:28px;" onclick="cancelProfileEdit('${spanId}', '${field}', '${width}', '${customId}', '${totalLevels}')"></i></div>`;
 }
-function cancelProfileEdit(spanId, field, width, customId, totalLevels) {
+window.cancelProfileEdit = function(spanId, field, width, customId, totalLevels) {
     const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement;
     wrapper.innerHTML = `<span id="${spanId}">${originalValues[spanId]}</span><i class="fa-solid fa-pen admin-table-edit" style="color: #7E22CE;" onclick="openProfileEdit('${field}', '${spanId}', '${width}', '${customId}', '${totalLevels}')"></i>`;
 }
-async function saveProfileEdit(field, spanId, width, customId, totalLevels) {
+window.saveProfileEdit = async function(field, spanId, width, customId, totalLevels) {
     const val = document.getElementById(`in-${spanId}`).value; 
     if (field === 'completed_levels' && totalLevels) {
         if (Number(val) > Number(totalLevels)) { showToast("Invalid Input", `Max levels is ${totalLevels}.`, "error"); cancelProfileEdit(spanId, field, width, customId, totalLevels); return; }
@@ -353,8 +364,6 @@ async function saveProfileEdit(field, spanId, width, customId, totalLevels) {
     const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement; wrapper.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: #7E22CE;"></i>`;
     try {
         await fetch(`${BASE_URL}/api/admin/update-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: adminToken, id: customId, completed_levels: val }) }); 
-        
-        // Soft refresh the skills panel
         const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: targetStudentEmail }) });
         const data = await req.json();
         currentStudentSkills = data.skills || []; renderStudentSkills(currentStudentSkills);
@@ -362,7 +371,7 @@ async function saveProfileEdit(field, spanId, width, customId, totalLevels) {
     } catch(e) { cancelProfileEdit(spanId, field, width, customId, totalLevels); showToast("Update Failed", "Could not save changes.", "error"); }
 }
 
-async function removeAssignedSkill(id, skillName) {
+window.removeAssignedSkill = async function(id, skillName) {
     if(!confirm(`Are you sure you want to completely remove "${skillName}" from this student's profile?`)) return;
     try { 
         await fetch(`${BASE_URL}/api/admin/remove-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: adminToken, id: id }) }); 
@@ -377,16 +386,7 @@ async function removeAssignedSkill(id, skillName) {
 // ==============================================================================
 // 🛑 FULL PAGE ASSIGN COURSES LOGIC
 // ==============================================================================
-function openPageAssignForStudent() {
-    closeModal('manage-skills-modal');
-    switchTab('assign', document.getElementById('nav-assign'));
-    assignSelectedStudentEmail = targetStudentEmail;
-    renderAssignStudentList();
-    renderAssignCourseList();
-    updateAssignSummary();
-}
-
-function renderAssignStudentList() {
+window.renderAssignStudentList = function() {
     const listContainer = document.getElementById('assign-student-list');
     if(!listContainer) return;
     const search = document.getElementById('assign-student-search').value.toLowerCase();
@@ -408,7 +408,7 @@ function renderAssignStudentList() {
     `).join('');
 }
 
-function renderAssignCourseList() {
+window.renderAssignCourseList = function() {
     const listContainer = document.getElementById('assign-course-list');
     if(!listContainer) return;
     const search = document.getElementById('assign-course-search').value.toLowerCase();
@@ -430,13 +430,13 @@ function renderAssignCourseList() {
     `).join('');
 }
 
-function selectAssignStudent(email) {
+window.selectAssignStudent = function(email) {
     assignSelectedStudentEmail = email;
     renderAssignStudentList();
     updateAssignSummary();
 }
 
-function selectAssignCourse(id) {
+window.selectAssignCourse = function(id) {
     assignSelectedCourseId = id;
     renderAssignCourseList();
     updateAssignSummary();
@@ -467,7 +467,7 @@ function updateAssignSummary() {
     }
 }
 
-async function executePageAssignment() {
+window.executePageAssignment = async function() {
     if(!assignSelectedStudentEmail || !assignSelectedCourseId) return;
     
     const btn = document.getElementById('btn-execute-assign'); 
@@ -479,11 +479,10 @@ async function executePageAssignment() {
         const res = await req.json(); 
         if (res.success) { 
             showToast("Success", "Course assigned to student successfully.", "success"); 
-            // Clear selection for next use
-            assignSelectedCourseId = null;
+            assignSelectedCourseId = null; // Clear course selection after assigning
             renderAssignCourseList();
             updateAssignSummary();
-        } else { showToast("Error", res.message, "error"); } 
+        } else { showToast("Notice", res.message, "warning"); } 
     } catch(e) { showToast("Error", "Network error assigning course.", "error"); } 
     
     btn.innerHTML = originalText; btn.disabled = (assignSelectedStudentEmail && assignSelectedCourseId) ? false : true;
