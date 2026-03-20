@@ -37,8 +37,6 @@ const promisePool = dbPool.promise();
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN reward_points VARCHAR(10) DEFAULT '0'`); } catch(e){}
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN arrears VARCHAR(10) DEFAULT '0'`); } catch(e){}
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN leaves VARCHAR(10) DEFAULT '0'`); } catch(e){}
-        
-        // MENTOR MAPPING COLUMN
         try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN mentor_id INT DEFAULT NULL`); } catch(e){}
         
         await promisePool.query(`CREATE TABLE IF NOT EXISTS pcdp_master_courses (id INT AUTO_INCREMENT PRIMARY KEY, course_name VARCHAR(255), description TEXT, total_levels INT DEFAULT 1, category VARCHAR(100), image_url TEXT)`);
@@ -63,17 +61,13 @@ const promisePool = dbPool.promise();
         await promisePool.query(`CREATE TABLE IF NOT EXISTS announcements (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), type VARCHAR(50), content TEXT, date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
         try { await promisePool.query(`ALTER TABLE announcements ADD COLUMN target_department VARCHAR(100) DEFAULT 'ALL'`); } catch(e){}
 
-        // STAFF & DEPARTMENT TABLES
         await promisePool.query(`CREATE TABLE IF NOT EXISTS staff_directory (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), email VARCHAR(255), role VARCHAR(100), dept VARCHAR(100))`);
         await promisePool.query(`CREATE TABLE IF NOT EXISTS departments (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), code VARCHAR(50), students INT DEFAULT 0, faculty INT DEFAULT 0, icon VARCHAR(100), color VARCHAR(50), bg VARCHAR(50))`);
 
-        console.log("✅ Database Verified: All Tables (including Mentor Mapping & Staff) Ready.");
+        console.log("✅ Database Verified: All Tables Ready.");
     } catch (err) { console.error("❌ DB Init Error:", err.message); }
 })();
 
-// ============================================================================
-// --- UTILITIES & MIDDLEWARE ---
-// ============================================================================
 function getDepartmentFromEmail(email) {
     let department = 'Not Assigned';
     try {
@@ -107,9 +101,6 @@ async function verifyPCDP(reqBody) {
     throw new Error("Unauthorized PCDP Access");
 }
 
-// ============================================================================
-// --- AUTHENTICATION ROUTES ---
-// ============================================================================
 app.post('/api/hr/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -198,7 +189,6 @@ app.post(['/api/admin/assign-pcdp', '/api/admin/assign-course', '/api/pcdp/assig
 app.post('/api/admin/update-skill', async (req, res) => { try { await verifyAdmin(req.body); const { id, completed_levels } = req.body; if(!id) return res.json({ success: false, message: "Missing ID" }); const [skill] = await promisePool.query("SELECT total_levels FROM student_skills WHERE id = ?", [id]); if(skill.length === 0) return res.json({ success: false, message: "Not found." }); const max = Number(skill[0].total_levels); const comp = Number(completed_levels); if (comp > max || comp < 0) return res.json({ success: false, message: "Invalid level." }); await promisePool.query(`UPDATE student_skills SET completed_levels = ? WHERE id = ?`, [comp, id]); res.json({ success: true }); } catch (e) { res.json({ success: false, message: e.message }); } });
 app.post('/api/admin/remove-skill', async (req, res) => { try { await verifyAdmin(req.body); await promisePool.query("DELETE FROM student_skills WHERE id = ?", [req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false, message: e.message }); } });
 
-
 // ============================================================================
 // --- STUDENT GLOBAL ROUTES ---
 // ============================================================================
@@ -209,7 +199,7 @@ app.post('/api/student/apply-drive', async (req, res) => { try { const ticket = 
 
 
 // ============================================================================
-// 🛑 ADMIN DIRECTORY & MENTOR MAPPING ROUTES 
+// 🛑 ADMIN DIRECTORY & MENTOR MAPPING ROUTES (FULLY FIXED)
 // ============================================================================
 app.post('/api/admin/list', async (req, res) => { 
     try { 
@@ -227,14 +217,13 @@ app.post('/api/admin/save-mentors', async (req, res) => {
         await verifyAdmin(req.body);
         const { staffId, studentEmails, unassignedEmails } = req.body;
         
-        if (studentEmails && studentEmails.length > 0) {
-            const placeholders = studentEmails.map(() => '?').join(',');
-            await promisePool.query(`UPDATE student_profile SET mentor_id = ? WHERE email IN (${placeholders})`, [staffId, ...studentEmails]);
+        // 🛑 BULLETPROOF ARRAYS: MySQL throws errors if you pass an empty array to IN (?)
+        if (studentEmails && Array.isArray(studentEmails) && studentEmails.length > 0) {
+            await promisePool.query(`UPDATE student_profile SET mentor_id = ? WHERE email IN (?)`, [staffId, studentEmails]);
         }
 
-        if (unassignedEmails && unassignedEmails.length > 0) {
-            const placeholders = unassignedEmails.map(() => '?').join(',');
-            await promisePool.query(`UPDATE student_profile SET mentor_id = NULL WHERE email IN (${placeholders})`, [...unassignedEmails]);
+        if (unassignedEmails && Array.isArray(unassignedEmails) && unassignedEmails.length > 0) {
+            await promisePool.query(`UPDATE student_profile SET mentor_id = NULL WHERE email IN (?)`, [unassignedEmails]);
         }
 
         res.json({ success: true });
@@ -299,7 +288,6 @@ app.post('/api/admin/drive-applicants', async (req, res) => { try { await verify
 app.post('/api/announcements/list', async (req, res) => { try { let incomingToken = req.body.token || ""; if (typeof incomingToken === 'string') incomingToken = incomingToken.replace(/['"]+/g, ''); if (incomingToken === 'custom_admin_token_pc123') { const [rows] = await promisePool.query("SELECT * FROM announcements ORDER BY date_posted DESC"); return res.json({ success: true, announcements: rows }); } const ticket = await googleClient.verifyIdToken({ idToken: req.body.token, audience: CLIENT_ID }); const email = ticket.getPayload().email.toLowerCase(); if (email === 'sivanagu7771@gmail.com' || email === 'placement@gmail.com' || email === 'admin@gmail.com') { const [rows] = await promisePool.query("SELECT * FROM announcements ORDER BY date_posted DESC"); return res.json({ success: true, announcements: rows }); } const [profile] = await promisePool.query("SELECT department FROM student_profile WHERE email = ?", [email]); const studentDept = (profile.length > 0) ? profile[0].department : 'Not Assigned'; const [rows] = await promisePool.query("SELECT * FROM announcements WHERE target_department = 'ALL' OR target_department = ? ORDER BY date_posted DESC", [studentDept]); res.json({ success: true, announcements: rows }); } catch (e) { res.json({ success: false, message: e.message }); } });
 app.post('/api/admin/add-announcement', async (req, res) => { try { await verifyAdmin(req.body); await promisePool.query("INSERT INTO announcements (title, type, content, target_department) VALUES (?, ?, ?, ?)", [req.body.title, req.body.type, req.body.content, req.body.target_department || 'ALL']); res.json({ success: true }); } catch (e) { res.json({ success: false, message: e.message }); } });
 app.post('/api/admin/delete-announcement', async (req, res) => { try { await verifyAdmin(req.body); await promisePool.query("DELETE FROM announcements WHERE id = ?", [req.body.id]); res.json({ success: true }); } catch (e) { res.json({ success: false, message: e.message }); } });
-
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 BACKEND READY ON PORT ${PORT}`));
