@@ -40,10 +40,9 @@ window.onload = async () => {
         document.getElementById('headerEmail').innerText = data.profile.email || '';
         document.getElementById('headerImage').src = data.profile.picture || `https://ui-avatars.com/api/?name=Admin&background=4F46E5&color=fff`;
 
-        // Initialize Live Data from Database
-        fetchDirectory();
+        // Initialize Live Data
+        fetchStaffDirectory(); // Load staff first so mentor mapping works for directory
         fetchAdminAnnouncements();
-        fetchStaffDirectory();
         fetchDepartments();
     } catch (e) { 
         console.error("Load Error:", e); 
@@ -92,7 +91,7 @@ function switchModalTab(tabId, element) {
 async function fetchDirectory() {
     const tbody = document.getElementById('directoryBody');
     if(!tbody) return;
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: #94A3B8;"><i class="fa-solid fa-spinner fa-spin"></i> Loading data...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: #94A3B8;"><i class="fa-solid fa-spinner fa-spin"></i> Loading data...</td></tr>`;
     try {
         const req = await fetch(`${BASE_URL}/api/admin/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken }) });
         const data = await req.json();
@@ -104,22 +103,35 @@ async function fetchDirectory() {
             renderDirectory(allStudentsList);
             if(activeMappingStaffId) renderMappingWorkspace();
         }
-    } catch(e) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Network Error.</td></tr>`; }
+    } catch(e) { tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger);">Network Error.</td></tr>`; }
 }
 
 function renderDirectory(students) {
     const tbody = document.getElementById('directoryBody');
     if(!tbody) return;
-    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: #94A3B8;">No students found.</td></tr>`; return; }
-    tbody.innerHTML = students.map(s => `
+    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: #94A3B8;">No students found.</td></tr>`; return; }
+    
+    tbody.innerHTML = students.map(s => {
+        // Extract Batch Year from email (e.g. sivanagu.it24@ -> 2024)
+        const match = (s.email || '').split('@')[0].match(/\d{2}$/);
+        const year = match ? "20" + match[0] : '--';
+
+        // Find Mentor Name
+        const mentor = staffDirectoryList.find(staff => staff.id == s.mentor_id);
+        const mentorBadge = mentor 
+            ? `<span class="badge" style="background:#ECFDF5; color:#059669; border: 1px solid #A7F3D0;"><i class="fa-solid fa-user-tie" style="margin-right:4px;"></i>${esc(mentor.name)}</span>`
+            : `<span class="badge" style="background:#F1F5F9; color:#64748B; border: 1px solid #E2E8F0;">Unassigned</span>`;
+
+        return `
         <tr class="dir-row" style="transition: 0.2s;" onmouseover="this.style.background='#F8FAFC'" onmouseout="this.style.background='white'">
             <td style="font-weight:600; color: #0F172A; cursor: pointer;" onclick="loadStudentModal('${esc(s.email)}')"><div style="display: flex; align-items: center; gap: 12px;"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px; border-radius: 8px;"><div>${esc(s.full_name)}</div></div></td>
             <td style="color: #64748B; cursor: pointer;" onclick="loadStudentModal('${esc(s.email)}')">${esc(s.email)}</td>
-            <td style="font-family: monospace; cursor: pointer; color: #475569;" onclick="loadStudentModal('${esc(s.email)}')">${esc(s.roll_no)}</td>
+            <td style="font-weight: 700; color: #334155; cursor: pointer;" onclick="loadStudentModal('${esc(s.email)}')">Batch '${match ? match[0] : '--'}</td>
             <td><span class="badge" style="background:#EEF2FF; color:#4F46E5;">${esc(s.department)}</span></td>
+            <td>${mentorBadge}</td>
             <td style="text-align: right;"><button class="action-icon cancel" style="padding: 6px; border: 1px solid #FECACA; border-radius: 6px; background: #FEF2F2;" onclick="deleteStudent('${esc(s.email)}', '${esc(s.full_name)}')"><i class="fa-solid fa-trash" style="color: #EF4444;"></i></button></td>
         </tr>
-    `).join('');
+    `}).join('');
 }
 
 function filterDirectory() {
@@ -225,55 +237,7 @@ function populateModalDashboard(p, courses, skills, semGpas) {
     }
 }
 
-// INLINE EDITS
-function openProfileEdit(field, spanId, width, customId, totalLevels) {
-    const span = document.getElementById(spanId); originalValues[spanId] = span.innerText.trim();
-    span.parentElement.innerHTML = `<div class="flex-center" style="width: 100%; gap:4px;"><input type="text" id="in-${spanId}" class="control-input" style="width: ${width}; padding:4px 8px; margin:0;" value="${originalValues[spanId]}"><i class="fa-solid fa-check action-icon save" style="width:28px; height:28px;" onclick="saveProfileEdit('${field}', '${spanId}', '${width}', '${customId || ''}', '${totalLevels || ''}')"></i><i class="fa-solid fa-xmark action-icon cancel" style="width:28px; height:28px;" onclick="cancelProfileEdit('${spanId}', '${field}', '${width}', '${customId || ''}', '${totalLevels || ''}')"></i></div>`;
-}
-function cancelProfileEdit(spanId, field, width, customId, totalLevels) {
-    const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement;
-    wrapper.innerHTML = `<span id="${spanId}">${originalValues[spanId]}</span><i class="fa-solid fa-pen admin-table-edit" onclick="openProfileEdit('${field}', '${spanId}', '${width}', '${customId}', '${totalLevels}')"></i>`;
-}
-async function saveProfileEdit(field, spanId, width, customId, totalLevels) {
-    const val = document.getElementById(`in-${spanId}`).value; 
-    if (field === 'completed_levels' && totalLevels) {
-        if (Number(val) > Number(totalLevels)) { alert(`❌ Invalid Input!\n\nYou entered ${val}, but max levels is ${totalLevels}.`); cancelProfileEdit(spanId, field, width, customId, totalLevels); return; }
-        if (Number(val) < 0) { alert(`❌ Invalid Input!\n\nLevels cannot be negative.`); cancelProfileEdit(spanId, field, width, customId, totalLevels); return; }
-    }
-    const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement; wrapper.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    try {
-        if(field === 'completed_levels') { await fetch(`${BASE_URL}/api/admin/update-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: customId, completed_levels: val }) }); } 
-        else { await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, field: field, value: val }) }); }
-        loadStudentModal(targetStudentEmail); 
-    } catch(e) { cancelProfileEdit(spanId, field, width, customId, totalLevels); }
-}
-
-function openGpaEdit(sem, currentVal) {
-    originalValues[`gpa-${sem}`] = currentVal;
-    document.getElementById(`wrap-gpa-${sem}`).innerHTML = `<input type="text" id="in-gpa-${sem}" class="control-input" style="width: 50px; padding:4px;" value="${currentVal}"><i class="fa-solid fa-check action-icon save" onclick="saveGpaEdit(${sem})"></i>`;
-}
-async function saveGpaEdit(sem) {
-    const val = document.getElementById(`in-gpa-${sem}`).value; document.getElementById(`wrap-gpa-${sem}`).innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    try { await fetch(`${BASE_URL}/api/admin/update-gpa`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, semester: sem, gpa: val }) }); loadStudentModal(targetStudentEmail); } catch(e) { }
-}
-
-async function submitNewStudent() {
-    const email = document.getElementById('new-email').value.trim(); const name = document.getElementById('new-name').value.trim(); const roll = document.getElementById('new-roll').value.trim(); const dept = document.getElementById('new-dept').value.trim();
-    if(!email || !name) return alert("Email and Student Name are required.");
-    try {
-        await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email, field: 'full_name', value: name }) });
-        await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email, field: 'roll_no', value: roll }) });
-        await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email, field: 'department', value: dept }) });
-        closeModal('add-modal'); fetchDirectory();
-    } catch (e) { }
-}
-
-async function deleteStudent(email, name) {
-    if(!confirm(`⚠️ WARNING: Are you sure you want to completely delete ${name} (${email})?`)) return;
-    try { await fetch(`${BASE_URL}/api/admin/delete-student`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) }); fetchDirectory(); } catch(e) { }
-}
-
-// Chart Logic
+// Reusable Chart Logic
 function renderChart(courses, semGpas) {
     const ctx = document.getElementById('gpaChart');
     if(!ctx) return;
@@ -298,9 +262,57 @@ function renderChart(courses, semGpas) {
     gpaChartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Avg SGPA', data: dataPoints, borderColor: '#4F46E5', backgroundColor: gradient, borderWidth: 3, pointBackgroundColor: '#FFF', pointBorderColor: '#4F46E5', pointBorderWidth: 2, pointRadius: 4, fill: true, tension: 0.3 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 10, border: {display: false} }, x: { grid: { display: false }, border: {display: false} } }, interaction: { mode: 'index', intersect: false } } });
 }
 
+// Inline Modals Edits
+function openProfileEdit(field, spanId, width, customId, totalLevels) {
+    const span = document.getElementById(spanId); originalValues[spanId] = span.innerText.trim();
+    span.parentElement.innerHTML = `<div class="flex-center" style="width: 100%; gap:4px;"><input type="text" id="in-${spanId}" class="search-wrapper" style="width: ${width}; padding:6px 10px; margin:0; border: 1px solid var(--primary); border-radius: 6px; outline:none;" value="${originalValues[spanId]}"><i class="fa-solid fa-check action-icon save" style="width:28px; height:28px;" onclick="saveProfileEdit('${field}', '${spanId}', '${width}', '${customId || ''}', '${totalLevels || ''}')"></i><i class="fa-solid fa-xmark action-icon cancel" style="width:28px; height:28px;" onclick="cancelProfileEdit('${spanId}', '${field}', '${width}', '${customId || ''}', '${totalLevels || ''}')"></i></div>`;
+}
+function cancelProfileEdit(spanId, field, width, customId, totalLevels) {
+    const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement;
+    wrapper.innerHTML = `<span id="${spanId}">${originalValues[spanId]}</span><i class="fa-solid fa-pen admin-table-edit" onclick="openProfileEdit('${field}', '${spanId}', '${width}', '${customId}', '${totalLevels}')"></i>`;
+}
+async function saveProfileEdit(field, spanId, width, customId, totalLevels) {
+    const val = document.getElementById(`in-${spanId}`).value; 
+    if (field === 'completed_levels' && totalLevels) {
+        if (Number(val) > Number(totalLevels)) { alert(`❌ Invalid Input!\n\nYou entered ${val}, but max levels is ${totalLevels}.`); cancelProfileEdit(spanId, field, width, customId, totalLevels); return; }
+        if (Number(val) < 0) { alert(`❌ Invalid Input!\n\nLevels cannot be negative.`); cancelProfileEdit(spanId, field, width, customId, totalLevels); return; }
+    }
+    const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement; wrapper.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
+    try {
+        if(field === 'completed_levels') { await fetch(`${BASE_URL}/api/admin/update-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: customId, completed_levels: val }) }); } 
+        else { await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, field: field, value: val }) }); }
+        loadStudentModal(targetStudentEmail); 
+    } catch(e) { cancelProfileEdit(spanId, field, width, customId, totalLevels); }
+}
+
+function openGpaEdit(sem, currentVal) {
+    originalValues[`gpa-${sem}`] = currentVal;
+    document.getElementById(`wrap-gpa-${sem}`).innerHTML = `<input type="text" id="in-gpa-${sem}" class="search-wrapper" style="width: 50px; padding:4px; border: 1px solid var(--primary); outline: none; border-radius: 4px;" value="${currentVal}"><i class="fa-solid fa-check action-icon save" onclick="saveGpaEdit(${sem})"></i>`;
+}
+async function saveGpaEdit(sem) {
+    const val = document.getElementById(`in-gpa-${sem}`).value; document.getElementById(`wrap-gpa-${sem}`).innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
+    try { await fetch(`${BASE_URL}/api/admin/update-gpa`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, semester: sem, gpa: val }) }); loadStudentModal(targetStudentEmail); } catch(e) { }
+}
+
+async function submitNewStudent() {
+    const email = document.getElementById('new-email').value.trim(); const name = document.getElementById('new-name').value.trim(); const roll = document.getElementById('new-roll').value.trim(); const dept = document.getElementById('new-dept').value.trim();
+    if(!email || !name) return alert("Email and Student Name are required.");
+    try {
+        await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email, field: 'full_name', value: name }) });
+        await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email, field: 'roll_no', value: roll }) });
+        await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email, field: 'department', value: dept }) });
+        closeModal('add-modal'); fetchDirectory();
+    } catch (e) { }
+}
+
+async function deleteStudent(email, name) {
+    if(!confirm(`⚠️ WARNING: Are you sure you want to completely delete ${name} (${email})?`)) return;
+    try { await fetch(`${BASE_URL}/api/admin/delete-student`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) }); fetchDirectory(); } catch(e) { }
+}
+
 
 // ==============================================================================
-// 🛑 PREMIUM MENTOR MAPPING LOGIC (LIVE DB)
+// 🛑 PREMIUM MENTOR MAPPING LOGIC (LIVE DB CONNECTION)
 // ==============================================================================
 function renderMappingStaffList() {
     const container = document.getElementById('mapping-staff-list');
@@ -444,7 +456,10 @@ async function saveMentorMappings() {
             })
         });
         const res = await req.json();
-        if(res.success) { alert("✅ Mentor batch assignments successfully saved to the database!"); } 
+        if(res.success) { 
+            alert("✅ Mentor batch assignments successfully saved to the database!"); 
+            fetchDirectory(); // Refresh directory table cleanly
+        } 
         else { alert("❌ Error: " + res.message); }
     } catch (e) { alert("❌ Network Error while saving mappings."); }
     btn.innerHTML = originalHtml;
@@ -482,7 +497,19 @@ async function deleteCourse(id) { if(!confirm("Delete subject record?")) return;
 async function submitNewCourse() { const sem = document.getElementById('crs-sem').value; const name = document.getElementById('crs-name').value; const mark = document.getElementById('crs-mark').value; const grade = document.getElementById('crs-grade').value; if(!sem || !name || !mark || !grade) return alert("All fields are required."); try { await fetch(`${BASE_URL}/api/admin/add-course`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, semester: sem, course_name: name, marks: mark, grade: grade }) }); closeModal('add-course-modal'); document.getElementById('crs-sem').value=''; document.getElementById('crs-name').value=''; document.getElementById('crs-mark').value=''; document.getElementById('crs-grade').value=''; loadStudentModal(targetStudentEmail); } catch(e) {} }
 
 // --- Staff Directory ---
-async function fetchStaffDirectory() { try { const req = await fetch(`${BASE_URL}/api/admin/staff/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken }) }); const res = await req.json(); if(res.success) { staffDirectoryList = res.staff; renderStaffDirectory(); if(activeMappingStaffId) renderMappingStaffList(); } } catch(e) { } }
+async function fetchStaffDirectory() { 
+    try { 
+        const req = await fetch(`${BASE_URL}/api/admin/staff/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken }) }); 
+        const res = await req.json(); 
+        if(res.success) { 
+            staffDirectoryList = res.staff; 
+            renderStaffDirectory(); 
+            if(activeMappingStaffId) renderMappingStaffList(); 
+            // Call fetchDirectory now that we have staff, so mentors appear instantly
+            fetchDirectory(); 
+        } 
+    } catch(e) { } 
+}
 function renderStaffDirectory() {
     const tbody = document.querySelector('#view-staff tbody'); if(!tbody) return;
     if(staffDirectoryList.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">No staff found.</td></tr>`; return; }
@@ -504,8 +531,8 @@ function renderDepartments() {
     grid.innerHTML = departmentsList.map(dept => `<div class="card" style="padding: 24px; display: flex; flex-direction: column;"><div class="flex-between" style="align-items: flex-start; margin-bottom: 16px;"><div style="background: ${dept.bg || '#EEF2FF'}; color: ${dept.color || '#4F46E5'}; width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;"><i class="fa-solid ${dept.icon || 'fa-building'}"></i></div><div style="display: flex; gap: 8px;"><i class="fa-solid fa-pen" style="color: var(--primary); cursor: pointer; padding: 4px;" onclick="openDeptModal(${dept.id})"></i><i class="fa-solid fa-trash" style="color: var(--danger); cursor: pointer; padding: 4px;" onclick="deleteDepartment(${dept.id})"></i></div></div><h3 style="font-size: 1.2rem; font-weight: 800; color: var(--text-main); margin: 0 0 4px 0;">${esc(dept.name)}</h3><p style="font-size: 0.85rem; color: var(--text-muted); margin: 0 0 20px 0;">Dept. Code: ${esc(dept.code)}</p><div style="background: #F8FAFC; border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; border: 1px solid var(--border); margin-top: auto;"><div style="text-align: center;"><div style="font-size: 1.2rem; font-weight: 800; color: var(--primary);">${dept.students || 0}</div><div style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Students</div></div><div style="width: 1px; background: var(--border);"></div><div style="text-align: center;"><div style="font-size: 1.2rem; font-weight: 800; color: var(--success);">${dept.faculty || 0}</div><div style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Faculty</div></div></div></div>`).join('');
 }
 function openDeptModal(id = null) {
-    if(id) { const dept = departmentsList.find(d => d.id === id); if(!dept) return; document.getElementById('dept-modal-title').innerText = "Edit Dept"; document.getElementById('dept-id').value = dept.id; document.getElementById('dept-name').value = dept.name; document.getElementById('dept-code').value = dept.code; document.getElementById('dept-students').value = dept.students || 0; document.getElementById('dept-faculty').value = dept.faculty || 0; } 
-    else { document.getElementById('dept-modal-title').innerText = "Add Dept"; document.getElementById('dept-id').value = ""; document.getElementById('dept-name').value = ""; document.getElementById('dept-code').value = ""; document.getElementById('dept-students').value = "0"; document.getElementById('dept-faculty').value = "0"; }
+    if(id) { const dept = departmentsList.find(d => d.id === id); if(!dept) return; document.getElementById('dept-modal-title').innerText = "Edit Department"; document.getElementById('dept-id').value = dept.id; document.getElementById('dept-name').value = dept.name; document.getElementById('dept-code').value = dept.code; document.getElementById('dept-students').value = dept.students || 0; document.getElementById('dept-faculty').value = dept.faculty || 0; } 
+    else { document.getElementById('dept-modal-title').innerText = "Add Department"; document.getElementById('dept-id').value = ""; document.getElementById('dept-name').value = ""; document.getElementById('dept-code').value = ""; document.getElementById('dept-students').value = ""; document.getElementById('dept-faculty').value = ""; }
     openModal('dept-modal');
 }
 async function submitDepartmentForm() { const id = document.getElementById('dept-id').value; const name = document.getElementById('dept-name').value.trim(); const code = document.getElementById('dept-code').value.trim(); const students = document.getElementById('dept-students').value || 0; const faculty = document.getElementById('dept-faculty').value || 0; if(!name || !code) return; const endpoint = id ? '/api/admin/departments/edit' : '/api/admin/departments/add'; const payload = { adminToken: globalToken, name, code, students, faculty, icon: 'fa-building', color: '#4F46E5', bg: '#EEF2FF' }; if(id) payload.id = id; try { await fetch(`${BASE_URL}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); closeModal('dept-modal'); fetchDepartments(); } catch(e) { } }
