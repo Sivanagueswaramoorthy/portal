@@ -22,6 +22,8 @@ let selectedAssigned = new Set();
 const esc = (str) => { if (!str) return '--'; return String(str).replace(/'/g, "&#39;").replace(/"/g, '&quot;'); };
 
 window.onload = async () => {
+    injectPremiumStyles(); // Injects Toast UI CSS automatically
+    
     try {
         const req = await fetch(`${BASE_URL}/api/auth`, { 
             method: 'POST', 
@@ -41,21 +43,78 @@ window.onload = async () => {
         document.getElementById('headerImage').src = data.profile.picture || `https://ui-avatars.com/api/?name=Admin&background=4F46E5&color=fff`;
 
         // Initialize Live Data
-        fetchStaffDirectory(); // Load staff first so mentor mapping works for directory
+        fetchStaffDirectory(); 
         fetchAdminAnnouncements();
         fetchDepartments();
     } catch (e) { 
         console.error("Load Error:", e); 
+        showToast("Connection Error", "Failed to connect to the server.", "error");
     }
 };
 
 // ==============================================================================
+// 🛑 PREMIUM TOAST NOTIFICATION SYSTEM
+// ==============================================================================
+function injectPremiumStyles() {
+    const style = document.createElement('style');
+    style.innerHTML = `
+        .toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 12px; z-index: 999999; }
+        .toast-box { min-width: 320px; max-width: 400px; background: white; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); display: flex; align-items: flex-start; padding: 16px; gap: 14px; transform: translateX(120%); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); border-left: 4px solid var(--primary); }
+        .toast-box.show { transform: translateX(0); }
+        .toast-box.success { border-left-color: #10B981; }
+        .toast-box.error { border-left-color: #EF4444; }
+        .toast-box.warning { border-left-color: #F59E0B; }
+        .toast-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 2px; }
+        .toast-box.success .toast-icon { color: #10B981; }
+        .toast-box.error .toast-icon { color: #EF4444; }
+        .toast-box.warning .toast-icon { color: #F59E0B; }
+        .toast-content { flex: 1; }
+        .toast-title { font-weight: 800; color: #0F172A; font-size: 0.95rem; margin-bottom: 4px; }
+        .toast-msg { color: #64748B; font-size: 0.85rem; line-height: 1.4; }
+        .toast-close { color: #94A3B8; cursor: pointer; transition: 0.2s; font-size: 1.1rem; }
+        .toast-close:hover { color: #0F172A; }
+    `;
+    document.head.appendChild(style);
+}
+
+function showToast(title, message, type = 'success') {
+    let container = document.getElementById('toast-container');
+    if(!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+    
+    const toast = document.createElement('div');
+    toast.className = `toast-box ${type}`;
+    
+    let icon = 'fa-circle-check';
+    if(type === 'error') icon = 'fa-circle-xmark';
+    if(type === 'warning') icon = 'fa-triangle-exclamation';
+
+    toast.innerHTML = `
+        <i class="fa-solid ${icon} toast-icon"></i>
+        <div class="toast-content">
+            <div class="toast-title">${title}</div>
+            <div class="toast-msg">${message}</div>
+        </div>
+        <i class="fa-solid fa-xmark toast-close" onclick="this.parentElement.remove()"></i>
+    `;
+    
+    container.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 400);
+    }, 4500);
+}
+
+
+// ==============================================================================
 // 🛑 NAVIGATION & MODAL CONTROLS
 // ==============================================================================
-function toggleSidebar() { 
-    document.getElementById('sidebar').classList.toggle('open'); 
-    document.getElementById('sidebar-overlay').classList.toggle('show'); 
-}
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebar-overlay').classList.toggle('show'); }
 
 function switchTab(tabId, element) { 
     document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active')); 
@@ -65,18 +124,13 @@ function switchTab(tabId, element) {
     const targetView = document.getElementById('view-' + tabId);
     if(targetView) targetView.classList.add('active'); 
     
-    if(window.innerWidth <= 768) { 
-        document.getElementById('sidebar').classList.remove('open'); 
-        document.getElementById('sidebar-overlay').classList.remove('show'); 
-    } 
-    
+    if(window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('show'); } 
     if(tabId === 'mapping') renderMappingStaffList();
 }
 
 function signOut() { localStorage.removeItem('bit_session_token'); window.location.href = 'index.html'; }
 function openModal(modalId) { const modal = document.getElementById(modalId); if (modal) modal.style.display = 'flex'; }
 function closeModal(modalId) { const modal = document.getElementById(modalId); if (modal) modal.style.display = 'none'; }
-
 function switchModalTab(tabId, element) {
     document.querySelectorAll('.modal-tab').forEach(el => el.classList.remove('active'));
     element.classList.add('active');
@@ -103,7 +157,7 @@ async function fetchDirectory() {
             renderDirectory(allStudentsList);
             if(activeMappingStaffId) renderMappingWorkspace();
         }
-    } catch(e) { tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger);">Network Error.</td></tr>`; }
+    } catch(e) { tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #EF4444;">Network Error.</td></tr>`; }
 }
 
 function renderDirectory(students) {
@@ -112,11 +166,9 @@ function renderDirectory(students) {
     if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: #94A3B8;">No students found.</td></tr>`; return; }
     
     tbody.innerHTML = students.map(s => {
-        // Extract Batch Year from email (e.g. sivanagu.it24@ -> 2024)
         const match = (s.email || '').split('@')[0].match(/\d{2}$/);
         const year = match ? "20" + match[0] : '--';
 
-        // Find Mentor Name
         const mentor = staffDirectoryList.find(staff => staff.id == s.mentor_id);
         const mentorBadge = mentor 
             ? `<span class="badge" style="background:#ECFDF5; color:#059669; border: 1px solid #A7F3D0;"><i class="fa-solid fa-user-tie" style="margin-right:4px;"></i>${esc(mentor.name)}</span>`
@@ -155,17 +207,15 @@ async function loadStudentModal(email) {
         if (data.success) {
             currentStudentSkills = data.skills || []; 
             populateModalDashboard(data.profile, data.courses, data.skills, data.semGpas);
-        } else { alert("Failed to fetch student data."); closeModal('student-edit-modal'); }
-    } catch(e) { alert("Network Error"); closeModal('student-edit-modal'); }
+        } else { showToast("Error", "Failed to fetch student data.", "error"); closeModal('student-edit-modal'); }
+    } catch(e) { showToast("Network Error", "Could not load data.", "error"); closeModal('student-edit-modal'); }
 }
 
 function populateModalDashboard(p, courses, skills, semGpas) {
     if(!p) return;
-    
     document.getElementById('modal-student-name').innerText = p.full_name; 
     document.getElementById('modal-student-dept').innerText = p.department || 'No Dept'; 
     document.getElementById('modal-student-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.full_name)}&background=4F46E5&color=fff&bold=true`;
-    
     document.getElementById('val-cgpa').innerText = parseFloat(p.cgpa || 0).toFixed(2); 
     document.getElementById('val-sgpa').innerText = parseFloat(p.sgpa || 0).toFixed(2);
     document.getElementById('val-attendance').innerText = p.attendance || '0'; 
@@ -274,15 +324,16 @@ function cancelProfileEdit(spanId, field, width, customId, totalLevels) {
 async function saveProfileEdit(field, spanId, width, customId, totalLevels) {
     const val = document.getElementById(`in-${spanId}`).value; 
     if (field === 'completed_levels' && totalLevels) {
-        if (Number(val) > Number(totalLevels)) { alert(`❌ Invalid Input!\n\nYou entered ${val}, but max levels is ${totalLevels}.`); cancelProfileEdit(spanId, field, width, customId, totalLevels); return; }
-        if (Number(val) < 0) { alert(`❌ Invalid Input!\n\nLevels cannot be negative.`); cancelProfileEdit(spanId, field, width, customId, totalLevels); return; }
+        if (Number(val) > Number(totalLevels)) { showToast("Invalid Input", `Max levels is ${totalLevels}.`, "error"); cancelProfileEdit(spanId, field, width, customId, totalLevels); return; }
+        if (Number(val) < 0) { showToast("Invalid Input", "Levels cannot be negative.", "error"); cancelProfileEdit(spanId, field, width, customId, totalLevels); return; }
     }
     const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement; wrapper.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
     try {
         if(field === 'completed_levels') { await fetch(`${BASE_URL}/api/admin/update-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: customId, completed_levels: val }) }); } 
         else { await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, field: field, value: val }) }); }
         loadStudentModal(targetStudentEmail); 
-    } catch(e) { cancelProfileEdit(spanId, field, width, customId, totalLevels); }
+        showToast("Profile Updated", "Record saved successfully.", "success");
+    } catch(e) { cancelProfileEdit(spanId, field, width, customId, totalLevels); showToast("Update Failed", "Could not save changes.", "error"); }
 }
 
 function openGpaEdit(sem, currentVal) {
@@ -291,28 +342,37 @@ function openGpaEdit(sem, currentVal) {
 }
 async function saveGpaEdit(sem) {
     const val = document.getElementById(`in-gpa-${sem}`).value; document.getElementById(`wrap-gpa-${sem}`).innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>`;
-    try { await fetch(`${BASE_URL}/api/admin/update-gpa`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, semester: sem, gpa: val }) }); loadStudentModal(targetStudentEmail); } catch(e) { }
+    try { 
+        await fetch(`${BASE_URL}/api/admin/update-gpa`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, semester: sem, gpa: val }) }); 
+        loadStudentModal(targetStudentEmail); 
+        showToast("GPA Updated", `Semester ${sem} GPA saved.`, "success");
+    } catch(e) { showToast("Update Failed", "Could not save GPA.", "error"); }
 }
 
 async function submitNewStudent() {
     const email = document.getElementById('new-email').value.trim(); const name = document.getElementById('new-name').value.trim(); const roll = document.getElementById('new-roll').value.trim(); const dept = document.getElementById('new-dept').value.trim();
-    if(!email || !name) return alert("Email and Student Name are required.");
+    if(!email || !name) return showToast("Missing Fields", "Email and Student Name are required.", "warning");
     try {
         await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email, field: 'full_name', value: name }) });
         await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email, field: 'roll_no', value: roll }) });
         await fetch(`${BASE_URL}/api/admin/update-field`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email, field: 'department', value: dept }) });
         closeModal('add-modal'); fetchDirectory();
-    } catch (e) { }
+        showToast("Student Added", `${name} has been added to the directory.`, "success");
+    } catch (e) { showToast("Network Error", "Could not add student.", "error"); }
 }
 
 async function deleteStudent(email, name) {
     if(!confirm(`⚠️ WARNING: Are you sure you want to completely delete ${name} (${email})?`)) return;
-    try { await fetch(`${BASE_URL}/api/admin/delete-student`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) }); fetchDirectory(); } catch(e) { }
+    try { 
+        await fetch(`${BASE_URL}/api/admin/delete-student`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: email }) }); 
+        fetchDirectory(); 
+        showToast("Student Deleted", "Record permanently removed.", "success");
+    } catch(e) { showToast("Deletion Failed", "Could not delete student.", "error"); }
 }
 
 
 // ==============================================================================
-// 🛑 PREMIUM MENTOR MAPPING LOGIC (LIVE DB CONNECTION)
+// 🛑 PREMIUM MENTOR MAPPING LOGIC (FIXED SELECT ALL)
 // ==============================================================================
 function renderMappingStaffList() {
     const container = document.getElementById('mapping-staff-list');
@@ -356,6 +416,25 @@ function selectMappingStaff(id) {
     renderMappingStaffList(); renderMappingWorkspace();
 }
 
+function selectAllMapping(type) {
+    const search = document.getElementById('map-student-search').value.toLowerCase();
+    
+    if(type === 'unassigned') {
+        let unassignedPool = allStudentsList.filter(s => !s.mentor_id || s.mentor_id == null || s.mentor_id === "");
+        unassignedPool = unassignedPool.filter(s => s.full_name.toLowerCase().includes(search) || (s.roll_no && s.roll_no.toLowerCase().includes(search)));
+        
+        let allSelected = unassignedPool.length > 0 && unassignedPool.every(s => selectedUnassigned.has(s.email));
+        if (allSelected) { unassignedPool.forEach(s => selectedUnassigned.delete(s.email)); } 
+        else { unassignedPool.forEach(s => selectedUnassigned.add(s.email)); }
+    } else {
+        let assignedPool = allStudentsList.filter(s => s.mentor_id == activeMappingStaffId);
+        let allSelected = assignedPool.length > 0 && assignedPool.every(s => selectedAssigned.has(s.email));
+        if (allSelected) { assignedPool.forEach(s => selectedAssigned.delete(s.email)); } 
+        else { assignedPool.forEach(s => selectedAssigned.add(s.email)); }
+    }
+    renderMappingWorkspace();
+}
+
 function renderMappingWorkspace() {
     if(!activeMappingStaffId) return;
     const unassignedList = document.getElementById('map-unassigned-list');
@@ -374,14 +453,51 @@ function renderMappingWorkspace() {
     else if (currentCount >= 15) { bar.style.background = '#F59E0B'; document.getElementById('map-capacity-text').style.color = '#D97706'; }
     else { bar.style.background = '#4F46E5'; document.getElementById('map-capacity-text').style.color = '#0F172A'; }
     
-    document.getElementById('map-unassigned-count').innerText = unassignedPool.length;
-    document.getElementById('map-assigned-count').innerText = currentCount;
+    // 🛑 SAFE HEADER INJECTION (Fixes the visual duplication bug)
+    const unassignedHeader = document.getElementById('map-unassigned-count').parentElement;
+    if (!document.getElementById('btn-sel-unassigned')) {
+        unassignedHeader.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-weight: 800; font-size: 0.95rem; color: #334155;">Unassigned Students</span> 
+                <span id="map-unassigned-count" class="badge" style="background: #F1F5F9; color: #475569;">${unassignedPool.length}</span>
+            </div>
+            <button id="btn-sel-unassigned" class="action-btn btn-outline" style="padding: 4px 12px; font-size: 0.75rem; color: var(--primary); border-color: #E2E8F0; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onclick="selectAllMapping('unassigned')">Select All</button>
+        `;
+    } else {
+        document.getElementById('map-unassigned-count').innerText = unassignedPool.length;
+    }
 
+    const assignedHeader = document.getElementById('map-assigned-count').parentElement;
+    if (!document.getElementById('btn-sel-assigned')) {
+        assignedHeader.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-weight: 800; font-size: 0.95rem; color: #4338CA;">Current Batch</span> 
+                <span id="map-assigned-count" class="badge" style="background: #4F46E5; color: white;">${currentCount}</span>
+            </div>
+            <button id="btn-sel-assigned" class="action-btn btn-outline" style="padding: 4px 12px; font-size: 0.75rem; color: #4338CA; border-color: #C7D2FE; background: white; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onclick="selectAllMapping('assigned')">Select All</button>
+        `;
+    } else {
+        document.getElementById('map-assigned-count').innerText = currentCount;
+    }
+
+    // Apply Filters for Rendering
     unassignedPool = unassignedPool.filter(s => s.full_name.toLowerCase().includes(search) || (s.roll_no && s.roll_no.toLowerCase().includes(search)));
+
+    // Smart Toggle Text updates
+    const uBtn = document.getElementById('btn-sel-unassigned');
+    if(uBtn) {
+        const allUSelected = unassignedPool.length > 0 && unassignedPool.every(s => selectedUnassigned.has(s.email));
+        uBtn.innerHTML = allUSelected ? `<i class="fa-solid fa-xmark"></i> Deselect All` : `<i class="fa-solid fa-check-double"></i> Select All`;
+    }
+    const aBtn = document.getElementById('btn-sel-assigned');
+    if(aBtn) {
+        const allASelected = assignedPool.length > 0 && assignedPool.every(s => selectedAssigned.has(s.email));
+        aBtn.innerHTML = allASelected ? `<i class="fa-solid fa-xmark"></i> Deselect All` : `<i class="fa-solid fa-check-double"></i> Select All`;
+    }
 
     // Render Unassigned
     if(unassignedPool.length === 0) {
-        unassignedList.innerHTML = `<div style="text-align: center; margin-top: 60px; color: #94A3B8;"><i class="fa-solid fa-inbox" style="font-size: 2.5rem; color: #E2E8F0; margin-bottom: 16px;"></i><div style="font-size: 0.95rem; font-weight: 600;">No students found.</div></div>`;
+        unassignedList.innerHTML = `<div style="text-align: center; margin-top: 60px; color: #94A3B8;"><i class="fa-solid fa-users-slash" style="font-size: 2.5rem; color: #E2E8F0; margin-bottom: 16px;"></i><div style="font-size: 0.95rem; font-weight: 600;">No students found.</div></div>`;
     } else {
         unassignedList.innerHTML = unassignedPool.map(s => `
             <div class="student-map-item ${selectedUnassigned.has(s.email) ? 'selected' : ''}" onclick="toggleMapSelect('${s.email}', 'unassigned')">
@@ -424,19 +540,22 @@ function toggleMapSelect(email, type) {
 function assignSelected() {
     if(!activeMappingStaffId || selectedUnassigned.size === 0) return;
     const currentCount = allStudentsList.filter(s => s.mentor_id == activeMappingStaffId).length;
-    if(currentCount + selectedUnassigned.size > 20) return alert(`❌ Capacity Exceeded! Limit is 20.`);
+    if(currentCount + selectedUnassigned.size > 20) return showToast("Capacity Exceeded", "A mentor can only handle a maximum of 20 students.", "error");
+    
     allStudentsList.forEach(s => { if(selectedUnassigned.has(s.email)) s.mentor_id = activeMappingStaffId; });
     selectedUnassigned.clear(); renderMappingWorkspace(); renderMappingStaffList();
+    showToast("Assigned", "Students moved to batch. Remember to save.", "warning");
 }
 
 function unassignSelected() {
     if(selectedAssigned.size === 0) return;
     allStudentsList.forEach(s => { if(selectedAssigned.has(s.email)) s.mentor_id = null; });
     selectedAssigned.clear(); renderMappingWorkspace(); renderMappingStaffList();
+    showToast("Removed", "Students removed from batch. Remember to save.", "warning");
 }
 
 async function saveMentorMappings() {
-    if(!activeMappingStaffId) return;
+    if(!activeMappingStaffId) return showToast("Notice", "Select a mentor before saving.", "warning");
     const btn = document.querySelector('#view-mapping .btn-success');
     const originalHtml = btn.innerHTML;
     btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Saving...`;
@@ -446,22 +565,13 @@ async function saveMentorMappings() {
     
     try {
         const req = await fetch(`${BASE_URL}/api/admin/save-mentors`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                adminToken: globalToken, 
-                staffId: activeMappingStaffId,
-                studentEmails: assignedEmails,
-                unassignedEmails: unassignedEmails
-            })
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adminToken: globalToken, staffId: activeMappingStaffId, studentEmails: assignedEmails, unassignedEmails: unassignedEmails })
         });
         const res = await req.json();
-        if(res.success) { 
-            alert("✅ Mentor batch assignments successfully saved to the database!"); 
-            fetchDirectory(); // Refresh directory table cleanly
-        } 
-        else { alert("❌ Error: " + res.message); }
-    } catch (e) { alert("❌ Network Error while saving mappings."); }
+        if(res.success) { showToast("Saved!", "Mentor batch assignments successfully saved to the database.", "success"); fetchDirectory(); } 
+        else { showToast("Database Error", res.message, "error"); }
+    } catch (e) { showToast("Network Error", "Could not connect to the database to save mappings.", "error"); }
     btn.innerHTML = originalHtml;
 }
 
@@ -470,7 +580,6 @@ async function saveMentorMappings() {
 // 🛑 OTHER CRUD (Staff, Depts, Courses, Announcements)
 // ==============================================================================
 
-// --- PCDP Assignment ---
 function processImageUrl(url) { if (!url || url.trim() === "") return 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80'; let finalUrl = url.trim(); const driveMatch = finalUrl.match(/drive\.google\.com\/file\/d\/([^\/]+)/); if (driveMatch && driveMatch[1]) { return `https://drive.google.com/uc?id=${driveMatch[1]}`; } return finalUrl; }
 window.masterPcdpCourses = [];
 function getAvailableCourses() { const assignedSkillNames = currentStudentSkills.map(s => s.skill_name.toLowerCase()); return window.masterPcdpCourses.filter(c => !assignedSkillNames.includes(c.course_name.toLowerCase())); }
@@ -488,15 +597,16 @@ function selectCourseOption(element, courseId) { document.querySelectorAll('.cou
 function filterCourseDropdown() { const search = document.getElementById('course-search-input').value.toLowerCase(); const availableCourses = getAvailableCourses(); const filtered = availableCourses.filter(c => c.course_name.toLowerCase().includes(search) || (c.category && c.category.toLowerCase().includes(search))); renderCourseDropdown(filtered); }
 function openAssignModal() { document.getElementById('course-search-input').value = ''; document.getElementById('assign-course-modal').style.display = 'flex'; if(!window.masterPcdpCourses || window.masterPcdpCourses.length === 0) { loadMasterCoursesForDropdown(); } else { renderCourseDropdown(getAvailableCourses()); } }
 async function submitCourseAssignment() {
-    const courseId = document.getElementById('selected-pcdp-course-id').value; if(!courseId) return alert("Please select a course."); if(!targetStudentEmail) return;
+    const courseId = document.getElementById('selected-pcdp-course-id').value; 
+    if(!courseId) return showToast("Selection Required", "Please select a course to assign.", "warning"); 
+    if(!targetStudentEmail) return;
     const btn = document.getElementById('btn-assign-course'); const originalText = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Assigning...'; btn.disabled = true;
     try { const req = await fetch(`${BASE_URL}/api/admin/assign-pcdp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, course_id: courseId }) });
-    const res = await req.json(); if (res.success) { document.getElementById('assign-course-modal').style.display = 'none'; loadStudentModal(targetStudentEmail); } else { alert("❌ " + res.message); } } catch(e) { } btn.innerHTML = originalText; btn.disabled = false;
+    const res = await req.json(); if (res.success) { document.getElementById('assign-course-modal').style.display = 'none'; loadStudentModal(targetStudentEmail); showToast("Success", "Course assigned to student.", "success"); } else { showToast("Error", res.message, "error"); } } catch(e) { showToast("Error", "Network error.", "error"); } btn.innerHTML = originalText; btn.disabled = false;
 }
-async function deleteCourse(id) { if(!confirm("Delete subject record?")) return; try { await fetch(`${BASE_URL}/api/admin/delete-course`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); loadStudentModal(targetStudentEmail); } catch(e) {} }
-async function submitNewCourse() { const sem = document.getElementById('crs-sem').value; const name = document.getElementById('crs-name').value; const mark = document.getElementById('crs-mark').value; const grade = document.getElementById('crs-grade').value; if(!sem || !name || !mark || !grade) return alert("All fields are required."); try { await fetch(`${BASE_URL}/api/admin/add-course`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, semester: sem, course_name: name, marks: mark, grade: grade }) }); closeModal('add-course-modal'); document.getElementById('crs-sem').value=''; document.getElementById('crs-name').value=''; document.getElementById('crs-mark').value=''; document.getElementById('crs-grade').value=''; loadStudentModal(targetStudentEmail); } catch(e) {} }
+async function deleteCourse(id) { if(!confirm("Delete subject record?")) return; try { await fetch(`${BASE_URL}/api/admin/delete-course`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); loadStudentModal(targetStudentEmail); showToast("Deleted", "Course removed.", "success"); } catch(e) {} }
+async function submitNewCourse() { const sem = document.getElementById('crs-sem').value; const name = document.getElementById('crs-name').value; const mark = document.getElementById('crs-mark').value; const grade = document.getElementById('crs-grade').value; if(!sem || !name || !mark || !grade) return showToast("Missing fields", "All fields are required.", "warning"); try { await fetch(`${BASE_URL}/api/admin/add-course`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, targetEmail: targetStudentEmail, semester: sem, course_name: name, marks: mark, grade: grade }) }); closeModal('add-course-modal'); document.getElementById('crs-sem').value=''; document.getElementById('crs-name').value=''; document.getElementById('crs-mark').value=''; document.getElementById('crs-grade').value=''; loadStudentModal(targetStudentEmail); showToast("Added", "Academic course logged.", "success"); } catch(e) {} }
 
-// --- Staff Directory ---
 async function fetchStaffDirectory() { 
     try { 
         const req = await fetch(`${BASE_URL}/api/admin/staff/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken }) }); 
@@ -505,7 +615,6 @@ async function fetchStaffDirectory() {
             staffDirectoryList = res.staff; 
             renderStaffDirectory(); 
             if(activeMappingStaffId) renderMappingStaffList(); 
-            // Call fetchDirectory now that we have staff, so mentors appear instantly
             fetchDirectory(); 
         } 
     } catch(e) { } 
@@ -520,10 +629,14 @@ function openStaffModal(id = null) {
     else { document.getElementById('staff-modal-title').innerText = "Add Staff"; document.getElementById('staff-id').value = ""; document.getElementById('staff-name').value = ""; document.getElementById('staff-email').value = ""; document.getElementById('staff-role').value = ""; document.getElementById('staff-dept').value = ""; }
     openModal('staff-modal');
 }
-async function submitStaffForm() { const id = document.getElementById('staff-id').value; const name = document.getElementById('staff-name').value.trim(); const email = document.getElementById('staff-email').value.trim(); const role = document.getElementById('staff-role').value.trim(); const dept = document.getElementById('staff-dept').value.trim(); if(!name || !email) return; const endpoint = id ? '/api/admin/staff/edit' : '/api/admin/staff/add'; const payload = { adminToken: globalToken, name, email, role, dept }; if(id) payload.id = id; try { await fetch(`${BASE_URL}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); closeModal('staff-modal'); fetchStaffDirectory(); } catch(e) { } }
-async function deleteStaff(id) { if(!confirm("Remove staff member?")) return; try { await fetch(`${BASE_URL}/api/admin/staff/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id }) }); fetchStaffDirectory(); } catch(e) { } }
+async function submitStaffForm() { 
+    const id = document.getElementById('staff-id').value; const name = document.getElementById('staff-name').value.trim(); const email = document.getElementById('staff-email').value.trim(); const role = document.getElementById('staff-role').value.trim(); const dept = document.getElementById('staff-dept').value.trim(); 
+    if(!name || !email) return showToast("Missing Fields", "Name and Email are required.", "warning"); 
+    const endpoint = id ? '/api/admin/staff/edit' : '/api/admin/staff/add'; const payload = { adminToken: globalToken, name, email, role, dept }; if(id) payload.id = id; 
+    try { await fetch(`${BASE_URL}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); closeModal('staff-modal'); fetchStaffDirectory(); showToast("Success", "Staff updated.", "success"); } catch(e) { } 
+}
+async function deleteStaff(id) { if(!confirm("Remove staff member?")) return; try { await fetch(`${BASE_URL}/api/admin/staff/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id }) }); fetchStaffDirectory(); showToast("Deleted", "Staff removed.", "success"); } catch(e) { } }
 
-// --- Departments ---
 async function fetchDepartments() { try { const req = await fetch(`${BASE_URL}/api/admin/departments/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken }) }); const res = await req.json(); if(res.success) { departmentsList = res.departments; renderDepartments(); } } catch(e) { } }
 function renderDepartments() {
     const grid = document.getElementById('deptGrid'); if(!grid) return;
@@ -535,10 +648,14 @@ function openDeptModal(id = null) {
     else { document.getElementById('dept-modal-title').innerText = "Add Department"; document.getElementById('dept-id').value = ""; document.getElementById('dept-name').value = ""; document.getElementById('dept-code').value = ""; document.getElementById('dept-students').value = ""; document.getElementById('dept-faculty').value = ""; }
     openModal('dept-modal');
 }
-async function submitDepartmentForm() { const id = document.getElementById('dept-id').value; const name = document.getElementById('dept-name').value.trim(); const code = document.getElementById('dept-code').value.trim(); const students = document.getElementById('dept-students').value || 0; const faculty = document.getElementById('dept-faculty').value || 0; if(!name || !code) return; const endpoint = id ? '/api/admin/departments/edit' : '/api/admin/departments/add'; const payload = { adminToken: globalToken, name, code, students, faculty, icon: 'fa-building', color: '#4F46E5', bg: '#EEF2FF' }; if(id) payload.id = id; try { await fetch(`${BASE_URL}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); closeModal('dept-modal'); fetchDepartments(); } catch(e) { } }
-async function deleteDepartment(id) { if(!confirm("Delete this department?")) return; try { await fetch(`${BASE_URL}/api/admin/departments/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id }) }); fetchDepartments(); } catch(e) { } }
+async function submitDepartmentForm() { 
+    const id = document.getElementById('dept-id').value; const name = document.getElementById('dept-name').value.trim(); const code = document.getElementById('dept-code').value.trim(); const students = document.getElementById('dept-students').value || 0; const faculty = document.getElementById('dept-faculty').value || 0; 
+    if(!name || !code) return showToast("Missing Fields", "Department Name and Code are required.", "error"); 
+    const endpoint = id ? '/api/admin/departments/edit' : '/api/admin/departments/add'; const payload = { adminToken: globalToken, name, code, students, faculty, icon: 'fa-building', color: '#4F46E5', bg: '#EEF2FF' }; if(id) payload.id = id; 
+    try { await fetch(`${BASE_URL}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); closeModal('dept-modal'); fetchDepartments(); showToast("Success", "Department saved.", "success"); } catch(e) { } 
+}
+async function deleteDepartment(id) { if(!confirm("Delete this department?")) return; try { await fetch(`${BASE_URL}/api/admin/departments/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id }) }); fetchDepartments(); showToast("Deleted", "Department block removed.", "success"); } catch(e) { } }
 
-// --- Announcements ---
 async function fetchAdminAnnouncements() { const feed = document.getElementById('admin-ann-feed'); if(!feed) return; feed.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i></div>`; try { const req = await fetch(`${BASE_URL}/api/announcements/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken }) }); const data = await req.json(); if (data.success) { if(data.announcements.length === 0) { feed.innerHTML = `<div class="card" style="text-align:center; padding: 40px; color:var(--text-muted);">No announcements posted yet.</div>`; return; } feed.innerHTML = data.announcements.map(ann => { let dateStr = new Date(ann.date_posted).toLocaleDateString('en-GB'); let targetLabel = ann.target_department || 'ALL'; let deptBadge = targetLabel === 'ALL' ? `<span class="badge" style="background: #E2E8F0; color: #475569; margin-right: 10px;"><i class="fa-solid fa-globe"></i> Global</span>` : `<span class="badge" style="background: var(--purple-light); color: var(--purple); margin-right: 10px;"><i class="fa-solid fa-bullseye"></i> ${targetLabel}</span>`; return `<div class="card" style="display: flex; gap: 20px; align-items: flex-start; padding: 24px; position: relative;"><button class="action-icon cancel" style="position: absolute; top: 16px; right: 16px;" onclick="deleteAnnouncement(${ann.id})"><i class="fa-solid fa-trash"></i></button><div style="background: #EEF2FF; color: #4F46E5; width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;"><i class="fa-solid fa-bullhorn"></i></div><div style="flex: 1; padding-right: 40px;"><h3 style="margin: 0 0 8px 0; font-size: 1.1rem; color: var(--text-main); font-weight: 800;">${esc(ann.title)}</h3><div style="margin-bottom: 12px;">${deptBadge}<span style="font-size: 0.8rem; color: var(--text-muted);"><i class="fa-regular fa-clock"></i> ${dateStr}</span></div><p style="margin: 0; color: var(--text-muted); line-height: 1.6; font-size: 0.95rem; white-space: pre-wrap;">${esc(ann.content)}</p></div></div>`; }).join(''); } } catch(e) { } }
-async function submitAnnouncement() { const title = document.getElementById('ann-title').value.trim(); const content = document.getElementById('ann-content').value.trim(); const targetDept = document.getElementById('ann-target-dept').value; if(!title || !content) return; try { await fetch(`${BASE_URL}/api/admin/add-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, title: title, type: 'College Announcement', content: content, target_department: targetDept }) }); closeModal('add-ann-modal'); document.getElementById('ann-title').value=''; document.getElementById('ann-content').value=''; fetchAdminAnnouncements(); } catch(e) {} }
-async function deleteAnnouncement(id) { if(!confirm("Delete announcement?")) return; await fetch(`${BASE_URL}/api/admin/delete-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); fetchAdminAnnouncements(); }
+async function submitAnnouncement() { const title = document.getElementById('ann-title').value.trim(); const content = document.getElementById('ann-content').value.trim(); const targetDept = document.getElementById('ann-target-dept').value; if(!title || !content) return showToast("Missing Fields", "Title and content required.", "warning"); try { await fetch(`${BASE_URL}/api/admin/add-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, title: title, type: 'College Announcement', content: content, target_department: targetDept }) }); closeModal('add-ann-modal'); document.getElementById('ann-title').value=''; document.getElementById('ann-content').value=''; fetchAdminAnnouncements(); showToast("Posted", "Announcement sent.", "success"); } catch(e) {} }
+async function deleteAnnouncement(id) { if(!confirm("Delete announcement?")) return; await fetch(`${BASE_URL}/api/admin/delete-announcement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: globalToken, id: id }) }); fetchAdminAnnouncements(); showToast("Deleted", "Announcement removed.", "success"); }
