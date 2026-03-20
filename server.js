@@ -343,6 +343,32 @@ app.post('/api/admin/departments/delete', async (req, res) => {
     try { await verifyAdmin(req.body); await promisePool.query("DELETE FROM departments WHERE id=?", [req.body.id]); res.json({ success: true }); } 
     catch (e) { res.json({ success: false, message: e.message }); }
 });
+// Add this inside your (async function initializeDatabase() { ... })
+try { await promisePool.query(`ALTER TABLE student_profile ADD COLUMN mentor_id INT DEFAULT NULL`); } catch(e){}
+
+// Add this new route for Mentor Mapping
+app.post('/api/admin/save-mentors', async (req, res) => {
+    try {
+        await verifyAdmin(req.body);
+        const { staffId, studentEmails, unassignedEmails } = req.body;
+        
+        // Assign selected students to this mentor
+        if (studentEmails && studentEmails.length > 0) {
+            const placeholders = studentEmails.map(() => '?').join(',');
+            await promisePool.query(`UPDATE student_profile SET mentor_id = ? WHERE email IN (${placeholders})`, [staffId, ...studentEmails]);
+        }
+
+        // Remove unassigned students from this mentor
+        if (unassignedEmails && unassignedEmails.length > 0) {
+            const placeholders = unassignedEmails.map(() => '?').join(',');
+            await promisePool.query(`UPDATE student_profile SET mentor_id = NULL WHERE email IN (${placeholders})`, [...unassignedEmails]);
+        }
+
+        res.json({ success: true });
+    } catch (e) {
+        res.json({ success: false, message: e.message });
+    }
+});
 
 
 const PORT = process.env.PORT || 10000;
