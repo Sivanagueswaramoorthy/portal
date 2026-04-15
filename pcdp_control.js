@@ -11,7 +11,8 @@ let originalValues = {};
 
 // Arrays/Vars for Multi-Select Assignment
 let assignSelectedStudentEmail = null;
-let assignSelectedCourseIds = []; // Now supports multiple courses
+let assignSelectedCourseIds = []; 
+let currentlyVisibleCourseIds = []; // Tracks filtered list for "Select All"
 
 if (!adminToken) window.location.href = 'index.html';
 
@@ -248,9 +249,7 @@ async function fetchStudents() {
             allStudentsList = data.students;
             if(document.getElementById('stat-students')) document.getElementById('stat-students').innerText = allStudentsList.length;
             
-            // Populate Dynamic Department Dropdown
             populateDeptFilter();
-
             renderProgressTable(allStudentsList);
             
             const assignView = document.getElementById('view-assign');
@@ -349,7 +348,6 @@ function renderStudentSkills(skills) {
     }).join('');
 }
 
-
 // 🛑 INLINE SKILL EDITS
 function openProfileEdit(field, spanId, width, customId, totalLevels) {
     const span = document.getElementById(spanId); originalValues[spanId] = span.innerText.trim();
@@ -389,16 +387,16 @@ async function removeAssignedSkill(id, skillName) {
 
 
 // ==============================================================================
-// 🛑 FULL PAGE ASSIGN COURSES LOGIC (MULTI-SELECT)
+// 🛑 FULL PAGE ASSIGN COURSES LOGIC (MULTI-SELECT & HIDE ALREADY ASSIGNED)
 // ==============================================================================
 function openPageAssignForStudent() {
     closeModal('manage-skills-modal');
     switchTab('assign', document.getElementById('nav-assign'));
-    assignSelectedStudentEmail = targetStudentEmail;
-    assignSelectedCourseIds = []; // reset array 
-    renderAssignStudentList();
-    renderAssignCourseList();
-    updateAssignSummary();
+    
+    // Trigger the selection which fetches their current skills and cleans the view
+    if (targetStudentEmail) {
+        selectAssignStudent(targetStudentEmail);
+    }
 }
 
 function populateDeptFilter() {
@@ -444,22 +442,91 @@ function renderAssignStudentList() {
     `).join('');
 }
 
+async function selectAssignStudent(email) {
+    assignSelectedStudentEmail = email;
+    assignSelectedCourseIds = []; // Reset selections when student changes
+    renderAssignStudentList();
+    
+    const listContainer = document.getElementById('assign-course-list');
+    const btnSelectAll = document.getElementById('btn-select-all');
+    const countLabel = document.getElementById('assign-course-count');
+    
+    if(listContainer) listContainer.innerHTML = `<div style="text-align:center; padding:30px; color:#94A3B8;"><i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem; color:#7E22CE; margin-bottom:12px;"></i><br>Loading student profile...</div>`;
+    if(btnSelectAll) { btnSelectAll.disabled = true; btnSelectAll.innerText = "Select All"; }
+    if(countLabel) countLabel.innerText = "Checking existing courses...";
+    updateAssignSummary();
+
+    // Fetch this specific student's current skills so we can hide them
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: email }) });
+        const data = await req.json();
+        if (data.success) { 
+            currentStudentSkills = data.skills || []; 
+        } else {
+            currentStudentSkills = [];
+        }
+    } catch(e) { 
+        currentStudentSkills = []; 
+        showToast("Warning", "Could not verify existing courses. Showing all.", "warning");
+    }
+    
+    renderAssignCourseList();
+    updateAssignSummary();
+}
+
 function renderAssignCourseList() {
     const listContainer = document.getElementById('assign-course-list');
+    const countLabel = document.getElementById('assign-course-count');
+    const btnSelectAll = document.getElementById('btn-select-all');
     if(!listContainer) return;
     
+    // If no student is selected, wait for selection
+    if (!assignSelectedStudentEmail) {
+        listContainer.innerHTML = `<div style="text-align:center; padding:30px; color:#94A3B8; font-size:0.9rem;"><i class="fa-solid fa-user-check" style="font-size: 2rem; color: #E2E8F0; margin-bottom: 12px; display:block;"></i>Please select a student from the list on the left.</div>`;
+        if(countLabel) countLabel.innerText = "Waiting for student selection";
+        if(btnSelectAll) { btnSelectAll.disabled = true; btnSelectAll.innerText = "Select All"; }
+        currentlyVisibleCourseIds = [];
+        return;
+    }
+
     const search = document.getElementById('assign-course-search').value.toLowerCase();
     const catFilter = document.getElementById('assign-cat-filter').value.toLowerCase();
     
+    // Extract names of already assigned skills to filter them out
+    const assignedSkillNames = currentStudentSkills.map(s => s.skill_name.toLowerCase());
+
     const filtered = masterCoursesData.filter(c => {
+        // HIDE if the student already has it
+        const isAlreadyAssigned = assignedSkillNames.includes(c.course_name.toLowerCase());
+        if (isAlreadyAssigned) return false; 
+
+        // Text and Category Filters
         const matchesSearch = c.course_name.toLowerCase().includes(search) || (c.category && c.category.toLowerCase().includes(search));
         const cCat = (c.category || 'General').toLowerCase();
         const matchesCat = catFilter === "" || cCat.includes(catFilter);
         return matchesSearch && matchesCat;
     });
     
-    if(filtered.length === 0) { listContainer.innerHTML = `<div style="text-align:center; padding:30px; color:#94A3B8; font-size:0.9rem;"><i class="fa-solid fa-book" style="font-size: 2rem; color: #E2E8F0; margin-bottom: 12px; display:block;"></i>No courses found.</div>`; return; }
+    currentlyVisibleCourseIds = filtered.map(c => c.id);
+
+    if(countLabel) countLabel.innerHTML = `<b>${filtered.length}</b> Unassigned Courses Available`;
+
+    if(filtered.length === 0) { 
+        listContainer.innerHTML = `<div style="text-align:center; padding:40px; color:#94A3B8; font-size:0.9rem;"><i class="fa-solid fa-check-double" style="font-size: 2.5rem; color: #10B981; margin-bottom: 12px; display:block;"></i>All caught up!<br>This student already has all available master courses in this category.</div>`; 
+        if(btnSelectAll) btnSelectAll.disabled = true;
+        return; 
+    }
     
+    // Check if all visible items are currently selected to toggle button state
+    const allSelected = currentlyVisibleCourseIds.length > 0 && currentlyVisibleCourseIds.every(id => assignSelectedCourseIds.includes(id));
+    if(btnSelectAll) {
+        btnSelectAll.disabled = false;
+        btnSelectAll.innerText = allSelected ? "Deselect All" : "Select All";
+        btnSelectAll.style.background = allSelected ? "#F3E8FF" : "white";
+        btnSelectAll.style.color = allSelected ? "#7E22CE" : "#475569";
+        btnSelectAll.style.borderColor = allSelected ? "#7E22CE" : "#CBD5E1";
+    }
+
     listContainer.innerHTML = filtered.map(c => `
         <div class="select-list-item ${assignSelectedCourseIds.includes(c.id) ? 'selected' : ''}" onclick="selectAssignCourse(${c.id})">
             <div style="display: flex; align-items: center; gap: 12px;">
@@ -474,18 +541,33 @@ function renderAssignCourseList() {
     `).join('');
 }
 
-function selectAssignStudent(email) {
-    assignSelectedStudentEmail = email;
-    renderAssignStudentList();
-    updateAssignSummary();
-}
-
 function selectAssignCourse(id) {
     if (assignSelectedCourseIds.includes(id)) {
         assignSelectedCourseIds = assignSelectedCourseIds.filter(cid => cid !== id);
     } else {
         assignSelectedCourseIds.push(id);
     }
+    renderAssignCourseList();
+    updateAssignSummary();
+}
+
+function toggleSelectAllCourses() {
+    if (!currentlyVisibleCourseIds || currentlyVisibleCourseIds.length === 0) return;
+
+    const allSelected = currentlyVisibleCourseIds.every(id => assignSelectedCourseIds.includes(id));
+
+    if (allSelected) {
+        // Deselect all currently visible items
+        assignSelectedCourseIds = assignSelectedCourseIds.filter(id => !currentlyVisibleCourseIds.includes(id));
+    } else {
+        // Select all currently visible items
+        currentlyVisibleCourseIds.forEach(id => {
+            if (!assignSelectedCourseIds.includes(id)) {
+                assignSelectedCourseIds.push(id);
+            }
+        });
+    }
+    
     renderAssignCourseList();
     updateAssignSummary();
 }
@@ -554,15 +636,12 @@ async function executePageAssignment() {
             showToast("Error", "Failed to assign the selected courses.", "error"); 
         }
         
-        // Reset selections
-        assignSelectedCourseIds = [];
-        renderAssignCourseList();
-        updateAssignSummary();
+        // Refetch the student's skills so the newly assigned ones disappear from the list
+        await selectAssignStudent(assignSelectedStudentEmail);
 
     } catch(e) { 
         showToast("Error", "Network error while assigning courses.", "error"); 
+        btn.innerHTML = originalText; 
+        btn.disabled = false;
     } 
-    
-    btn.innerHTML = originalText; 
-    btn.disabled = (assignSelectedStudentEmail && assignSelectedCourseIds.length > 0) ? false : true;
 }

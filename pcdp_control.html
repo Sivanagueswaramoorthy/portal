@@ -50,6 +50,10 @@
         .search-wrapper-clean { flex: 1; display: flex; align-items: center; background: white; border: 1px solid #E2E8F0; border-radius: 8px; padding: 0 12px; transition: 0.2s; }
         .search-wrapper-clean:focus-within { border-color: #C084FC; box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.1); }
         .search-wrapper-clean input { width: 100%; border: none; outline: none; padding: 10px 8px; font-size: 0.9rem; }
+
+        /* Select All Button */
+        #btn-select-all:not(:disabled):hover { border-color: #7E22CE !important; color: #7E22CE !important; background: #FAF5FF !important; }
+        #btn-select-all:disabled { opacity: 0.5; cursor: not-allowed; }
     </style>
 </head>
 <body style="background: #F8FAFC;">
@@ -158,7 +162,7 @@
 
             <div id="view-assign" class="view-section">
                 <div class="flex-between" style="margin-bottom: 24px;">
-                    <div><h1 class="page-title">Assign Courses to Students</h1><p style="color: var(--text-muted); margin-top: 6px; font-size: 0.9rem;">Select a student and multiple courses to enroll them instantly.</p></div>
+                    <div><h1 class="page-title">Assign Courses to Students</h1><p style="color: var(--text-muted); margin-top: 6px; font-size: 0.9rem;">Select a student to view available courses. Courses they already have are hidden.</p></div>
                 </div>
                 
                 <div class="dash-grid" style="grid-template-columns: 1fr 1fr; align-items: start; gap: 24px;">
@@ -174,7 +178,7 @@
                                 </div>
                                 <select id="assign-dept-filter" class="filter-select" onchange="renderAssignStudentList()">
                                     <option value="">All Depts</option>
-                                    </select>
+                                </select>
                             </div>
                         </div>
                         <div id="assign-student-list" class="assign-scroll" style="overflow-y: auto; flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: white;"></div>
@@ -182,10 +186,10 @@
 
                     <div style="display: flex; flex-direction: column; gap: 24px; height: 600px;">
                         <div class="card" style="padding: 0; overflow: hidden; flex: 1; display: flex; flex-direction: column; border: 1px solid #E2E8F0;">
-                            <div style="padding: 20px; border-bottom: 1px solid #E2E8F0; background: #F8FAFC;">
+                            <div style="padding: 20px 20px 10px 20px; background: #F8FAFC;">
                                 <h3 style="font-size: 0.95rem; font-weight: 800; color: #0F172A; margin: 0 0 16px 0;">2. Select Master Courses (Multi-Select)</h3>
                                 
-                                <div class="search-filter-row">
+                                <div class="search-filter-row" style="margin-bottom: 0;">
                                     <div class="search-wrapper-clean">
                                         <i class="fa-solid fa-search" style="color: #94A3B8;"></i>
                                         <input type="text" id="assign-course-search" placeholder="Search course name..." oninput="renderAssignCourseList()">
@@ -198,7 +202,14 @@
                                     </select>
                                 </div>
                             </div>
-                            <div id="assign-course-list" class="assign-scroll" style="overflow-y: auto; flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: white;"></div>
+                            
+                            <div class="flex-between" style="padding: 12px 20px; background: #F8FAFC; border-bottom: 1px solid #E2E8F0;">
+                                <div style="font-size: 0.8rem; font-weight: 700; color: #64748B;" id="assign-course-count">Select a student first</div>
+                                <button id="btn-select-all" style="background: white; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 12px; font-size: 0.75rem; font-weight: 700; color: #475569; cursor: pointer; transition: 0.2s;" onclick="toggleSelectAllCourses()" disabled>Select All</button>
+                            </div>
+
+                            <div id="assign-course-list" class="assign-scroll" style="overflow-y: auto; flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: white;">
+                                </div>
                         </div>
                         
                         <div class="card" style="padding: 20px; background: #F3E8FF; border: 1px solid #D8B4FE; display: flex; justify-content: space-between; align-items: center;">
@@ -294,6 +305,6 @@
     </div>
 
     <div id="toast-container" class="toast-container"></div>
-    <script src="pcdp_control.js?v=multi_assign_v1"></script>
+    <script src="pcdp_control.js?v=multi_assign_v2"></script>
 </body>
 </html>
