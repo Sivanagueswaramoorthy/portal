@@ -13,9 +13,9 @@ let assignVisibleCourseIds = [];
 
 // Remove Course Vars
 let removeSelectedStudentEmail = null;
-let removeSelectedCourseIds = []; // Contains assigned skill primary IDs
+let removeSelectedCourseIds = []; 
 let removeVisibleCourseIds = []; 
-let removeStudentSkillsData = []; // Specific student's assigned skills
+let removeStudentSkillsData = []; 
 
 if (!adminToken) window.location.href = 'index.html';
 
@@ -57,7 +57,7 @@ function switchTab(tabId, element) {
 
         if(tabId === 'assign') {
             renderAssignStudentList();
-            renderAssignCourseList();
+            renderAssignCourseList(window._cachedAssignSkills || []);
         } else if (tabId === 'remove') {
             renderRemoveStudentList();
             renderRemoveCourseList();
@@ -133,9 +133,7 @@ async function loadMasterCourses() {
             renderLevelsTable(masterCoursesData); 
             if(document.getElementById('stat-courses')) document.getElementById('stat-courses').innerText = masterCoursesData.length;
         } else { signOut(); }
-    } catch(e) { 
-        if(grid) grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px; color: #EF4444;">Network Error.</div>`; 
-    }
+    } catch(e) {}
 }
 
 function renderMasterGrid(courses) {
@@ -243,7 +241,7 @@ async function deleteMasterCourse(id) {
 
 
 // ==============================================================================
-// 🛑 CORE DATA FETCHING (Runs on Load)
+// 🛑 CORE DATA FETCHING & SYNCING
 // ==============================================================================
 async function fetchStudents() {
     try {
@@ -252,7 +250,6 @@ async function fetchStudents() {
         if (data.success) {
             allStudentsList = data.students;
             if(document.getElementById('stat-students')) document.getElementById('stat-students').innerText = allStudentsList.length;
-            
             populateDeptFilter();
             
             const assignView = document.getElementById('view-assign');
@@ -260,7 +257,6 @@ async function fetchStudents() {
 
             const removeView = document.getElementById('view-remove');
             if(removeView && removeView.style.display !== 'none' && removeView.classList.contains('active')) renderRemoveStudentList();
-
         }
     } catch(e) { console.error("Error fetching students", e); }
 }
@@ -273,6 +269,34 @@ function populateDeptFilter() {
     if(document.getElementById('assign-dept-filter')) document.getElementById('assign-dept-filter').innerHTML = html;
     if(document.getElementById('remove-dept-filter')) document.getElementById('remove-dept-filter').innerHTML = html;
 }
+
+// 🛑 Master Sync Function - Keeps Assign & Remove tabs perfectly synced
+async function syncStudentData(email) {
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/student-data`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pcdpToken: adminToken, targetEmail: email })
+        });
+        const data = await req.json();
+        const skills = data.success ? (data.skills || []) : [];
+
+        // If this student is currently selected in Assign, refresh its list
+        if (assignSelectedStudentEmail === email) {
+            window._cachedAssignSkills = skills;
+            renderAssignCourseList(skills);
+            updateAssignSummary();
+        }
+        
+        // If this student is currently selected in Remove, refresh its list
+        if (removeSelectedStudentEmail === email) {
+            removeStudentSkillsData = skills;
+            renderRemoveCourseList();
+            updateRemoveSummary();
+        }
+    } catch(e) { console.error("Sync failed", e); }
+}
+
 
 // ==============================================================================
 // 🛑 ASSIGN COURSES (LEFT SIDE NAV)
@@ -320,16 +344,7 @@ async function selectAssignStudent(email) {
     if(countLabel) countLabel.innerText = "Checking existing courses...";
     updateAssignSummary();
 
-    let studentCurrentSkills = [];
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: email }) });
-        const data = await req.json();
-        if (data.success) { studentCurrentSkills = data.skills || []; }
-        window._cachedAssignSkills = studentCurrentSkills;
-    } catch(e) { window._cachedAssignSkills = []; }
-    
-    renderAssignCourseList(window._cachedAssignSkills);
-    updateAssignSummary();
+    await syncStudentData(email); // Fetches and calls renderAssignCourseList
 }
 
 function renderAssignCourseList(studentCurrentSkills = window._cachedAssignSkills || []) {
@@ -432,21 +447,33 @@ async function executePageAssignment() {
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Assigning...'; btn.disabled = true;
     
     let successCount = 0; let failCount = 0;
-    try { 
-        const promises = assignSelectedCourseIds.map(cid => 
-            fetch(`${BASE_URL}/api/admin/assign-pcdp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: assignSelectedStudentEmail, course_id: cid }) }).then(res => res.json())
-        );
-        const results = await Promise.all(promises);
-        results.forEach(res => { if(res.success) successCount++; else failCount++; });
 
-        if (successCount > 0 && failCount === 0) { showToast("Success", `Assigned ${successCount} course(s) successfully.`, "success"); } 
-        else if (successCount > 0 && failCount > 0) { showToast("Partial Success", `Assigned ${successCount} course(s), failed to assign ${failCount}.`, "warning"); } 
-        else { showToast("Error", "Failed to assign the selected courses.", "error"); }
-        await selectAssignStudent(assignSelectedStudentEmail);
-    } catch(e) { 
-        showToast("Error", "Network error while assigning courses.", "error"); 
-        btn.innerHTML = originalText; btn.disabled = false;
-    } 
+    // Run sequentially to prevent database locking issues
+    for (let cid of assignSelectedCourseIds) {
+        try {
+            const req = await fetch(`${BASE_URL}/api/admin/assign-pcdp`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ pcdpToken: adminToken, targetEmail: assignSelectedStudentEmail, course_id: cid }) 
+            });
+            const res = await req.json();
+            if (res.success) successCount++;
+            else failCount++;
+        } catch(e) {
+            failCount++;
+        }
+    }
+
+    if (successCount > 0 && failCount === 0) { showToast("Success", `Assigned ${successCount} course(s) successfully.`, "success"); } 
+    else if (successCount > 0 && failCount > 0) { showToast("Partial Success", `Assigned ${successCount} course(s), failed to assign ${failCount}.`, "warning"); } 
+    else { showToast("Error", "Failed to assign the selected courses.", "error"); }
+    
+    // Clear selections and resync data across both tabs
+    assignSelectedCourseIds = [];
+    await syncStudentData(assignSelectedStudentEmail);
+
+    btn.innerHTML = originalText; 
+    updateAssignSummary();
 }
 
 
@@ -497,14 +524,7 @@ async function selectRemoveStudent(email) {
     if(countLabel) countLabel.innerText = "Fetching data...";
     updateRemoveSummary();
 
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: email }) });
-        const data = await req.json();
-        if (data.success) { removeStudentSkillsData = data.skills || []; }
-    } catch(e) { showToast("Error", "Could not fetch assigned courses.", "error"); }
-    
-    renderRemoveCourseList();
-    updateRemoveSummary();
+    await syncStudentData(email); // Fetches and calls renderRemoveCourseList
 }
 
 function renderRemoveCourseList() {
@@ -600,7 +620,7 @@ function updateRemoveSummary() {
     }
 }
 
-// 🛑 MODIFIED to open the Custom Modal instead of window.confirm
+// Opens the Custom Modal
 function executePageRemove() {
     if(!removeSelectedStudentEmail || removeSelectedCourseIds.length === 0) return;
     
@@ -612,7 +632,7 @@ function executePageRemove() {
     openModal('confirm-remove-modal');
 }
 
-// 🛑 NEW Function to perform the actual removal after user confirms in the modal
+// Performs the actual removal after user clicks "Yes, Remove"
 async function confirmAndExecuteRemove() {
     closeModal('confirm-remove-modal');
 
@@ -621,25 +641,32 @@ async function confirmAndExecuteRemove() {
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Removing...'; btn.disabled = true;
     
     let successCount = 0; let failCount = 0;
-    try { 
-        const promises = removeSelectedCourseIds.map(cid => 
-            fetch(`${BASE_URL}/api/admin/remove-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: adminToken, id: cid }) }).then(res => res.json())
-        );
-        const results = await Promise.all(promises);
-        results.forEach(res => { if(res.success) successCount++; else failCount++; });
 
-        if (successCount > 0 && failCount === 0) { showToast("Success", `Removed ${successCount} course(s) successfully.`, "success"); } 
-        else if (successCount > 0 && failCount > 0) { showToast("Partial Success", `Removed ${successCount} course(s), failed to remove ${failCount}.`, "warning"); } 
-        else { showToast("Error", "Failed to remove the selected courses.", "error"); }
-        
-        // 🛑 FIX: Clear the selected array before re-fetching
-        removeSelectedCourseIds = [];
-        
-        await selectRemoveStudent(removeSelectedStudentEmail);
-    } catch(e) { 
-        showToast("Error", "Network error while removing courses.", "error"); 
-    } finally {
-        btn.innerHTML = originalText;
-        updateRemoveSummary();
+    // Run sequentially to prevent database locking issues
+    for (let cid of removeSelectedCourseIds) {
+        try {
+            const req = await fetch(`${BASE_URL}/api/admin/remove-skill`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                // Passed both keys to ensure backend accepts it regardless of convention used
+                body: JSON.stringify({ adminToken: adminToken, pcdpToken: adminToken, id: cid }) 
+            });
+            const res = await req.json();
+            if (res.success) successCount++;
+            else failCount++;
+        } catch(e) {
+            failCount++;
+        }
     }
+
+    if (successCount > 0 && failCount === 0) { showToast("Success", `Removed ${successCount} course(s) successfully.`, "success"); } 
+    else if (successCount > 0 && failCount > 0) { showToast("Partial Success", `Removed ${successCount} course(s), failed to remove ${failCount}.`, "warning"); } 
+    else { showToast("Error", "Failed to remove the selected courses.", "error"); }
+    
+    // Clear selections and resync data across both tabs
+    removeSelectedCourseIds = [];
+    await syncStudentData(removeSelectedStudentEmail);
+    
+    btn.innerHTML = originalText;
+    updateRemoveSummary();
 }
