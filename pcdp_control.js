@@ -325,13 +325,14 @@ async function selectAssignStudent(email) {
         const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: email }) });
         const data = await req.json();
         if (data.success) { studentCurrentSkills = data.skills || []; }
-    } catch(e) {}
+        window._cachedAssignSkills = studentCurrentSkills;
+    } catch(e) { window._cachedAssignSkills = []; }
     
-    renderAssignCourseList(studentCurrentSkills);
+    renderAssignCourseList(window._cachedAssignSkills);
     updateAssignSummary();
 }
 
-function renderAssignCourseList(studentCurrentSkills = []) {
+function renderAssignCourseList(studentCurrentSkills = window._cachedAssignSkills || []) {
     const listContainer = document.getElementById('assign-course-list');
     const countLabel = document.getElementById('assign-course-count');
     const btnSelectAll = document.getElementById('btn-select-all');
@@ -390,35 +391,7 @@ function renderAssignCourseList(studentCurrentSkills = []) {
 function selectAssignCourse(id) {
     if (assignSelectedCourseIds.includes(id)) { assignSelectedCourseIds = assignSelectedCourseIds.filter(cid => cid !== id); } 
     else { assignSelectedCourseIds.push(id); }
-    // We pass empty array here because we don't need to re-fetch to toggle selection visually. 
-    // It will just reuse the existing filtered data due to how we mapped it.
-    // Wait, we need the skills array to not redraw everything. Actually, the easiest way is to let render fetch again or cache skills.
-    // Let's just trigger a re-render student to keep it clean, or modify the DOM directly. Re-triggering is safer.
-    selectAssignStudent(assignSelectedStudentEmail); // Temporary hack to avoid storing `studentCurrentSkills` globally for Assign.
-}
-
-// Fixed selectAssignCourse logic to avoid network call on every click
-function selectAssignCourse(id) {
-    if (assignSelectedCourseIds.includes(id)) { assignSelectedCourseIds = assignSelectedCourseIds.filter(cid => cid !== id); } 
-    else { assignSelectedCourseIds.push(id); }
     renderAssignCourseList(window._cachedAssignSkills || []);
-    updateAssignSummary();
-}
-// Need to cache the skills when student is selected
-async function selectAssignStudent(email) {
-    assignSelectedStudentEmail = email;
-    assignSelectedCourseIds = [];
-    renderAssignStudentList();
-    document.getElementById('assign-course-list').innerHTML = `<div style="text-align:center; padding:30px; color:#94A3B8;"><i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem; color:#7E22CE; margin-bottom:12px;"></i></div>`;
-    updateAssignSummary();
-
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: email }) });
-        const data = await req.json();
-        window._cachedAssignSkills = data.success ? (data.skills || []) : [];
-    } catch(e) { window._cachedAssignSkills = []; }
-    
-    renderAssignCourseList(window._cachedAssignSkills);
     updateAssignSummary();
 }
 
@@ -549,12 +522,10 @@ function renderRemoveCourseList() {
 
     const search = document.getElementById('remove-course-search').value.toLowerCase();
 
-    // Filter assigned skills by search
     const filtered = removeStudentSkillsData.filter(c => {
         return c.skill_name.toLowerCase().includes(search);
     });
     
-    // Note: for removal, the backend requires the primary ID of the assigned record, which is c.id
     removeVisibleCourseIds = filtered.map(c => c.id);
 
     if(countLabel) countLabel.innerHTML = `<b>${filtered.length}</b> Assigned Courses Found`;
@@ -629,9 +600,21 @@ function updateRemoveSummary() {
     }
 }
 
-async function executePageRemove() {
+// 🛑 MODIFIED to open the Custom Modal instead of window.confirm
+function executePageRemove() {
     if(!removeSelectedStudentEmail || removeSelectedCourseIds.length === 0) return;
-    if(!confirm(`Are you sure you want to permanently remove ${removeSelectedCourseIds.length} course(s) from this student?\n\nThis will reset their progress for these skills to 0.`)) return;
+    
+    const textEl = document.getElementById('confirm-remove-text');
+    if(textEl) {
+        textEl.innerText = `Are you sure you want to permanently remove ${removeSelectedCourseIds.length} course(s) from this student? This will reset their progress for these skills to 0.`;
+    }
+    
+    openModal('confirm-remove-modal');
+}
+
+// 🛑 NEW Function to perform the actual removal after user confirms in the modal
+async function confirmAndExecuteRemove() {
+    closeModal('confirm-remove-modal');
 
     const btn = document.getElementById('btn-execute-remove'); 
     const originalText = btn.innerHTML; 
@@ -639,7 +622,6 @@ async function executePageRemove() {
     
     let successCount = 0; let failCount = 0;
     try { 
-        // Backend remove endpoint requires adminToken and the record id
         const promises = removeSelectedCourseIds.map(cid => 
             fetch(`${BASE_URL}/api/admin/remove-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: adminToken, id: cid }) }).then(res => res.json())
         );
@@ -650,9 +632,14 @@ async function executePageRemove() {
         else if (successCount > 0 && failCount > 0) { showToast("Partial Success", `Removed ${successCount} course(s), failed to remove ${failCount}.`, "warning"); } 
         else { showToast("Error", "Failed to remove the selected courses.", "error"); }
         
+        // 🛑 FIX: Clear the selected array before re-fetching
+        removeSelectedCourseIds = [];
+        
         await selectRemoveStudent(removeSelectedStudentEmail);
     } catch(e) { 
         showToast("Error", "Network error while removing courses.", "error"); 
-        btn.innerHTML = originalText; btn.disabled = false;
-    } 
+    } finally {
+        btn.innerHTML = originalText;
+        updateRemoveSummary();
+    }
 }
