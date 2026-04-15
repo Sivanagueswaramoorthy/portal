@@ -8,8 +8,10 @@ let allStudentsList = [];
 let targetStudentEmail = "";
 let currentStudentSkills = [];
 let originalValues = {}; 
+
+// Arrays/Vars for Multi-Select Assignment
 let assignSelectedStudentEmail = null;
-let assignSelectedCourseId = null;
+let assignSelectedCourseIds = []; // Now supports multiple courses
 
 if (!adminToken) window.location.href = 'index.html';
 
@@ -22,7 +24,7 @@ window.onload = async () => {
 };
 
 // ==============================================================================
-// 🛑 UI CONTROLS & NAVIGATION (HOISTED FOR HTML ACCESS)
+// 🛑 UI CONTROLS & NAVIGATION 
 // ==============================================================================
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar'); 
@@ -33,26 +35,22 @@ function toggleSidebar() {
 
 function switchTab(tabId, element) { 
     try {
-        // Reset nav highlights
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active')); 
         if(element) element.classList.add('active'); 
         
-        // Hide all views
         document.querySelectorAll('.view-section').forEach(view => {
             view.classList.remove('active');
-            view.style.display = 'none'; // Force hide
+            view.style.display = 'none';
         }); 
         
-        // Show target view
         const targetView = document.getElementById('view-' + tabId);
         if(targetView) {
             targetView.classList.add('active'); 
-            targetView.style.display = 'block'; // Force show
+            targetView.style.display = 'block';
         }
         
         if(window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('show'); } 
 
-        // Specific Tab Logic
         if(tabId === 'assign') {
             renderAssignStudentList();
             renderAssignCourseList();
@@ -66,7 +64,7 @@ function closeModal(modalId) { const modal = document.getElementById(modalId); i
 
 
 // ==============================================================================
-// 🛑 TOAST NOTIFICATIONS
+// 🛑 TOAST NOTIFICATIONS & CSS INJECTION
 // ==============================================================================
 function injectPremiumStyles() {
     const style = document.createElement('style');
@@ -89,8 +87,6 @@ function injectPremiumStyles() {
         .select-list-item { padding: 12px 16px; border: 1px solid #E2E8F0; border-radius: 8px; background: white; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: space-between; }
         .select-list-item:hover { border-color: #C084FC; background: #FAF5FF; }
         .select-list-item.selected { border-color: #7E22CE; background: #F3E8FF; box-shadow: 0 0 0 1px #7E22CE; }
-        .select-list-item .check-icon { display: none; color: #7E22CE; }
-        .select-list-item.selected .check-icon { display: block; }
     `;
     document.head.appendChild(style);
 }
@@ -251,9 +247,12 @@ async function fetchStudents() {
         if (data.success) {
             allStudentsList = data.students;
             if(document.getElementById('stat-students')) document.getElementById('stat-students').innerText = allStudentsList.length;
+            
+            // Populate Dynamic Department Dropdown
+            populateDeptFilter();
+
             renderProgressTable(allStudentsList);
             
-            // Only render assign lists if that tab is actually active
             const assignView = document.getElementById('view-assign');
             if(assignView && assignView.style.display !== 'none' && assignView.classList.contains('active')) {
                 renderAssignStudentList();
@@ -390,24 +389,46 @@ async function removeAssignedSkill(id, skillName) {
 
 
 // ==============================================================================
-// 🛑 FULL PAGE ASSIGN COURSES LOGIC
+// 🛑 FULL PAGE ASSIGN COURSES LOGIC (MULTI-SELECT)
 // ==============================================================================
 function openPageAssignForStudent() {
     closeModal('manage-skills-modal');
     switchTab('assign', document.getElementById('nav-assign'));
     assignSelectedStudentEmail = targetStudentEmail;
+    assignSelectedCourseIds = []; // reset array 
     renderAssignStudentList();
     renderAssignCourseList();
     updateAssignSummary();
 }
 
+function populateDeptFilter() {
+    const deptFilter = document.getElementById('assign-dept-filter');
+    if(!deptFilter) return;
+    
+    const depts = [...new Set(allStudentsList.map(s => s.department).filter(Boolean))].sort();
+    
+    let html = '<option value="">All Departments</option>';
+    depts.forEach(d => {
+        html += `<option value="${esc(d)}">${esc(d)}</option>`;
+    });
+    deptFilter.innerHTML = html;
+}
+
 function renderAssignStudentList() {
     const listContainer = document.getElementById('assign-student-list');
     if(!listContainer) return;
-    const search = document.getElementById('assign-student-search').value.toLowerCase();
-    const filtered = allStudentsList.filter(s => s.full_name.toLowerCase().includes(search) || (s.roll_no && s.roll_no.toLowerCase().includes(search)));
     
-    if(filtered.length === 0) { listContainer.innerHTML = `<div style="text-align:center; padding:20px; color:#94A3B8; font-size:0.9rem;">No students found.</div>`; return; }
+    const search = document.getElementById('assign-student-search').value.toLowerCase();
+    const deptFilter = document.getElementById('assign-dept-filter').value.toLowerCase();
+    
+    const filtered = allStudentsList.filter(s => {
+        const matchesSearch = s.full_name.toLowerCase().includes(search) || (s.roll_no && s.roll_no.toLowerCase().includes(search));
+        const sDept = (s.department || '').toLowerCase();
+        const matchesDept = deptFilter === "" || sDept.includes(deptFilter);
+        return matchesSearch && matchesDept;
+    });
+    
+    if(filtered.length === 0) { listContainer.innerHTML = `<div style="text-align:center; padding:30px; color:#94A3B8; font-size:0.9rem;"><i class="fa-solid fa-users" style="font-size: 2rem; color: #E2E8F0; margin-bottom: 12px; display:block;"></i>No students found.</div>`; return; }
     
     listContainer.innerHTML = filtered.map(s => `
         <div class="select-list-item ${assignSelectedStudentEmail === s.email ? 'selected' : ''}" onclick="selectAssignStudent('${esc(s.email)}')">
@@ -418,7 +439,7 @@ function renderAssignStudentList() {
                     <div style="font-size: 0.75rem; color: #64748B;">${esc(s.roll_no)} • ${esc(s.department)}</div>
                 </div>
             </div>
-            <i class="fa-solid fa-circle-check check-icon"></i>
+            <div class="multi-checkbox" style="border-radius: 50%;"><i class="fa-solid fa-check" style="font-size: 0.75rem;"></i></div>
         </div>
     `).join('');
 }
@@ -426,21 +447,29 @@ function renderAssignStudentList() {
 function renderAssignCourseList() {
     const listContainer = document.getElementById('assign-course-list');
     if(!listContainer) return;
-    const search = document.getElementById('assign-course-search').value.toLowerCase();
-    const filtered = masterCoursesData.filter(c => c.course_name.toLowerCase().includes(search) || (c.category && c.category.toLowerCase().includes(search)));
     
-    if(filtered.length === 0) { listContainer.innerHTML = `<div style="text-align:center; padding:20px; color:#94A3B8; font-size:0.9rem;">No courses found.</div>`; return; }
+    const search = document.getElementById('assign-course-search').value.toLowerCase();
+    const catFilter = document.getElementById('assign-cat-filter').value.toLowerCase();
+    
+    const filtered = masterCoursesData.filter(c => {
+        const matchesSearch = c.course_name.toLowerCase().includes(search) || (c.category && c.category.toLowerCase().includes(search));
+        const cCat = (c.category || 'General').toLowerCase();
+        const matchesCat = catFilter === "" || cCat.includes(catFilter);
+        return matchesSearch && matchesCat;
+    });
+    
+    if(filtered.length === 0) { listContainer.innerHTML = `<div style="text-align:center; padding:30px; color:#94A3B8; font-size:0.9rem;"><i class="fa-solid fa-book" style="font-size: 2rem; color: #E2E8F0; margin-bottom: 12px; display:block;"></i>No courses found.</div>`; return; }
     
     listContainer.innerHTML = filtered.map(c => `
-        <div class="select-list-item ${assignSelectedCourseId == c.id ? 'selected' : ''}" onclick="selectAssignCourse(${c.id})">
+        <div class="select-list-item ${assignSelectedCourseIds.includes(c.id) ? 'selected' : ''}" onclick="selectAssignCourse(${c.id})">
             <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="background: #F3E8FF; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #7E22CE;"><i class="fa-solid fa-code"></i></div>
+                <div style="background: ${assignSelectedCourseIds.includes(c.id) ? '#7E22CE' : '#F3E8FF'}; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: ${assignSelectedCourseIds.includes(c.id) ? 'white' : '#7E22CE'}; transition: 0.2s;"><i class="fa-solid fa-code"></i></div>
                 <div>
                     <div style="font-weight: 700; color: #0F172A; font-size: 0.9rem;">${esc(c.course_name)}</div>
-                    <div style="font-size: 0.75rem; color: #64748B;">${c.total_levels} Levels • ${esc(c.category)}</div>
+                    <div style="font-size: 0.75rem; color: #64748B;">${c.total_levels} Levels • ${esc(c.category || 'General')}</div>
                 </div>
             </div>
-            <i class="fa-solid fa-circle-check check-icon"></i>
+            <div class="multi-checkbox"><i class="fa-solid fa-check" style="font-size: 0.75rem;"></i></div>
         </div>
     `).join('');
 }
@@ -452,7 +481,11 @@ function selectAssignStudent(email) {
 }
 
 function selectAssignCourse(id) {
-    assignSelectedCourseId = id;
+    if (assignSelectedCourseIds.includes(id)) {
+        assignSelectedCourseIds = assignSelectedCourseIds.filter(cid => cid !== id);
+    } else {
+        assignSelectedCourseIds.push(id);
+    }
     renderAssignCourseList();
     updateAssignSummary();
 }
@@ -462,44 +495,74 @@ function updateAssignSummary() {
     const btn = document.getElementById('btn-execute-assign');
     if(!textEl || !btn) return;
     
-    let sName = "Student"; let cName = "Course";
+    let sName = "Student";
     if(assignSelectedStudentEmail) {
         const student = allStudentsList.find(s => s.email === assignSelectedStudentEmail);
         if(student) sName = student.full_name;
     }
-    if(assignSelectedCourseId) {
-        const course = masterCoursesData.find(c => c.id == assignSelectedCourseId);
-        if(course) cName = course.course_name;
-    }
 
-    if (assignSelectedStudentEmail && assignSelectedCourseId) {
-        textEl.innerHTML = `Assign <span style="color:#7E22CE;">${esc(cName)}</span> to <span style="color:#7E22CE;">${esc(sName)}</span>`;
+    const courseCount = assignSelectedCourseIds.length;
+
+    if (assignSelectedStudentEmail && courseCount > 0) {
+        const courseText = courseCount === 1 ? "1 Course" : `${courseCount} Courses`;
+        textEl.innerHTML = `Assign <span style="color:#7E22CE; font-weight:800;">${courseText}</span> to <span style="color:#7E22CE; font-weight:800;">${esc(sName)}</span>`;
         btn.disabled = false;
         btn.style.opacity = '1';
     } else {
-        textEl.innerHTML = "Select a student and a course above.";
+        textEl.innerHTML = "Select a student and at least one course.";
         btn.disabled = true;
         btn.style.opacity = '0.5';
     }
 }
 
 async function executePageAssignment() {
-    if(!assignSelectedStudentEmail || !assignSelectedCourseId) return;
+    if(!assignSelectedStudentEmail || assignSelectedCourseIds.length === 0) return;
     
     const btn = document.getElementById('btn-execute-assign'); 
     const originalText = btn.innerHTML; 
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Assigning...'; btn.disabled = true;
     
+    let successCount = 0;
+    let failCount = 0;
+
     try { 
-        const req = await fetch(`${BASE_URL}/api/admin/assign-pcdp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: assignSelectedStudentEmail, course_id: assignSelectedCourseId }) });
-        const res = await req.json(); 
-        if (res.success) { 
-            showToast("Success", "Course assigned to student successfully.", "success"); 
-            assignSelectedCourseId = null; // Reset course selection
-            renderAssignCourseList();
-            updateAssignSummary();
-        } else { showToast("Notice", res.message, "warning"); } 
-    } catch(e) { showToast("Error", "Network error assigning course.", "error"); } 
+        // Send requests concurrently for all selected courses
+        const promises = assignSelectedCourseIds.map(cid => 
+            fetch(`${BASE_URL}/api/admin/assign-pcdp`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ 
+                    pcdpToken: adminToken, 
+                    targetEmail: assignSelectedStudentEmail, 
+                    course_id: cid 
+                }) 
+            }).then(res => res.json())
+        );
+
+        const results = await Promise.all(promises);
+
+        results.forEach(res => {
+            if(res.success) successCount++;
+            else failCount++;
+        });
+
+        if (successCount > 0 && failCount === 0) {
+            showToast("Success", `Assigned ${successCount} course(s) successfully.`, "success"); 
+        } else if (successCount > 0 && failCount > 0) {
+            showToast("Partial Success", `Assigned ${successCount} course(s), failed to assign ${failCount}.`, "warning");
+        } else {
+            showToast("Error", "Failed to assign the selected courses.", "error"); 
+        }
+        
+        // Reset selections
+        assignSelectedCourseIds = [];
+        renderAssignCourseList();
+        updateAssignSummary();
+
+    } catch(e) { 
+        showToast("Error", "Network error while assigning courses.", "error"); 
+    } 
     
-    btn.innerHTML = originalText; btn.disabled = (assignSelectedStudentEmail && assignSelectedCourseId) ? false : true;
+    btn.innerHTML = originalText; 
+    btn.disabled = (assignSelectedStudentEmail && assignSelectedCourseIds.length > 0) ? false : true;
 }

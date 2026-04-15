@@ -38,6 +38,18 @@
         .assign-scroll::-webkit-scrollbar-track { background: transparent; }
         .assign-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
         .assign-scroll::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+        /* Multi-Select & Filter UI Elements */
+        .multi-checkbox { width: 22px; height: 22px; border: 2px solid #CBD5E1; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: transparent; transition: all 0.2s ease; background: white; flex-shrink: 0; }
+        .select-list-item.selected .multi-checkbox { background: #7E22CE; border-color: #7E22CE; color: white; }
+        
+        .filter-select { padding: 8px 12px; border: 1px solid #E2E8F0; border-radius: 8px; background: white; color: #475569; font-size: 0.85rem; font-weight: 600; outline: none; cursor: pointer; transition: 0.2s; min-width: 140px; }
+        .filter-select:focus { border-color: #C084FC; box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.1); }
+        
+        .search-filter-row { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
+        .search-wrapper-clean { flex: 1; display: flex; align-items: center; background: white; border: 1px solid #E2E8F0; border-radius: 8px; padding: 0 12px; transition: 0.2s; }
+        .search-wrapper-clean:focus-within { border-color: #C084FC; box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.1); }
+        .search-wrapper-clean input { width: 100%; border: none; outline: none; padding: 10px 8px; font-size: 0.9rem; }
     </style>
 </head>
 <body style="background: #F8FAFC;">
@@ -146,16 +158,23 @@
 
             <div id="view-assign" class="view-section">
                 <div class="flex-between" style="margin-bottom: 24px;">
-                    <div><h1 class="page-title">Assign Courses to Students</h1><p style="color: var(--text-muted); margin-top: 6px; font-size: 0.9rem;">Select a student and a course to enroll them in a skill path.</p></div>
+                    <div><h1 class="page-title">Assign Courses to Students</h1><p style="color: var(--text-muted); margin-top: 6px; font-size: 0.9rem;">Select a student and multiple courses to enroll them instantly.</p></div>
                 </div>
                 
                 <div class="dash-grid" style="grid-template-columns: 1fr 1fr; align-items: start; gap: 24px;">
+                    
                     <div class="card" style="padding: 0; overflow: hidden; height: 600px; display: flex; flex-direction: column; border: 1px solid #E2E8F0;">
-                        <div style="padding: 16px 20px; border-bottom: 1px solid #E2E8F0; background: #F8FAFC;">
-                            <h3 style="font-size: 0.95rem; font-weight: 800; color: #0F172A; margin: 0 0 12px 0;">1. Select Student</h3>
-                            <div class="search-wrapper" style="width: 100%; max-width: 100%; margin: 0; background: white; border: 1px solid #E2E8F0;">
-                                <i class="fa-solid fa-search" style="color: #94A3B8;"></i>
-                                <input type="text" id="assign-student-search" style="width: 100%; border: none; outline: none; padding: 8px;" placeholder="Search name or roll no..." oninput="renderAssignStudentList()">
+                        <div style="padding: 20px; border-bottom: 1px solid #E2E8F0; background: #F8FAFC;">
+                            <h3 style="font-size: 0.95rem; font-weight: 800; color: #0F172A; margin: 0 0 16px 0;">1. Target Student Selection</h3>
+                            
+                            <div class="search-filter-row">
+                                <div class="search-wrapper-clean">
+                                    <i class="fa-solid fa-search" style="color: #94A3B8;"></i>
+                                    <input type="text" id="assign-student-search" placeholder="Search name or roll no..." oninput="renderAssignStudentList()">
+                                </div>
+                                <select id="assign-dept-filter" class="filter-select" onchange="renderAssignStudentList()">
+                                    <option value="">All Depts</option>
+                                    </select>
                             </div>
                         </div>
                         <div id="assign-student-list" class="assign-scroll" style="overflow-y: auto; flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: white;"></div>
@@ -163,11 +182,20 @@
 
                     <div style="display: flex; flex-direction: column; gap: 24px; height: 600px;">
                         <div class="card" style="padding: 0; overflow: hidden; flex: 1; display: flex; flex-direction: column; border: 1px solid #E2E8F0;">
-                            <div style="padding: 16px 20px; border-bottom: 1px solid #E2E8F0; background: #F8FAFC;">
-                                <h3 style="font-size: 0.95rem; font-weight: 800; color: #0F172A; margin: 0 0 12px 0;">2. Select Master Course</h3>
-                                <div class="search-wrapper" style="width: 100%; max-width: 100%; margin: 0; background: white; border: 1px solid #E2E8F0;">
-                                    <i class="fa-solid fa-search" style="color: #94A3B8;"></i>
-                                    <input type="text" id="assign-course-search" style="width: 100%; border: none; outline: none; padding: 8px;" placeholder="Search course name..." oninput="renderAssignCourseList()">
+                            <div style="padding: 20px; border-bottom: 1px solid #E2E8F0; background: #F8FAFC;">
+                                <h3 style="font-size: 0.95rem; font-weight: 800; color: #0F172A; margin: 0 0 16px 0;">2. Select Master Courses (Multi-Select)</h3>
+                                
+                                <div class="search-filter-row">
+                                    <div class="search-wrapper-clean">
+                                        <i class="fa-solid fa-search" style="color: #94A3B8;"></i>
+                                        <input type="text" id="assign-course-search" placeholder="Search course name..." oninput="renderAssignCourseList()">
+                                    </div>
+                                    <select id="assign-cat-filter" class="filter-select" onchange="renderAssignCourseList()">
+                                        <option value="">All Categories</option>
+                                        <option value="software">Software</option>
+                                        <option value="hardware">Hardware</option>
+                                        <option value="general">General</option>
+                                    </select>
                                 </div>
                             </div>
                             <div id="assign-course-list" class="assign-scroll" style="overflow-y: auto; flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: white;"></div>
@@ -176,9 +204,9 @@
                         <div class="card" style="padding: 20px; background: #F3E8FF; border: 1px solid #D8B4FE; display: flex; justify-content: space-between; align-items: center;">
                             <div>
                                 <div style="font-size: 0.75rem; font-weight: 700; color: #6B21A8; text-transform: uppercase; margin-bottom: 4px;">Ready to Enroll</div>
-                                <div id="assign-summary-text" style="font-weight: 800; color: #0F172A; font-size: 0.9rem;">Select a student and a course above.</div>
+                                <div id="assign-summary-text" style="font-weight: 500; color: #0F172A; font-size: 0.95rem;">Select a student and at least one course.</div>
                             </div>
-                            <button class="action-btn btn-primary" id="btn-execute-assign" style="background: #7E22CE; border: none; padding: 12px 24px; font-size: 0.95rem;" onclick="executePageAssignment()" disabled>Assign Course <i class="fa-solid fa-arrow-right"></i></button>
+                            <button class="action-btn btn-primary" id="btn-execute-assign" style="background: #7E22CE; border: none; padding: 12px 24px; font-size: 0.95rem;" onclick="executePageAssignment()" disabled>Assign Courses <i class="fa-solid fa-arrow-right"></i></button>
                         </div>
                     </div>
                 </div>
@@ -240,7 +268,7 @@
             <div style="padding: 24px 32px;">
                 <div class="flex-between" style="margin-bottom: 20px;">
                     <h3 style="font-weight: 800; font-size: 1.1rem; color: #0F172A;">Assigned PCDP Courses</h3>
-                    <button class="action-btn btn-primary" style="background: #7E22CE; border: none; padding: 8px 16px; font-size: 0.85rem;" onclick="closeModal('manage-skills-modal'); switchTab('assign', document.getElementById('nav-assign'));"><i class="fa-solid fa-plus"></i> Go to Assign View</button>
+                    <button class="action-btn btn-primary" style="background: #7E22CE; border: none; padding: 8px 16px; font-size: 0.85rem;" onclick="openPageAssignForStudent()"><i class="fa-solid fa-plus"></i> Go to Assign View</button>
                 </div>
                 <div id="ms-skills-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;"></div>
             </div>
@@ -266,6 +294,6 @@
     </div>
 
     <div id="toast-container" class="toast-container"></div>
-    <script src="pcdp_control.js?v=force_clear_cache_001"></script>
+    <script src="pcdp_control.js?v=multi_assign_v1"></script>
 </body>
 </html>
