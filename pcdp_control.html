@@ -43,6 +43,10 @@
         .multi-checkbox { width: 22px; height: 22px; border: 2px solid #CBD5E1; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: transparent; transition: all 0.2s ease; background: white; flex-shrink: 0; }
         .select-list-item.selected .multi-checkbox { background: #7E22CE; border-color: #7E22CE; color: white; }
         
+        /* Danger Selection Styling for Remove Course */
+        .select-list-item.selected-danger { border-color: #EF4444; background: #FEF2F2; box-shadow: 0 0 0 1px #EF4444; }
+        .select-list-item.selected-danger .multi-checkbox { background: #EF4444; border-color: #EF4444; color: white; }
+
         .filter-select { padding: 8px 12px; border: 1px solid #E2E8F0; border-radius: 8px; background: white; color: #475569; font-size: 0.85rem; font-weight: 600; outline: none; cursor: pointer; transition: 0.2s; min-width: 140px; }
         .filter-select:focus { border-color: #C084FC; box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.1); }
         
@@ -52,8 +56,9 @@
         .search-wrapper-clean input { width: 100%; border: none; outline: none; padding: 10px 8px; font-size: 0.9rem; }
 
         /* Select All Button */
-        #btn-select-all:not(:disabled):hover { border-color: #7E22CE !important; color: #7E22CE !important; background: #FAF5FF !important; }
-        #btn-select-all:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-select-all:not(:disabled):hover { border-color: #7E22CE !important; color: #7E22CE !important; background: #FAF5FF !important; }
+        .btn-select-all-danger:not(:disabled):hover { border-color: #EF4444 !important; color: #EF4444 !important; background: #FEF2F2 !important; }
+        .btn-select-all:disabled, .btn-select-all-danger:disabled { opacity: 0.5; cursor: not-allowed; }
     </style>
 </head>
 <body style="background: #F8FAFC;">
@@ -73,7 +78,7 @@
             <a class="nav-item" id="nav-repository" onclick="switchTab('repository', this)"><i class="fa-solid fa-layer-group"></i> Course Repository</a>
             <a class="nav-item" id="nav-create" onclick="switchTab('create', this)"><i class="fa-solid fa-plus-circle"></i> Create Course</a>
             <a class="nav-item" id="nav-assign" onclick="switchTab('assign', this)"><i class="fa-solid fa-user-plus"></i> Assign Courses</a>
-            <a class="nav-item" id="nav-progress" onclick="switchTab('progress', this)"><i class="fa-solid fa-bars-progress"></i> Student Progress</a>
+            <a class="nav-item" id="nav-remove" onclick="switchTab('remove', this)"><i class="fa-solid fa-folder-minus"></i> Remove Course</a>
             <a class="nav-item" id="nav-levels" onclick="switchTab('levels', this)"><i class="fa-solid fa-list-ol"></i> Levels / Modules</a>
             <a class="nav-item" id="nav-reports" onclick="switchTab('reports', this)"><i class="fa-solid fa-file-csv"></i> Reports</a>
         </div>
@@ -166,19 +171,15 @@
                 </div>
                 
                 <div class="dash-grid" style="grid-template-columns: 1fr 1fr; align-items: start; gap: 24px;">
-                    
                     <div class="card" style="padding: 0; overflow: hidden; height: 600px; display: flex; flex-direction: column; border: 1px solid #E2E8F0;">
                         <div style="padding: 20px; border-bottom: 1px solid #E2E8F0; background: #F8FAFC;">
                             <h3 style="font-size: 0.95rem; font-weight: 800; color: #0F172A; margin: 0 0 16px 0;">1. Target Student Selection</h3>
-                            
                             <div class="search-filter-row">
                                 <div class="search-wrapper-clean">
                                     <i class="fa-solid fa-search" style="color: #94A3B8;"></i>
                                     <input type="text" id="assign-student-search" placeholder="Search name or roll no..." oninput="renderAssignStudentList()">
                                 </div>
-                                <select id="assign-dept-filter" class="filter-select" onchange="renderAssignStudentList()">
-                                    <option value="">All Depts</option>
-                                </select>
+                                <select id="assign-dept-filter" class="filter-select" onchange="renderAssignStudentList()"><option value="">All Depts</option></select>
                             </div>
                         </div>
                         <div id="assign-student-list" class="assign-scroll" style="overflow-y: auto; flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: white;"></div>
@@ -188,28 +189,21 @@
                         <div class="card" style="padding: 0; overflow: hidden; flex: 1; display: flex; flex-direction: column; border: 1px solid #E2E8F0;">
                             <div style="padding: 20px 20px 10px 20px; background: #F8FAFC;">
                                 <h3 style="font-size: 0.95rem; font-weight: 800; color: #0F172A; margin: 0 0 16px 0;">2. Select Master Courses (Multi-Select)</h3>
-                                
                                 <div class="search-filter-row" style="margin-bottom: 0;">
                                     <div class="search-wrapper-clean">
                                         <i class="fa-solid fa-search" style="color: #94A3B8;"></i>
                                         <input type="text" id="assign-course-search" placeholder="Search course name..." oninput="renderAssignCourseList()">
                                     </div>
                                     <select id="assign-cat-filter" class="filter-select" onchange="renderAssignCourseList()">
-                                        <option value="">All Categories</option>
-                                        <option value="software">Software</option>
-                                        <option value="hardware">Hardware</option>
-                                        <option value="general">General</option>
+                                        <option value="">All Categories</option><option value="software">Software</option><option value="hardware">Hardware</option><option value="general">General</option>
                                     </select>
                                 </div>
                             </div>
-                            
                             <div class="flex-between" style="padding: 12px 20px; background: #F8FAFC; border-bottom: 1px solid #E2E8F0;">
                                 <div style="font-size: 0.8rem; font-weight: 700; color: #64748B;" id="assign-course-count">Select a student first</div>
-                                <button id="btn-select-all" style="background: white; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 12px; font-size: 0.75rem; font-weight: 700; color: #475569; cursor: pointer; transition: 0.2s;" onclick="toggleSelectAllCourses()" disabled>Select All</button>
+                                <button id="btn-select-all" class="btn-select-all" style="background: white; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 12px; font-size: 0.75rem; font-weight: 700; color: #475569; cursor: pointer; transition: 0.2s;" onclick="toggleSelectAllCourses()" disabled>Select All</button>
                             </div>
-
-                            <div id="assign-course-list" class="assign-scroll" style="overflow-y: auto; flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: white;">
-                                </div>
+                            <div id="assign-course-list" class="assign-scroll" style="overflow-y: auto; flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: white;"></div>
                         </div>
                         
                         <div class="card" style="padding: 20px; background: #F3E8FF; border: 1px solid #D8B4FE; display: flex; justify-content: space-between; align-items: center;">
@@ -223,19 +217,52 @@
                 </div>
             </div>
 
-            <div id="view-progress" class="view-section">
-                <div class="flex-between" style="margin-bottom: 24px;"><div><h1 class="page-title">Student Skill Progress</h1><p style="color: var(--text-muted); margin-top: 6px; font-size: 0.85rem;">Track individual student skill assignments and update levels.</p></div></div>
-                <div class="card" style="padding: 20px; margin-bottom: 20px; border: 1px solid #E2E8F0;">
-                    <div class="search-wrapper" style="width: 100%; max-width: 100%; margin: 0; background: #F8FAFC; border-radius: 8px; padding: 10px 14px; border: 1px solid #E2E8F0;">
-                        <i class="fa-solid fa-search" style="color: #94A3B8;"></i>
-                        <input type="text" id="search-student" style="width: 100%; border: none; background: transparent; font-size: 0.95rem; outline: none; color: #0F172A;" placeholder="Search students by name or roll number..." oninput="filterProgressStudents()">
-                    </div>
+            <div id="view-remove" class="view-section">
+                <div class="flex-between" style="margin-bottom: 24px;">
+                    <div><h1 class="page-title">Remove Assigned Courses</h1><p style="color: var(--text-muted); margin-top: 6px; font-size: 0.9rem;">Select a student to view their assigned courses. Select courses to permanently unassign them.</p></div>
                 </div>
-                <div class="table-wrapper" style="border: 1px solid #E2E8F0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border-radius: 12px; overflow: hidden;">
-                    <table class="modern-table" style="margin: 0;">
-                        <thead><tr><th>Student Details</th><th>Department</th><th>Skill Status</th><th>Action</th></tr></thead>
-                        <tbody id="student-progress-tbody"><tr><td colspan="4" style="text-align: center; padding: 40px; color: #94A3B8;"><i class="fa-solid fa-spinner fa-spin"></i> Loading students...</td></tr></tbody>
-                    </table>
+                
+                <div class="dash-grid" style="grid-template-columns: 1fr 1fr; align-items: start; gap: 24px;">
+                    <div class="card" style="padding: 0; overflow: hidden; height: 600px; display: flex; flex-direction: column; border: 1px solid #E2E8F0;">
+                        <div style="padding: 20px; border-bottom: 1px solid #E2E8F0; background: #F8FAFC;">
+                            <h3 style="font-size: 0.95rem; font-weight: 800; color: #0F172A; margin: 0 0 16px 0;">1. Target Student Selection</h3>
+                            <div class="search-filter-row">
+                                <div class="search-wrapper-clean">
+                                    <i class="fa-solid fa-search" style="color: #94A3B8;"></i>
+                                    <input type="text" id="remove-student-search" placeholder="Search name or roll no..." oninput="renderRemoveStudentList()">
+                                </div>
+                                <select id="remove-dept-filter" class="filter-select" onchange="renderRemoveStudentList()"><option value="">All Depts</option></select>
+                            </div>
+                        </div>
+                        <div id="remove-student-list" class="assign-scroll" style="overflow-y: auto; flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: white;"></div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 24px; height: 600px;">
+                        <div class="card" style="padding: 0; overflow: hidden; flex: 1; display: flex; flex-direction: column; border: 1px solid #E2E8F0;">
+                            <div style="padding: 20px 20px 10px 20px; background: #F8FAFC;">
+                                <h3 style="font-size: 0.95rem; font-weight: 800; color: #0F172A; margin: 0 0 16px 0;">2. Select Courses to Remove (Multi-Select)</h3>
+                                <div class="search-filter-row" style="margin-bottom: 0;">
+                                    <div class="search-wrapper-clean">
+                                        <i class="fa-solid fa-search" style="color: #94A3B8;"></i>
+                                        <input type="text" id="remove-course-search" placeholder="Search assigned courses..." oninput="renderRemoveCourseList()">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex-between" style="padding: 12px 20px; background: #F8FAFC; border-bottom: 1px solid #E2E8F0;">
+                                <div style="font-size: 0.8rem; font-weight: 700; color: #64748B;" id="remove-course-count">Select a student first</div>
+                                <button id="btn-select-all-remove" class="btn-select-all-danger" style="background: white; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 12px; font-size: 0.75rem; font-weight: 700; color: #475569; cursor: pointer; transition: 0.2s;" onclick="toggleSelectAllRemoveCourses()" disabled>Select All</button>
+                            </div>
+                            <div id="remove-course-list" class="assign-scroll" style="overflow-y: auto; flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: white;"></div>
+                        </div>
+                        
+                        <div class="card" style="padding: 20px; background: #FEF2F2; border: 1px solid #FCA5A5; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 0.75rem; font-weight: 700; color: #991B1B; text-transform: uppercase; margin-bottom: 4px;">Ready to Remove</div>
+                                <div id="remove-summary-text" style="font-weight: 500; color: #0F172A; font-size: 0.95rem;">Select a student and at least one course.</div>
+                            </div>
+                            <button class="action-btn btn-primary" id="btn-execute-remove" style="background: #EF4444; border: none; padding: 12px 24px; font-size: 0.95rem; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);" onclick="executePageRemove()" disabled><i class="fa-solid fa-trash" style="margin-right: 8px;"></i> Remove Selected</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -261,32 +288,7 @@
         </div>
     </main>
 
-    <div id="manage-skills-modal" class="modal-overlay" style="display: none; align-items: center; justify-content: center; z-index: 9999; padding: 20px;">
-        <div class="modal-content large-modal-content">
-            <div class="modal-header-banner">
-                <div style="display: flex; align-items: center; gap: 20px;">
-                    <img id="ms-student-img" src="" style="width: 60px; height: 60px; border-radius: 12px; border: 2px solid #EEF2FF; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-                    <div>
-                        <h2 id="ms-student-name" style="margin: 0 0 6px 0; font-weight: 800; font-size: 1.4rem; color: #0F172A;">Loading...</h2>
-                        <div style="display: flex; gap: 12px; align-items: center;">
-                            <span id="ms-student-roll" style="font-family: monospace; font-size: 0.85rem; color: #64748B;">--</span>
-                            <span id="ms-student-dept" class="badge" style="background: #F3E8FF; color: #7E22CE; border: 1px solid #E9D5FF;">--</span>
-                        </div>
-                    </div>
-                </div>
-                <button class="action-icon cancel" style="width: 40px; height: 40px; background: #F1F5F9; border-radius: 50%; border: none;" onclick="closeModal('manage-skills-modal')"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div style="padding: 24px 32px;">
-                <div class="flex-between" style="margin-bottom: 20px;">
-                    <h3 style="font-weight: 800; font-size: 1.1rem; color: #0F172A;">Assigned PCDP Courses</h3>
-                    <button class="action-btn btn-primary" style="background: #7E22CE; border: none; padding: 8px 16px; font-size: 0.85rem;" onclick="openPageAssignForStudent()"><i class="fa-solid fa-plus"></i> Go to Assign View</button>
-                </div>
-                <div id="ms-skills-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;"></div>
-            </div>
-        </div>
-    </div>
-
-    <div id="edit-course-modal" class="modal-overlay">
+    <div id="edit-course-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content" style="border-radius: 12px; padding: 24px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;"><h2 style="margin:0; font-weight: 800; font-size: 1.15rem; color: var(--text-main);">Edit Master Course</h2><i class="fa-solid fa-xmark" style="cursor: pointer; color: var(--text-muted);" onclick="closeModal('edit-course-modal')"></i></div>
             <input type="hidden" id="edit-c-id">
@@ -305,6 +307,6 @@
     </div>
 
     <div id="toast-container" class="toast-container"></div>
-    <script src="pcdp_control.js?v=multi_assign_v2"></script>
+    <script src="pcdp_control.js?v=remove_view_v1"></script>
 </body>
 </html>

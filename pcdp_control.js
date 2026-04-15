@@ -5,14 +5,17 @@ const BASE_URL = 'https://portal-6crm.onrender.com';
 let adminToken = localStorage.getItem('pcdp_session_token');
 let masterCoursesData = []; 
 let allStudentsList = [];
-let targetStudentEmail = "";
-let currentStudentSkills = [];
-let originalValues = {}; 
 
-// Arrays/Vars for Multi-Select Assignment
+// Assign Course Vars
 let assignSelectedStudentEmail = null;
 let assignSelectedCourseIds = []; 
-let currentlyVisibleCourseIds = []; // Tracks filtered list for "Select All"
+let assignVisibleCourseIds = []; 
+
+// Remove Course Vars
+let removeSelectedStudentEmail = null;
+let removeSelectedCourseIds = []; // Contains assigned skill primary IDs
+let removeVisibleCourseIds = []; 
+let removeStudentSkillsData = []; // Specific student's assigned skills
 
 if (!adminToken) window.location.href = 'index.html';
 
@@ -55,6 +58,9 @@ function switchTab(tabId, element) {
         if(tabId === 'assign') {
             renderAssignStudentList();
             renderAssignCourseList();
+        } else if (tabId === 'remove') {
+            renderRemoveStudentList();
+            renderRemoveCourseList();
         }
     } catch(e) { console.error("Tab switch error:", e); }
 }
@@ -237,11 +243,9 @@ async function deleteMasterCourse(id) {
 
 
 // ==============================================================================
-// 🛑 STUDENT PROGRESS & SKILL MANAGEMENT
+// 🛑 CORE DATA FETCHING (Runs on Load)
 // ==============================================================================
 async function fetchStudents() {
-    const tbody = document.getElementById('student-progress-tbody');
-    if(!tbody) return;
     try {
         const req = await fetch(`${BASE_URL}/api/admin/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken }) });
         const data = await req.json();
@@ -250,168 +254,29 @@ async function fetchStudents() {
             if(document.getElementById('stat-students')) document.getElementById('stat-students').innerText = allStudentsList.length;
             
             populateDeptFilter();
-            renderProgressTable(allStudentsList);
             
             const assignView = document.getElementById('view-assign');
-            if(assignView && assignView.style.display !== 'none' && assignView.classList.contains('active')) {
-                renderAssignStudentList();
-            }
-        } else { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #EF4444;">Failed to load students.</td></tr>`; }
-    } catch(e) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #EF4444;">Network Error.</td></tr>`; }
-}
+            if(assignView && assignView.style.display !== 'none' && assignView.classList.contains('active')) renderAssignStudentList();
 
-function renderProgressTable(students) {
-    const tbody = document.getElementById('student-progress-tbody');
-    if(!tbody) return;
-    if(students.length === 0) { tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px; color: #94A3B8;">No students found.</td></tr>`; return; }
-    
-    tbody.innerHTML = students.map(s => `
-        <tr class="dir-row" style="transition: 0.2s;" onmouseover="this.style.background='#F8FAFC'" onmouseout="this.style.background='white'">
-            <td style="font-weight:600; color: #0F172A; cursor: pointer;" onclick="openManageSkillsModal('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 36px; height: 36px; border-radius: 8px;">
-                    <div>${esc(s.full_name)}<div style="font-size:0.75rem; color:#64748B; font-weight:400; font-family:monospace; margin-top:2px;">${esc(s.roll_no)}</div></div>
-                </div>
-            </td>
-            <td><span class="badge" style="background:#F3E8FF; color:#7E22CE;">${esc(s.department)}</span></td>
-            <td><span style="font-size:0.8rem; color:#64748B;"><i class="fa-solid fa-chart-bar" style="margin-right:4px;"></i> Click Manage to view</span></td>
-            <td style="text-align: right;">
-                <button class="action-btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color: #7E22CE; color: #7E22CE;" onclick="openManageSkillsModal('${esc(s.email)}', '${esc(s.full_name)}', '${esc(s.roll_no)}', '${esc(s.department)}')">
-                    <i class="fa-solid fa-sliders"></i> Manage Skills
-                </button>
-            </td>
-        </tr>
-    `).join('');
-}
+            const removeView = document.getElementById('view-remove');
+            if(removeView && removeView.style.display !== 'none' && removeView.classList.contains('active')) renderRemoveStudentList();
 
-function filterProgressStudents() {
-    const search = document.getElementById('search-student').value.toLowerCase();
-    const filtered = allStudentsList.filter(s => ((s.full_name||'').toLowerCase().includes(search)) || ((s.roll_no||'').toLowerCase().includes(search)));
-    renderProgressTable(filtered);
-}
-
-// 🛑 THE SKILL EDITOR MODAL
-async function openManageSkillsModal(email, name, roll, dept) {
-    targetStudentEmail = email;
-    document.getElementById('ms-student-name').innerText = name;
-    document.getElementById('ms-student-roll').innerText = roll || 'No Roll';
-    document.getElementById('ms-student-dept').innerText = dept || 'No Dept';
-    document.getElementById('ms-student-img').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=7E22CE&color=fff&bold=true`;
-    
-    document.getElementById('ms-skills-container').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px; color: #7E22CE;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>`;
-    openModal('manage-skills-modal');
-
-    try {
-        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: email }) });
-        const data = await req.json();
-        if (data.success) { 
-            currentStudentSkills = data.skills || []; 
-            renderStudentSkills(currentStudentSkills); 
-        } else { showToast("Error", "Failed to fetch student data.", "error"); closeModal('manage-skills-modal'); }
-    } catch(e) { showToast("Network Error", "Could not load data.", "error"); closeModal('manage-skills-modal'); }
-}
-
-function renderStudentSkills(skills) {
-    const container = document.getElementById('ms-skills-container');
-    if(!container) return;
-
-    if(skills.length === 0) {
-        container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color:#94A3B8; border: 1px dashed #CBD5E1; border-radius: 12px; background: white;"><i class="fa-solid fa-folder-open" style="font-size: 2rem; color: #E2E8F0; margin-bottom: 12px;"></i><br>No PCDP courses assigned to this student yet.</div>`;
-        return;
-    }
-
-    container.innerHTML = skills.map(c => {
-        const total = Number(c.total_levels) || 1; const comp = Number(c.completed_levels) || 0; const pct = Math.round((comp / total) * 100);
-        const imgUrl = processImageUrl(c.image_url);
-        let segmentsHtml = ''; for(let i=0; i<total; i++) { segmentsHtml += `<div style="flex: 1; border-radius: 4px; background: ${i < comp ? '#A855F7' : '#E2E8F0'}; height: 6px;"></div>`; }
-        return `
-        <div class="card" style="padding: 0; overflow: hidden; border: 1px solid #E2E8F0; display: flex; flex-direction: column;">
-            <div style="height: 120px; width: 100%; position: relative; background: #F8FAFC;">
-                <img src="${imgUrl}" onerror="this.src='https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&q=80';" style="width: 100%; height: 100%; object-fit: cover;">
-            </div>
-            <div style="padding: 16px; flex: 1; display: flex; flex-direction: column;">
-                <h4 style="margin: 0 0 12px 0; font-size: 0.95rem; color: #0F172A; font-weight: 800;">${esc(c.skill_name)}</h4>
-                <div style="display: flex; justify-content: space-between; align-items: center; color: #64748B; font-size: 0.8rem; font-weight: 700; margin-bottom: 12px;">
-                    <span>Max: ${total}</span>
-                    <span id="wrap-lvl-${c.id}" style="color: #7E22CE;">
-                        <span id="val-lvl-${c.id}">${comp}</span> done 
-                        <i class="fa-solid fa-pen admin-table-edit" style="color: #7E22CE;" onclick="openProfileEdit('completed_levels', 'val-lvl-${c.id}', '40px', '${c.id}', '${total}')"></i>
-                    </span>
-                </div>
-                <div style="display: flex; gap: 4px; height: 6px; margin-bottom: 12px;">${segmentsHtml}</div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto;">
-                    <div style="font-size: 0.75rem; color: #64748B; font-weight: 600;">${pct}% Complete</div>
-                    <button class="action-icon cancel" style="padding: 4px 8px; border: 1px solid #FECACA; border-radius: 6px; background: #FEF2F2;" onclick="removeAssignedSkill(${c.id}, '${esc(c.skill_name)}')"><i class="fa-solid fa-trash" style="color: #EF4444; font-size: 0.8rem;"></i></button>
-                </div>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-// 🛑 INLINE SKILL EDITS
-function openProfileEdit(field, spanId, width, customId, totalLevels) {
-    const span = document.getElementById(spanId); originalValues[spanId] = span.innerText.trim();
-    span.parentElement.innerHTML = `<div class="flex-center" style="width: 100%; gap:4px;"><input type="number" id="in-${spanId}" class="control-input" style="width: ${width}; padding:4px 8px; margin:0; border: 1px solid #7E22CE; outline:none;" value="${originalValues[spanId]}"><i class="fa-solid fa-check action-icon save" style="width:28px; height:28px; color: #7E22CE;" onclick="saveProfileEdit('${field}', '${spanId}', '${width}', '${customId}', '${totalLevels}')"></i><i class="fa-solid fa-xmark action-icon cancel" style="width:28px; height:28px;" onclick="cancelProfileEdit('${spanId}', '${field}', '${width}', '${customId}', '${totalLevels}')"></i></div>`;
-}
-function cancelProfileEdit(spanId, field, width, customId, totalLevels) {
-    const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement;
-    wrapper.innerHTML = `<span id="${spanId}">${originalValues[spanId]}</span><i class="fa-solid fa-pen admin-table-edit" style="color: #7E22CE;" onclick="openProfileEdit('${field}', '${spanId}', '${width}', '${customId}', '${totalLevels}')"></i>`;
-}
-async function saveProfileEdit(field, spanId, width, customId, totalLevels) {
-    const val = document.getElementById(`in-${spanId}`).value; 
-    if (field === 'completed_levels' && totalLevels) {
-        if (Number(val) > Number(totalLevels)) { showToast("Invalid Input", `Max levels is ${totalLevels}.`, "error"); cancelProfileEdit(spanId, field, width, customId, totalLevels); return; }
-        if (Number(val) < 0) { showToast("Invalid Input", "Levels cannot be negative.", "error"); cancelProfileEdit(spanId, field, width, customId, totalLevels); return; }
-    }
-    const wrapper = document.getElementById(`in-${spanId}`).parentElement.parentElement; wrapper.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: #7E22CE;"></i>`;
-    try {
-        await fetch(`${BASE_URL}/api/admin/update-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: adminToken, id: customId, completed_levels: val }) }); 
-        
-        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: targetStudentEmail }) });
-        const data = await req.json();
-        currentStudentSkills = data.skills || []; renderStudentSkills(currentStudentSkills);
-        showToast("Skill Updated", "Progress saved successfully.", "success");
-    } catch(e) { cancelProfileEdit(spanId, field, width, customId, totalLevels); showToast("Update Failed", "Could not save changes.", "error"); }
-}
-
-async function removeAssignedSkill(id, skillName) {
-    if(!confirm(`Are you sure you want to completely remove "${skillName}" from this student's profile?`)) return;
-    try { 
-        await fetch(`${BASE_URL}/api/admin/remove-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: adminToken, id: id }) }); 
-        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: targetStudentEmail }) });
-        const data = await req.json();
-        currentStudentSkills = data.skills || []; renderStudentSkills(currentStudentSkills);
-        showToast("Removed", "Course removed from student.", "success");
-    } catch(e) { showToast("Error", "Could not remove skill.", "error"); }
-}
-
-
-// ==============================================================================
-// 🛑 FULL PAGE ASSIGN COURSES LOGIC (MULTI-SELECT & HIDE ALREADY ASSIGNED)
-// ==============================================================================
-function openPageAssignForStudent() {
-    closeModal('manage-skills-modal');
-    switchTab('assign', document.getElementById('nav-assign'));
-    
-    // Trigger the selection which fetches their current skills and cleans the view
-    if (targetStudentEmail) {
-        selectAssignStudent(targetStudentEmail);
-    }
+        }
+    } catch(e) { console.error("Error fetching students", e); }
 }
 
 function populateDeptFilter() {
-    const deptFilter = document.getElementById('assign-dept-filter');
-    if(!deptFilter) return;
-    
     const depts = [...new Set(allStudentsList.map(s => s.department).filter(Boolean))].sort();
-    
     let html = '<option value="">All Departments</option>';
-    depts.forEach(d => {
-        html += `<option value="${esc(d)}">${esc(d)}</option>`;
-    });
-    deptFilter.innerHTML = html;
+    depts.forEach(d => { html += `<option value="${esc(d)}">${esc(d)}</option>`; });
+    
+    if(document.getElementById('assign-dept-filter')) document.getElementById('assign-dept-filter').innerHTML = html;
+    if(document.getElementById('remove-dept-filter')) document.getElementById('remove-dept-filter').innerHTML = html;
 }
 
+// ==============================================================================
+// 🛑 ASSIGN COURSES (LEFT SIDE NAV)
+// ==============================================================================
 function renderAssignStudentList() {
     const listContainer = document.getElementById('assign-student-list');
     if(!listContainer) return;
@@ -422,8 +287,7 @@ function renderAssignStudentList() {
     const filtered = allStudentsList.filter(s => {
         const matchesSearch = s.full_name.toLowerCase().includes(search) || (s.roll_no && s.roll_no.toLowerCase().includes(search));
         const sDept = (s.department || '').toLowerCase();
-        const matchesDept = deptFilter === "" || sDept.includes(deptFilter);
-        return matchesSearch && matchesDept;
+        return matchesSearch && (deptFilter === "" || sDept.includes(deptFilter));
     });
     
     if(filtered.length === 0) { listContainer.innerHTML = `<div style="text-align:center; padding:30px; color:#94A3B8; font-size:0.9rem;"><i class="fa-solid fa-users" style="font-size: 2rem; color: #E2E8F0; margin-bottom: 12px; display:block;"></i>No students found.</div>`; return; }
@@ -444,7 +308,7 @@ function renderAssignStudentList() {
 
 async function selectAssignStudent(email) {
     assignSelectedStudentEmail = email;
-    assignSelectedCourseIds = []; // Reset selections when student changes
+    assignSelectedCourseIds = [];
     renderAssignStudentList();
     
     const listContainer = document.getElementById('assign-course-list');
@@ -456,69 +320,51 @@ async function selectAssignStudent(email) {
     if(countLabel) countLabel.innerText = "Checking existing courses...";
     updateAssignSummary();
 
-    // Fetch this specific student's current skills so we can hide them
+    let studentCurrentSkills = [];
     try {
         const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: email }) });
         const data = await req.json();
-        if (data.success) { 
-            currentStudentSkills = data.skills || []; 
-        } else {
-            currentStudentSkills = [];
-        }
-    } catch(e) { 
-        currentStudentSkills = []; 
-        showToast("Warning", "Could not verify existing courses. Showing all.", "warning");
-    }
+        if (data.success) { studentCurrentSkills = data.skills || []; }
+    } catch(e) {}
     
-    renderAssignCourseList();
+    renderAssignCourseList(studentCurrentSkills);
     updateAssignSummary();
 }
 
-function renderAssignCourseList() {
+function renderAssignCourseList(studentCurrentSkills = []) {
     const listContainer = document.getElementById('assign-course-list');
     const countLabel = document.getElementById('assign-course-count');
     const btnSelectAll = document.getElementById('btn-select-all');
     if(!listContainer) return;
     
-    // If no student is selected, wait for selection
     if (!assignSelectedStudentEmail) {
         listContainer.innerHTML = `<div style="text-align:center; padding:30px; color:#94A3B8; font-size:0.9rem;"><i class="fa-solid fa-user-check" style="font-size: 2rem; color: #E2E8F0; margin-bottom: 12px; display:block;"></i>Please select a student from the list on the left.</div>`;
         if(countLabel) countLabel.innerText = "Waiting for student selection";
         if(btnSelectAll) { btnSelectAll.disabled = true; btnSelectAll.innerText = "Select All"; }
-        currentlyVisibleCourseIds = [];
-        return;
+        assignVisibleCourseIds = []; return;
     }
 
     const search = document.getElementById('assign-course-search').value.toLowerCase();
     const catFilter = document.getElementById('assign-cat-filter').value.toLowerCase();
-    
-    // Extract names of already assigned skills to filter them out
-    const assignedSkillNames = currentStudentSkills.map(s => s.skill_name.toLowerCase());
+    const assignedSkillNames = studentCurrentSkills.map(s => s.skill_name.toLowerCase());
 
     const filtered = masterCoursesData.filter(c => {
-        // HIDE if the student already has it
-        const isAlreadyAssigned = assignedSkillNames.includes(c.course_name.toLowerCase());
-        if (isAlreadyAssigned) return false; 
-
-        // Text and Category Filters
+        if (assignedSkillNames.includes(c.course_name.toLowerCase())) return false; 
         const matchesSearch = c.course_name.toLowerCase().includes(search) || (c.category && c.category.toLowerCase().includes(search));
         const cCat = (c.category || 'General').toLowerCase();
-        const matchesCat = catFilter === "" || cCat.includes(catFilter);
-        return matchesSearch && matchesCat;
+        return matchesSearch && (catFilter === "" || cCat.includes(catFilter));
     });
     
-    currentlyVisibleCourseIds = filtered.map(c => c.id);
+    assignVisibleCourseIds = filtered.map(c => c.id);
 
     if(countLabel) countLabel.innerHTML = `<b>${filtered.length}</b> Unassigned Courses Available`;
 
     if(filtered.length === 0) { 
-        listContainer.innerHTML = `<div style="text-align:center; padding:40px; color:#94A3B8; font-size:0.9rem;"><i class="fa-solid fa-check-double" style="font-size: 2.5rem; color: #10B981; margin-bottom: 12px; display:block;"></i>All caught up!<br>This student already has all available master courses in this category.</div>`; 
-        if(btnSelectAll) btnSelectAll.disabled = true;
-        return; 
+        listContainer.innerHTML = `<div style="text-align:center; padding:40px; color:#94A3B8; font-size:0.9rem;"><i class="fa-solid fa-check-double" style="font-size: 2.5rem; color: #10B981; margin-bottom: 12px; display:block;"></i>All caught up!<br>This student already has all available master courses.</div>`; 
+        if(btnSelectAll) btnSelectAll.disabled = true; return; 
     }
     
-    // Check if all visible items are currently selected to toggle button state
-    const allSelected = currentlyVisibleCourseIds.length > 0 && currentlyVisibleCourseIds.every(id => assignSelectedCourseIds.includes(id));
+    const allSelected = assignVisibleCourseIds.length > 0 && assignVisibleCourseIds.every(id => assignSelectedCourseIds.includes(id));
     if(btnSelectAll) {
         btnSelectAll.disabled = false;
         btnSelectAll.innerText = allSelected ? "Deselect All" : "Select All";
@@ -542,33 +388,46 @@ function renderAssignCourseList() {
 }
 
 function selectAssignCourse(id) {
-    if (assignSelectedCourseIds.includes(id)) {
-        assignSelectedCourseIds = assignSelectedCourseIds.filter(cid => cid !== id);
-    } else {
-        assignSelectedCourseIds.push(id);
-    }
-    renderAssignCourseList();
+    if (assignSelectedCourseIds.includes(id)) { assignSelectedCourseIds = assignSelectedCourseIds.filter(cid => cid !== id); } 
+    else { assignSelectedCourseIds.push(id); }
+    // We pass empty array here because we don't need to re-fetch to toggle selection visually. 
+    // It will just reuse the existing filtered data due to how we mapped it.
+    // Wait, we need the skills array to not redraw everything. Actually, the easiest way is to let render fetch again or cache skills.
+    // Let's just trigger a re-render student to keep it clean, or modify the DOM directly. Re-triggering is safer.
+    selectAssignStudent(assignSelectedStudentEmail); // Temporary hack to avoid storing `studentCurrentSkills` globally for Assign.
+}
+
+// Fixed selectAssignCourse logic to avoid network call on every click
+function selectAssignCourse(id) {
+    if (assignSelectedCourseIds.includes(id)) { assignSelectedCourseIds = assignSelectedCourseIds.filter(cid => cid !== id); } 
+    else { assignSelectedCourseIds.push(id); }
+    renderAssignCourseList(window._cachedAssignSkills || []);
+    updateAssignSummary();
+}
+// Need to cache the skills when student is selected
+async function selectAssignStudent(email) {
+    assignSelectedStudentEmail = email;
+    assignSelectedCourseIds = [];
+    renderAssignStudentList();
+    document.getElementById('assign-course-list').innerHTML = `<div style="text-align:center; padding:30px; color:#94A3B8;"><i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem; color:#7E22CE; margin-bottom:12px;"></i></div>`;
+    updateAssignSummary();
+
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: email }) });
+        const data = await req.json();
+        window._cachedAssignSkills = data.success ? (data.skills || []) : [];
+    } catch(e) { window._cachedAssignSkills = []; }
+    
+    renderAssignCourseList(window._cachedAssignSkills);
     updateAssignSummary();
 }
 
 function toggleSelectAllCourses() {
-    if (!currentlyVisibleCourseIds || currentlyVisibleCourseIds.length === 0) return;
-
-    const allSelected = currentlyVisibleCourseIds.every(id => assignSelectedCourseIds.includes(id));
-
-    if (allSelected) {
-        // Deselect all currently visible items
-        assignSelectedCourseIds = assignSelectedCourseIds.filter(id => !currentlyVisibleCourseIds.includes(id));
-    } else {
-        // Select all currently visible items
-        currentlyVisibleCourseIds.forEach(id => {
-            if (!assignSelectedCourseIds.includes(id)) {
-                assignSelectedCourseIds.push(id);
-            }
-        });
-    }
-    
-    renderAssignCourseList();
+    if (!assignVisibleCourseIds || assignVisibleCourseIds.length === 0) return;
+    const allSelected = assignVisibleCourseIds.every(id => assignSelectedCourseIds.includes(id));
+    if (allSelected) { assignSelectedCourseIds = assignSelectedCourseIds.filter(id => !assignVisibleCourseIds.includes(id)); } 
+    else { assignVisibleCourseIds.forEach(id => { if (!assignSelectedCourseIds.includes(id)) assignSelectedCourseIds.push(id); }); }
+    renderAssignCourseList(window._cachedAssignSkills || []);
     updateAssignSummary();
 }
 
@@ -584,64 +443,216 @@ function updateAssignSummary() {
     }
 
     const courseCount = assignSelectedCourseIds.length;
-
     if (assignSelectedStudentEmail && courseCount > 0) {
-        const courseText = courseCount === 1 ? "1 Course" : `${courseCount} Courses`;
-        textEl.innerHTML = `Assign <span style="color:#7E22CE; font-weight:800;">${courseText}</span> to <span style="color:#7E22CE; font-weight:800;">${esc(sName)}</span>`;
-        btn.disabled = false;
-        btn.style.opacity = '1';
+        textEl.innerHTML = `Assign <span style="color:#7E22CE; font-weight:800;">${courseCount === 1 ? "1 Course" : courseCount+" Courses"}</span> to <span style="color:#7E22CE; font-weight:800;">${esc(sName)}</span>`;
+        btn.disabled = false; btn.style.opacity = '1';
     } else {
         textEl.innerHTML = "Select a student and at least one course.";
-        btn.disabled = true;
-        btn.style.opacity = '0.5';
+        btn.disabled = true; btn.style.opacity = '0.5';
     }
 }
 
 async function executePageAssignment() {
     if(!assignSelectedStudentEmail || assignSelectedCourseIds.length === 0) return;
-    
     const btn = document.getElementById('btn-execute-assign'); 
     const originalText = btn.innerHTML; 
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Assigning...'; btn.disabled = true;
     
-    let successCount = 0;
-    let failCount = 0;
-
+    let successCount = 0; let failCount = 0;
     try { 
-        // Send requests concurrently for all selected courses
         const promises = assignSelectedCourseIds.map(cid => 
-            fetch(`${BASE_URL}/api/admin/assign-pcdp`, { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ 
-                    pcdpToken: adminToken, 
-                    targetEmail: assignSelectedStudentEmail, 
-                    course_id: cid 
-                }) 
-            }).then(res => res.json())
+            fetch(`${BASE_URL}/api/admin/assign-pcdp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: assignSelectedStudentEmail, course_id: cid }) }).then(res => res.json())
         );
-
         const results = await Promise.all(promises);
+        results.forEach(res => { if(res.success) successCount++; else failCount++; });
 
-        results.forEach(res => {
-            if(res.success) successCount++;
-            else failCount++;
-        });
-
-        if (successCount > 0 && failCount === 0) {
-            showToast("Success", `Assigned ${successCount} course(s) successfully.`, "success"); 
-        } else if (successCount > 0 && failCount > 0) {
-            showToast("Partial Success", `Assigned ${successCount} course(s), failed to assign ${failCount}.`, "warning");
-        } else {
-            showToast("Error", "Failed to assign the selected courses.", "error"); 
-        }
-        
-        // Refetch the student's skills so the newly assigned ones disappear from the list
+        if (successCount > 0 && failCount === 0) { showToast("Success", `Assigned ${successCount} course(s) successfully.`, "success"); } 
+        else if (successCount > 0 && failCount > 0) { showToast("Partial Success", `Assigned ${successCount} course(s), failed to assign ${failCount}.`, "warning"); } 
+        else { showToast("Error", "Failed to assign the selected courses.", "error"); }
         await selectAssignStudent(assignSelectedStudentEmail);
-
     } catch(e) { 
         showToast("Error", "Network error while assigning courses.", "error"); 
-        btn.innerHTML = originalText; 
-        btn.disabled = false;
+        btn.innerHTML = originalText; btn.disabled = false;
+    } 
+}
+
+
+// ==============================================================================
+// 🛑 REMOVE COURSES (LEFT SIDE NAV)
+// ==============================================================================
+function renderRemoveStudentList() {
+    const listContainer = document.getElementById('remove-student-list');
+    if(!listContainer) return;
+    
+    const search = document.getElementById('remove-student-search').value.toLowerCase();
+    const deptFilter = document.getElementById('remove-dept-filter').value.toLowerCase();
+    
+    const filtered = allStudentsList.filter(s => {
+        const matchesSearch = s.full_name.toLowerCase().includes(search) || (s.roll_no && s.roll_no.toLowerCase().includes(search));
+        const sDept = (s.department || '').toLowerCase();
+        return matchesSearch && (deptFilter === "" || sDept.includes(deptFilter));
+    });
+    
+    if(filtered.length === 0) { listContainer.innerHTML = `<div style="text-align:center; padding:30px; color:#94A3B8; font-size:0.9rem;"><i class="fa-solid fa-users" style="font-size: 2rem; color: #E2E8F0; margin-bottom: 12px; display:block;"></i>No students found.</div>`; return; }
+    
+    listContainer.innerHTML = filtered.map(s => `
+        <div class="select-list-item ${removeSelectedStudentEmail === s.email ? 'selected-danger' : ''}" onclick="selectRemoveStudent('${esc(s.email)}')">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(s.full_name)}&background=random&color=fff&rounded=true" style="width: 32px; height: 32px; border-radius: 8px;">
+                <div>
+                    <div style="font-weight: 700; color: #0F172A; font-size: 0.9rem;">${esc(s.full_name)}</div>
+                    <div style="font-size: 0.75rem; color: #64748B;">${esc(s.roll_no)} • ${esc(s.department)}</div>
+                </div>
+            </div>
+            <div class="multi-checkbox" style="border-radius: 50%;"><i class="fa-solid fa-check" style="font-size: 0.75rem;"></i></div>
+        </div>
+    `).join('');
+}
+
+async function selectRemoveStudent(email) {
+    removeSelectedStudentEmail = email;
+    removeSelectedCourseIds = [];
+    removeStudentSkillsData = [];
+    renderRemoveStudentList();
+    
+    const listContainer = document.getElementById('remove-course-list');
+    const btnSelectAll = document.getElementById('btn-select-all-remove');
+    const countLabel = document.getElementById('remove-course-count');
+    
+    if(listContainer) listContainer.innerHTML = `<div style="text-align:center; padding:30px; color:#94A3B8;"><i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem; color:#EF4444; margin-bottom:12px;"></i><br>Loading assigned courses...</div>`;
+    if(btnSelectAll) { btnSelectAll.disabled = true; btnSelectAll.innerText = "Select All"; }
+    if(countLabel) countLabel.innerText = "Fetching data...";
+    updateRemoveSummary();
+
+    try {
+        const req = await fetch(`${BASE_URL}/api/admin/student-data`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pcdpToken: adminToken, targetEmail: email }) });
+        const data = await req.json();
+        if (data.success) { removeStudentSkillsData = data.skills || []; }
+    } catch(e) { showToast("Error", "Could not fetch assigned courses.", "error"); }
+    
+    renderRemoveCourseList();
+    updateRemoveSummary();
+}
+
+function renderRemoveCourseList() {
+    const listContainer = document.getElementById('remove-course-list');
+    const countLabel = document.getElementById('remove-course-count');
+    const btnSelectAll = document.getElementById('btn-select-all-remove');
+    if(!listContainer) return;
+    
+    if (!removeSelectedStudentEmail) {
+        listContainer.innerHTML = `<div style="text-align:center; padding:30px; color:#94A3B8; font-size:0.9rem;"><i class="fa-solid fa-user-xmark" style="font-size: 2rem; color: #E2E8F0; margin-bottom: 12px; display:block;"></i>Please select a student from the list on the left.</div>`;
+        if(countLabel) countLabel.innerText = "Waiting for student selection";
+        if(btnSelectAll) { btnSelectAll.disabled = true; btnSelectAll.innerText = "Select All"; }
+        removeVisibleCourseIds = []; return;
+    }
+
+    const search = document.getElementById('remove-course-search').value.toLowerCase();
+
+    // Filter assigned skills by search
+    const filtered = removeStudentSkillsData.filter(c => {
+        return c.skill_name.toLowerCase().includes(search);
+    });
+    
+    // Note: for removal, the backend requires the primary ID of the assigned record, which is c.id
+    removeVisibleCourseIds = filtered.map(c => c.id);
+
+    if(countLabel) countLabel.innerHTML = `<b>${filtered.length}</b> Assigned Courses Found`;
+
+    if(filtered.length === 0) { 
+        listContainer.innerHTML = `<div style="text-align:center; padding:40px; color:#94A3B8; font-size:0.9rem;"><i class="fa-solid fa-folder-open" style="font-size: 2.5rem; color: #E2E8F0; margin-bottom: 12px; display:block;"></i>No courses to remove.<br>This student currently has no assigned courses.</div>`; 
+        if(btnSelectAll) btnSelectAll.disabled = true; return; 
+    }
+    
+    const allSelected = removeVisibleCourseIds.length > 0 && removeVisibleCourseIds.every(id => removeSelectedCourseIds.includes(id));
+    if(btnSelectAll) {
+        btnSelectAll.disabled = false;
+        btnSelectAll.innerText = allSelected ? "Deselect All" : "Select All";
+        btnSelectAll.style.background = allSelected ? "#FEF2F2" : "white";
+        btnSelectAll.style.color = allSelected ? "#EF4444" : "#475569";
+        btnSelectAll.style.borderColor = allSelected ? "#EF4444" : "#CBD5E1";
+    }
+
+    listContainer.innerHTML = filtered.map(c => {
+        const isSelected = removeSelectedCourseIds.includes(c.id);
+        const comp = Number(c.completed_levels) || 0;
+        const total = Number(c.total_levels) || 1;
+        
+        return `
+        <div class="select-list-item ${isSelected ? 'selected-danger' : ''}" onclick="selectRemoveCourse(${c.id})">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="background: ${isSelected ? '#EF4444' : '#F1F5F9'}; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: ${isSelected ? 'white' : '#64748B'}; transition: 0.2s;"><i class="fa-solid fa-book"></i></div>
+                <div>
+                    <div style="font-weight: 700; color: #0F172A; font-size: 0.9rem;">${esc(c.skill_name)}</div>
+                    <div style="font-size: 0.75rem; color: #64748B;">Progress: ${comp} / ${total} Levels Completed</div>
+                </div>
+            </div>
+            <div class="multi-checkbox"><i class="fa-solid fa-check" style="font-size: 0.75rem;"></i></div>
+        </div>`;
+    }).join('');
+}
+
+function selectRemoveCourse(id) {
+    if (removeSelectedCourseIds.includes(id)) { removeSelectedCourseIds = removeSelectedCourseIds.filter(cid => cid !== id); } 
+    else { removeSelectedCourseIds.push(id); }
+    renderRemoveCourseList();
+    updateRemoveSummary();
+}
+
+function toggleSelectAllRemoveCourses() {
+    if (!removeVisibleCourseIds || removeVisibleCourseIds.length === 0) return;
+    const allSelected = removeVisibleCourseIds.every(id => removeSelectedCourseIds.includes(id));
+    if (allSelected) { removeSelectedCourseIds = removeSelectedCourseIds.filter(id => !removeVisibleCourseIds.includes(id)); } 
+    else { removeVisibleCourseIds.forEach(id => { if (!removeSelectedCourseIds.includes(id)) removeSelectedCourseIds.push(id); }); }
+    renderRemoveCourseList();
+    updateRemoveSummary();
+}
+
+function updateRemoveSummary() {
+    const textEl = document.getElementById('remove-summary-text');
+    const btn = document.getElementById('btn-execute-remove');
+    if(!textEl || !btn) return;
+    
+    let sName = "Student";
+    if(removeSelectedStudentEmail) {
+        const student = allStudentsList.find(s => s.email === removeSelectedStudentEmail);
+        if(student) sName = student.full_name;
+    }
+
+    const courseCount = removeSelectedCourseIds.length;
+    if (removeSelectedStudentEmail && courseCount > 0) {
+        textEl.innerHTML = `Remove <span style="color:#EF4444; font-weight:800;">${courseCount === 1 ? "1 Course" : courseCount+" Courses"}</span> from <span style="color:#EF4444; font-weight:800;">${esc(sName)}</span>`;
+        btn.disabled = false; btn.style.opacity = '1';
+    } else {
+        textEl.innerHTML = "Select a student and at least one assigned course to remove.";
+        btn.disabled = true; btn.style.opacity = '0.5';
+    }
+}
+
+async function executePageRemove() {
+    if(!removeSelectedStudentEmail || removeSelectedCourseIds.length === 0) return;
+    if(!confirm(`Are you sure you want to permanently remove ${removeSelectedCourseIds.length} course(s) from this student?\n\nThis will reset their progress for these skills to 0.`)) return;
+
+    const btn = document.getElementById('btn-execute-remove'); 
+    const originalText = btn.innerHTML; 
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Removing...'; btn.disabled = true;
+    
+    let successCount = 0; let failCount = 0;
+    try { 
+        // Backend remove endpoint requires adminToken and the record id
+        const promises = removeSelectedCourseIds.map(cid => 
+            fetch(`${BASE_URL}/api/admin/remove-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminToken: adminToken, id: cid }) }).then(res => res.json())
+        );
+        const results = await Promise.all(promises);
+        results.forEach(res => { if(res.success) successCount++; else failCount++; });
+
+        if (successCount > 0 && failCount === 0) { showToast("Success", `Removed ${successCount} course(s) successfully.`, "success"); } 
+        else if (successCount > 0 && failCount > 0) { showToast("Partial Success", `Removed ${successCount} course(s), failed to remove ${failCount}.`, "warning"); } 
+        else { showToast("Error", "Failed to remove the selected courses.", "error"); }
+        
+        await selectRemoveStudent(removeSelectedStudentEmail);
+    } catch(e) { 
+        showToast("Error", "Network error while removing courses.", "error"); 
+        btn.innerHTML = originalText; btn.disabled = false;
     } 
 }
